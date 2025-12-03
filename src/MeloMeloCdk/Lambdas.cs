@@ -8,7 +8,7 @@ public partial class MeloMeloCdkStack
 {
     private void InitialiseLambdas()
     {
-        PostConfirmationFunction = CreateLambdaFunction("CreateLambdaFunction");
+        PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
     }
     
     private IFunction CreateLambdaFunction(string lambdaName)
@@ -23,7 +23,7 @@ public partial class MeloMeloCdkStack
                 "-c",
                 "dotnet tool install -g Amazon.Lambda.Tools && " +
                 "cd src && " + 
-                $"cd ${lambdaName} && " +
+                $"cd {lambdaName} && " +
                 "dotnet build && " +
                 "dotnet lambda package --output-package /asset-output/function.zip"
             }

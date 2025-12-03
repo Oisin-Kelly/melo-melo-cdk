@@ -2,7 +2,7 @@
 {
     public class User
     {
-        public string Username { get; set; }
+        public required string Username { get; set; }
         public string? DisplayName { get; set; }
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
@@ -11,12 +11,11 @@
         public string? Bio { get; set; }
         public string? ImageUrl { get; set; }
         public string? ImageBgColor { get; set; }
-        public int FollowingCount { get; set; }
-        public int FollowerCount { get; set; }
-        public bool FollowingsPrivate { get; set; }
-        public bool FollowersPrivate { get; set; }
-        public long CreatedAt { get; set; }
-        public string GSI1PK { get; set; }
+        public required int FollowingCount { get; set; }
+        public required int FollowerCount { get; set; }
+        public required bool FollowingsPrivate { get; set; }
+        public required bool FollowersPrivate { get; set; }
+        public required long CreatedAt { get; set; }
 
         public User() { }
 
@@ -46,10 +45,12 @@
     {
         public string PK { get; set; }
         public string SK { get; set; }
+        public string GSI1PK { get; set; }
+        
         
         public UserDataModel() { }
 
-        public UserDataModel(string PK, string SK,
+        public UserDataModel(string PK, string SK, string GSI1PK,
             string username, string? displayName, string? firstName, string? lastName,
             string? country, string? city, string? bio, string? imageUrl, string? imageBgColor,
             int followingCount, int followerCount, bool followingsPrivate, bool followersPrivate,
@@ -59,6 +60,7 @@
         {
             this.PK = PK;
             this.SK = SK;
+            this.GSI1PK = GSI1PK;
         }
     }
 }

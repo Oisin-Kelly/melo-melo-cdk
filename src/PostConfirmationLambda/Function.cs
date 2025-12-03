@@ -11,13 +11,13 @@ namespace PostConfirmationLambda
 {
     public class Function
     {
-        private readonly DynamoDBContext dbContext;
+        private readonly DynamoDBContext _dbContext;
 
         public Function()
         {
             IAmazonDynamoDB CreateClient() => new AmazonDynamoDBClient();
 
-            dbContext = new DynamoDBContextBuilder()
+            _dbContext = new DynamoDBContextBuilder()
                 .WithDynamoDBClient(CreateClient) 
                 .Build();
         }
@@ -41,7 +41,9 @@ namespace PostConfirmationLambda
                 CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 FollowingsPrivate = false,
                 FollowersPrivate = false,
-                GSI1PK = $"USERSUB#{userSub}"
+                GSI1PK = $"USERSUB#{userSub}",
+                FollowingCount = 0,
+                FollowerCount = 0
             };
 
             try
@@ -51,7 +53,7 @@ namespace PostConfirmationLambda
                     OverrideTableName = Environment.GetEnvironmentVariable("TABLE_NAME")
                 };
 
-                await dbContext.SaveAsync(userData, operationConfig);
+                await _dbContext.SaveAsync(userData, operationConfig);
 
                 context.Logger.LogLine($"User {userData.Username} successfully inserted into DynamoDB.");
             }

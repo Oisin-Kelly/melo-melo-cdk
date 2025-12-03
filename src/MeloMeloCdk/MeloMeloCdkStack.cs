@@ -9,19 +9,18 @@ using Constructs;
 
 namespace MeloMeloCdk
 {
-    public class MeloMeloCdkStack : Stack
+    public partial class MeloMeloCdkStack : Stack
     {
-        private string Env { get; set; }
+        private string Env { get; }
         
-        private Table DynamoDbTable { get; set; }
-        private Bucket DropboxBucket { get; set; }
-        private Bucket PrivateReadonlyBucket { get; set; }
-        private Bucket PublicReadonlyBucket { get; set; }
+        private ITable DynamoDbTable { get; set; }
+        private IBucket DropboxBucket { get; set; }
+        private IBucket PrivateReadonlyBucket { get; set; }
+        private IBucket PublicReadonlyBucket { get; set; }
         
-        private UserPool UserPool { get; set; }
+        private IUserPool UserPool { get; set; }
         
-        private Function CheckEmailExistenceFunction { get; set; }
-        private Function PostConfirmationFunction { get; set; }
+        private IFunction PostConfirmationFunction { get; set; }
         
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
@@ -55,55 +54,18 @@ namespace MeloMeloCdk
                 UserVerification = new UserVerificationConfig()
                 {
                     EmailSubject = "Verify your MeloMelo account",
-                    EmailBody = "Verify your MeloMelo account",
                     EmailStyle = VerificationEmailStyle.CODE
                 },
                 LambdaTriggers = new UserPoolTriggers()
                 {
                     PostConfirmation = PostConfirmationFunction,
-                    PreSignUp = CheckEmailExistenceFunction,
                 }
             });
-
-            CheckEmailExistenceFunction.Role!.AttachInlinePolicy(
-                new Policy(this, "userpool-policy", new PolicyProps
-                {
-                    Statements = new[]
-                    {
-                        new PolicyStatement(new PolicyStatementProps
-                        {
-                            Actions = new[] { "cognito-idp:ListUsers" },
-                            Resources = new[] { UserPool.UserPoolArn },
-                            Effect = Effect.ALLOW
-                        })
-                    }
-                })
-            );
-        }
-
-        private void InitialiseLambdas()
-        {
-            var lambdaProps = new FunctionProps()
-            {
-                Runtime = Runtime.DOTNET_8,
-                MemorySize = 1024,
-                Environment = new Dictionary<string, string>()
-                {
-                    { "ENVIRONMENT", Env },
-                    { "TABLE_NAME", DynamoDbTable.TableName },
-                    { "DROPBOX_BUCKET", DropboxBucket.BucketName },
-                    { "PRIVATE_READONLY_BUCKET", PrivateReadonlyBucket.BucketName },
-                    { "PUBLIC_READONLY_BUCKET", PublicReadonlyBucket.BucketName }
-                }
-            };
-
-            CheckEmailExistenceFunction = new Function(this, "CheckEmailExistenceFunction", lambdaProps);
-            PostConfirmationFunction = new Function(this, "PostConfirmationFunction", lambdaProps);
         }
 
         private void InitialiseTable()
         {
-            DynamoDbTable = new Table(this, Env + "_DynamoDBTable", new TableProps
+            var table = new Table(this, Env + "_DynamoDBTable", new TableProps()
             {
                 PartitionKey = new Attribute
                 {
@@ -116,10 +78,10 @@ namespace MeloMeloCdk
                     Type = AttributeType.STRING
                 },
                 BillingMode = BillingMode.PAY_PER_REQUEST,
-                TableName = "MeloMeloTable"
+                TableName = "MeloMeloTable",
             });
             
-            DynamoDbTable.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps
+            table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()
             {
                 IndexName = "GSI1",
                 PartitionKey = new Attribute
@@ -134,41 +96,8 @@ namespace MeloMeloCdk
                 },
                 ProjectionType =  ProjectionType.ALL
             });
+            
+            DynamoDbTable = table;
         }
-        
-        private void InitialiseBuckets()
-        {
-            DropboxBucket = new Bucket(this, "DropboxBucket", new BucketProps
-            {
-                BucketName = $"melo-melo-dropbox-bucket-{Env}".ToLower(),
-                PublicReadAccess = false,
-                BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
-                RemovalPolicy = RemovalPolicy.RETAIN,
-                LifecycleRules = new ILifecycleRule[]
-                {
-                    new LifecycleRule
-                    {
-                        Expiration = Duration.Days(1)
-                    }
-                }
-            });
-
-            PrivateReadonlyBucket = new Bucket(this, "PrivateReadonlyBucket", new BucketProps
-            {
-                BucketName = $"melo-melo-private-readonly-bucket-{Env}".ToLower(),
-                PublicReadAccess = false,
-                BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
-                RemovalPolicy = RemovalPolicy.RETAIN,
-            });
-
-            PublicReadonlyBucket = new Bucket(this, "PublicReadonlyBucket", new BucketProps
-            {
-                BucketName = $"melo-melo-public-readonly-bucket-{Env}".ToLower(),
-                PublicReadAccess = true,
-                BlockPublicAccess = BlockPublicAccess.BLOCK_ACLS,
-                RemovalPolicy = RemovalPolicy.RETAIN,
-            });
-        }
-
     }
 }

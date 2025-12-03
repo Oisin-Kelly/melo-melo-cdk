@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Amazon.CDK;
+using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 
 namespace MeloMeloCdk;
@@ -13,6 +14,22 @@ public partial class MeloMeloCdkStack
     {
         PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
         DynamoDbTable.GrantReadWriteData(PostConfirmationFunction);
+        
+        CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
+        CheckEmailExistenceFunction.Role!.AttachInlinePolicy(
+            new Policy(this, "userpool-policy", new PolicyProps
+            {
+                Statements = new[]
+                {
+                    new PolicyStatement(new PolicyStatementProps
+                    {
+                        Actions = new[] { "cognito-idp:ListUsers" },
+                        Resources = new[] { UserPool.UserPoolArn },
+                        Effect = Effect.ALLOW
+                    })
+                }
+            })
+        );
     }
     
     private IFunction CreateLambdaFunction(string lambdaName)

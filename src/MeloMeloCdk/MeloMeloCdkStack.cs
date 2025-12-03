@@ -27,9 +27,9 @@ namespace MeloMeloCdk
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
 
             InitialiseTable();
-            InitialiseBuckets();
-            InitialiseLambdas();
             InitialiseCognito();
+            InitialiseLambdas();
+            InitialiseBuckets();
         }
 
         private void InitialiseCognito()
@@ -59,6 +59,7 @@ namespace MeloMeloCdk
                 LambdaTriggers = new UserPoolTriggers()
                 {
                     PostConfirmation = PostConfirmationFunction,
+                    PreSignUp = CheckEmailExistenceFunction
                 }
             });
 

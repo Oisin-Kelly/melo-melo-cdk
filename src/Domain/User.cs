@@ -1,66 +1,80 @@
-﻿namespace Domain
+﻿using Amazon.DynamoDBv2.DataModel;
+
+namespace Domain
 {
     public class User
     {
-        public required string Username { get; set; }
-        public string? DisplayName { get; set; }
-        public string? FirstName { get; set; }
-        public string? LastName { get; set; }
-        public string? Country { get; set; }
-        public string? City { get; set; }
-        public string? Bio { get; set; }
-        public string? ImageUrl { get; set; }
-        public string? ImageBgColor { get; set; }
-        public required int FollowingCount { get; set; }
-        public required int FollowerCount { get; set; }
+        [DynamoDBProperty("username")] public required string Username { get; set; }
+
+        [DynamoDBProperty("displayName")] public string? DisplayName { get; set; }
+
+        [DynamoDBProperty("firstName")] public string? FirstName { get; set; }
+
+        [DynamoDBProperty("lastName")] public string? LastName { get; set; }
+
+        [DynamoDBProperty("country")] public string? Country { get; set; }
+
+        [DynamoDBProperty("city")] public string? City { get; set; }
+
+        [DynamoDBProperty("bio")] public string? Bio { get; set; }
+
+        [DynamoDBProperty("imageUrl")] public string? ImageUrl { get; set; }
+
+        [DynamoDBProperty("imageBgColor")] public string? ImageBgColor { get; set; }
+
+        [DynamoDBProperty("followingCount")] public required int FollowingCount { get; set; }
+
+        [DynamoDBProperty("followerCount")] public required int FollowerCount { get; set; }
+
+        [DynamoDBProperty("followingsPrivate")]
         public required bool FollowingsPrivate { get; set; }
-        public required bool FollowersPrivate { get; set; }
-        public required long CreatedAt { get; set; }
 
-        public User() { }
+        [DynamoDBProperty("followersPrivate")] public required bool FollowersPrivate { get; set; }
 
-        public User(string username, string? displayName, string? firstName, string? lastName,
-                    string? country, string? city, string? bio, string? imageUrl, string? imageBgColor,
-                    int followingCount, int followerCount, bool followingsPrivate, bool followersPrivate,
-                    long createdAt)
+        [DynamoDBProperty("createdAt")] public required long CreatedAt { get; set; }
+
+        public User()
         {
-            Username = username;
-            DisplayName = displayName;
-            FirstName = firstName;
-            LastName = lastName;
-            Country = country;
-            City = city;
-            Bio = bio;
-            ImageUrl = imageUrl;
-            ImageBgColor = imageBgColor;
-            FollowingCount = followingCount;
-            FollowerCount = followerCount;
-            FollowingsPrivate = followingsPrivate;
-            FollowersPrivate = followersPrivate;
-            CreatedAt = createdAt;
         }
     }
 
+    [DynamoDBTable("MeloMeloTable")]
     public class UserDataModel : User
     {
-        public string PK { get; set; }
-        public string SK { get; set; }
-        public string GSI1PK { get; set; }
-        
-        
-        public UserDataModel() { }
+        [DynamoDBHashKey("PK")] public required string Pk { get; set; }
 
-        public UserDataModel(string PK, string SK, string GSI1PK,
-            string username, string? displayName, string? firstName, string? lastName,
-            string? country, string? city, string? bio, string? imageUrl, string? imageBgColor,
-            int followingCount, int followerCount, bool followingsPrivate, bool followersPrivate,
-            long createdAt)
-            : base(username, displayName, firstName, lastName, country, city, bio, imageUrl, imageBgColor,
-                   followingCount, followerCount, followingsPrivate, followersPrivate, createdAt)
+        [DynamoDBRangeKey("SK")] public required string Sk { get; set; }
+
+        [DynamoDBGlobalSecondaryIndexHashKey("GSI1", "GSI1PK")]
+        public required string Gsi1Pk { get; set; }
+
+        [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", "GSI1SK")]
+        public string? Gsi1Sk { get; set; }
+
+        public UserDataModel()
         {
-            this.PK = PK;
-            this.SK = SK;
-            this.GSI1PK = GSI1PK;
+        }
+
+        public static UserDataModel CreateFromCognitoSignUp(string username, string userSub)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            return new UserDataModel
+            {
+                Pk = $"USER#{username}",
+                Sk = "PROFILE",
+                Gsi1Pk = $"USERSUB#{userSub}",
+                Gsi1Sk = "PROFILE",
+                Username = username,
+                DisplayName = username,
+                Country = "Ireland",
+                Bio = "Hey! I'm using MeloMelo!",
+                FollowingCount = 0,
+                FollowerCount = 0,
+                FollowingsPrivate = false,
+                FollowersPrivate = false,
+                CreatedAt = now
+            };
         }
     }
 }

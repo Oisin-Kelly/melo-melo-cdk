@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Amazon.CDK;
+using Amazon.CDK.Alexa.Ask;
 using Amazon.CDK.AWS.Cognito;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.IAM;
@@ -12,20 +13,19 @@ namespace MeloMeloCdk
     public partial class MeloMeloCdkStack : Stack
     {
         private string Env { get; }
-        
+
         private ITable DynamoDbTable { get; set; }
         private IBucket DropboxBucket { get; set; }
         private IBucket PrivateReadonlyBucket { get; set; }
         private IBucket PublicReadonlyBucket { get; set; }
-        
+
         private IUserPool UserPool { get; set; }
-        
-        private IFunction PostConfirmationFunction { get; set; }
-        
+
+
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
-            
+
             InitialiseTable();
             InitialiseBuckets();
             InitialiseLambdas();
@@ -61,6 +61,25 @@ namespace MeloMeloCdk
                     PostConfirmation = PostConfirmationFunction,
                 }
             });
+
+            UserPool.AddClient($"{Env}_AppClient", new UserPoolClientOptions()
+            {
+                OAuth = new OAuthSettings()
+                {
+                    Flows = new OAuthFlows()
+                    {
+                        AuthorizationCodeGrant = true
+                    },
+                },
+                IdTokenValidity = Duration.Hours(8),
+                AccessTokenValidity = Duration.Hours(8),
+                RefreshTokenValidity = Duration.Days(90),
+                AuthFlows = new AuthFlow()
+                {
+                    UserPassword = true
+                },
+                PreventUserExistenceErrors = true
+            });
         }
 
         private void InitialiseTable()
@@ -80,7 +99,7 @@ namespace MeloMeloCdk
                 BillingMode = BillingMode.PAY_PER_REQUEST,
                 TableName = "MeloMeloTable",
             });
-            
+
             table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()
             {
                 IndexName = "GSI1",
@@ -89,14 +108,14 @@ namespace MeloMeloCdk
                     Name = "GSI1PK",
                     Type = AttributeType.STRING
                 },
-                SortKey =  new Attribute
+                SortKey = new Attribute
                 {
                     Name = "GSI1SK",
                     Type = AttributeType.STRING
                 },
-                ProjectionType =  ProjectionType.ALL
+                ProjectionType = ProjectionType.ALL
             });
-            
+
             DynamoDbTable = table;
         }
     }

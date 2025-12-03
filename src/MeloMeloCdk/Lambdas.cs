@@ -6,9 +6,13 @@ namespace MeloMeloCdk;
 
 public partial class MeloMeloCdkStack
 {
+    private IFunction PostConfirmationFunction { get; set; }
+    private IFunction CheckEmailExistenceFunction { get; set; }
+    
     private void InitialiseLambdas()
     {
         PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
+        DynamoDbTable.GrantReadWriteData(PostConfirmationFunction);
     }
     
     private IFunction CreateLambdaFunction(string lambdaName)

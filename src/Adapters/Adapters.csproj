@@ -9,4 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="../Ports/Ports.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" Version="2025.2.4" />
+  </ItemGroup>
 </Project>

@@ -38,24 +38,23 @@ namespace Domain
         }
     }
 
-    [DynamoDBTable("MeloMeloTable")]
     public class UserDataModel : User
     {
         [DynamoDBHashKey("PK")] public required string Pk { get; set; }
 
         [DynamoDBRangeKey("SK")] public required string Sk { get; set; }
 
-        [DynamoDBGlobalSecondaryIndexHashKey("GSI1", "GSI1PK")]
+        [DynamoDBGlobalSecondaryIndexHashKey("GSI1", AttributeName = "GSI1PK")]
         public required string Gsi1Pk { get; set; }
 
-        [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", "GSI1SK")]
+        [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName =  "GSI1SK")]
         public string? Gsi1Sk { get; set; }
 
         public UserDataModel()
         {
         }
 
-        public static UserDataModel CreateFromCognitoSignUp(string username, string userSub)
+        public static UserDataModel CreateFromCognitoSignUp(string username, string email)
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -63,7 +62,7 @@ namespace Domain
             {
                 Pk = $"USER#{username}",
                 Sk = "PROFILE",
-                Gsi1Pk = $"USERSUB#{userSub}",
+                Gsi1Pk = $"EMAIL#{email}",
                 Gsi1Sk = "PROFILE",
                 Username = username,
                 DisplayName = username,

@@ -16,20 +16,7 @@ public partial class MeloMeloCdkStack
         DynamoDbTable.GrantReadWriteData(PostConfirmationFunction);
         
         CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
-        CheckEmailExistenceFunction.Role!.AttachInlinePolicy(
-            new Policy(this, "userpool-policy", new PolicyProps
-            {
-                Statements = new[]
-                {
-                    new PolicyStatement(new PolicyStatementProps
-                    {
-                        Actions = new[] { "cognito-idp:ListUsers" },
-                        Resources = new[] { UserPool.UserPoolArn },
-                        Effect = Effect.ALLOW
-                    })
-                }
-            })
-        );
+        DynamoDbTable.GrantReadData(CheckEmailExistenceFunction);
     }
     
     private IFunction CreateLambdaFunction(string lambdaName)

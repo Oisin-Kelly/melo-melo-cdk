@@ -1,9 +1,9 @@
-using Amazon.DynamoDBv2;
-using Amazon.DynamoDBv2.DataModel;
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.Serialization.SystemTextJson;
 using Domain;
+using Microsoft.Extensions.DependencyInjection;
+using Ports;
 
 // Assembly attribute to enable Lambda logging
 [assembly: LambdaSerializer(typeof(DefaultLambdaJsonSerializer))]
@@ -12,18 +12,20 @@ namespace PostConfirmationLambda;
 
 public class Function
 {
-    private readonly DynamoDBContext _dbContext;
+    private readonly IDynamoDBService _dbService;
 
     public Function()
     {
-        IAmazonDynamoDB CreateClient()
-        {
-            return new AmazonDynamoDBClient();
-        }
+        var services = new ServiceCollection();
+        new Startup().ConfigureServices(services);
+        var serviceProvider = services.BuildServiceProvider();
 
-        _dbContext = new DynamoDBContextBuilder()
-            .WithDynamoDBClient(CreateClient)
-            .Build();
+        _dbService = serviceProvider.GetRequiredService<IDynamoDBService>();
+    }
+
+    public Function(IDynamoDBService dbService)
+    {
+        _dbService = dbService;
     }
 
     public async Task<CognitoPostConfirmationEvent> FunctionHandler(CognitoPostConfirmationEvent cognitoEvent,
@@ -32,28 +34,26 @@ public class Function
         if (cognitoEvent.TriggerSource != "PostConfirmation_ConfirmSignUp")
             return cognitoEvent;
 
-        var userSub = cognitoEvent.Request.UserAttributes.GetValueOrDefault("sub", "");
         var userName = cognitoEvent.UserName;
-
-        var userData = UserDataModel.CreateFromCognitoSignUp(userName, userSub);
+        var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
 
         try
         {
-            var operationConfig = new DynamoDBOperationConfig
-            {
-                OverrideTableName = Environment.GetEnvironmentVariable("TABLE_NAME")
-            };
+            if (string.IsNullOrEmpty(email))
+                throw new NullReferenceException("email");
 
-            await _dbContext.SaveAsync(userData, operationConfig);
+            var userData = UserDataModel.CreateFromCognitoSignUp(userName, email);
+
+            await _dbService.WriteToDynamoAsync(userData);
 
             context.Logger.LogLine($"User {userData.Username} successfully inserted into DynamoDB.");
+
+            return cognitoEvent;
         }
         catch (Exception ex)
         {
-            context.Logger.LogError($"Error inserting user {userData.Username}: {ex}");
-            throw;
+            context.Logger.LogError($"Error inserting user {userName} (Email: {email}): {ex.Message}");
+            throw new Exception($"Database operation failed for user {userName}");
         }
-
-        return cognitoEvent;
     }
 }

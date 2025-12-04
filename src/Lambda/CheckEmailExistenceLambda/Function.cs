@@ -9,16 +9,47 @@ namespace CheckEmailExistenceLambda;
 
 public class Function
 {
-    private IUserValidationService ValidationService { get; set; }
+    private readonly IUserValidationService _userValidationService;
+
+    public Function(IUserValidationService userValidationService)
+    {
+        _userValidationService = userValidationService;
+    }
 
     public async Task<CognitoPreAuthenticationEvent> FunctionHandler(CognitoPreAuthenticationEvent cognitoEvent,
         ILambdaContext context)
     {
         var userPoolId = cognitoEvent.UserPoolId;
-        var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
         var userName = cognitoEvent.UserName;
+        var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
 
+        try
+        {
+            // make sure username and email match criteria
+            ValidateUserDetails(userName, email);
 
-        return cognitoEvent;
+// TODO: Check if email is part of database
+            
+            return cognitoEvent;
+        }
+        catch (Exception e)
+        {
+            context.Logger.LogLine($"Error in CognitoPreAuthenticationEvent {e.Message}");
+            throw new Exception($"CognitoPreAuthenticationEvent {cognitoEvent} failed");
+        }
+    }
+
+    private void ValidateUserDetails(string username, string? email)
+    {
+        if (string.IsNullOrEmpty(email))
+            throw new ArgumentNullException(nameof(email));
+
+        var isUsernameValid = _userValidationService.ValidateUsername(username);
+        if (!isUsernameValid)
+            throw new Exception($"Username {username} is not valid");
+
+        var isEmailValid = _userValidationService.ValidateEmail(email);
+        if (!isEmailValid)
+            throw new Exception($"Email {email} is not valid");
     }
 }

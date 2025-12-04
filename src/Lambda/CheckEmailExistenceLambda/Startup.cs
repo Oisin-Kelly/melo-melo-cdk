@@ -22,8 +22,8 @@ public class Startup
             var client = provider.GetRequiredService<IAmazonDynamoDB>();
             return new DynamoDBService(client, tableName);
         });
-        
-        var userValidationService = new UserValidationService()
-        services.AddTransient<IUserValidationService>(userValidationService)
+
+        var userValidationService = new UserValidationService();
+        services.AddTransient<IUserValidationService>(userValidationService);
     }
 }

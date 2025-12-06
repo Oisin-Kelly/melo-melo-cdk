@@ -11,7 +11,6 @@ namespace CheckEmailExistenceLambda;
 public class Function
 {
     private readonly IUserValidationService _userValidationService;
-    private readonly IDynamoDBService _dynamoDbService;
 
     public Function()
     {
@@ -20,44 +19,43 @@ public class Function
         var serviceProvider = services.BuildServiceProvider();
 
         _userValidationService = serviceProvider.GetRequiredService<IUserValidationService>();
-        _dynamoDbService = serviceProvider.GetRequiredService<IDynamoDBService>();
     }
 
-    public Function(IDynamoDBService dynamoDbService, IUserValidationService userValidationService)
+    public Function(IUserValidationService userValidationService)
     {
         _userValidationService = userValidationService;
-        _dynamoDbService = dynamoDbService;
     }
 
-    public async Task<CognitoPreAuthenticationEvent> FunctionHandler(CognitoPreAuthenticationEvent cognitoEvent,
+    public async Task<CognitoPreSignupEvent> FunctionHandler(CognitoPreSignupEvent cognitoEvent,
         ILambdaContext context)
     {
         var userName = cognitoEvent.UserName;
         var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
+        var userPoolId = cognitoEvent.UserPoolId;
 
         try
         {
             if (string.IsNullOrEmpty(email))
                 throw new ArgumentNullException("email");
 
-            await ValidateUserDetails(context, userName, email);
+            await ValidateUserDetails(context, userName, email, userPoolId);
 
             return cognitoEvent;
         }
         catch (Exception e)
         {
             context.Logger.LogLine($"Error in CognitoPreAuthenticationEvent {e.Message}");
-            throw new Exception($"CognitoPreAuthenticationEvent {cognitoEvent} failed");
+            throw new Exception($"CognitoPreAuthenticationEvent failed: {e.Message}");
         }
     }
 
-    private async Task ValidateUserDetails(ILambdaContext context, string username, string email)
+    private async Task ValidateUserDetails(ILambdaContext context, string username, string email, string userPoolId)
     {
         try
         {
             _userValidationService.ValidateUsername(username);
 
-            await _userValidationService.ValidateEmail(email);
+            await _userValidationService.ValidateEmail(email, userPoolId);
         }
         catch (Exception e)
         {

@@ -7,8 +7,8 @@ namespace MeloMeloCdk;
 
 public partial class MeloMeloCdkStack
 {
-    private Function PostConfirmationFunction { get; set; }
-    private Function CheckEmailExistenceFunction { get; set; }
+    private IFunction PostConfirmationFunction { get; set; }
+    private IFunction CheckEmailExistenceFunction { get; set; }
 
     private void InitialiseLambdas()
     {
@@ -18,7 +18,7 @@ public partial class MeloMeloCdkStack
         CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
     }
 
-    private Function CreateLambdaFunction(string lambdaName)
+    private IFunction CreateLambdaFunction(string lambdaName)
     {
         var buildOption = new BundlingOptions()
         {
@@ -37,14 +37,16 @@ public partial class MeloMeloCdkStack
             }
         };
 
+        var environment = new Dictionary<string, string>()
+        {
+            { "TABLE_NAME", DynamoDbTable.TableName },
+        };
+
         var lambdaProps = new FunctionProps()
         {
             Runtime = Runtime.DOTNET_8,
             MemorySize = 512,
-            Environment = new Dictionary<string, string>()
-            {
-                { "TABLE_NAME", DynamoDbTable.TableName },
-            },
+            Environment = environment,
             Handler = $"{lambdaName}::{lambdaName}.Function::FunctionHandler",
             Code = Code.FromAsset(".", new Amazon.CDK.AWS.S3.Assets.AssetOptions
             {

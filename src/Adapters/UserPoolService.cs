@@ -6,20 +6,19 @@ namespace Adapters;
 
 public class UserPoolService : IUserPoolService
 {
-    private readonly string _userPoolId;
     private readonly IAmazonCognitoIdentityProvider _cognitoIdentityProvider;
-    
-    public UserPoolService(IAmazonCognitoIdentityProvider provider, string userPoolId)
+
+    public UserPoolService(IAmazonCognitoIdentityProvider provider)
     {
         _cognitoIdentityProvider = provider;
-        _userPoolId = userPoolId;
     }
-    
-    public async Task<bool> EmailExistsInUserPool(string email)
+
+    public async Task<bool> EmailExistsInUserPool(string email, string userPoolId)
     {
         var request = new ListUsersRequest
         {
-            UserPoolId = _userPoolId,
+            UserPoolId = userPoolId,
+            Filter = $"email = \"{email}\"",
             Limit = 1
         };
 

@@ -16,7 +16,7 @@ namespace MeloMeloCdk
         private IBucket PrivateReadonlyBucket { get; set; }
         private IBucket PublicReadonlyBucket { get; set; }
 
-        private UserPool UserPool { get; set; }
+        private IUserPool UserPool { get; set; }
 
 
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
@@ -26,7 +26,6 @@ namespace MeloMeloCdk
             InitialiseTable();
             InitialiseLambdas();
             InitialiseCognito();
-            AddTriggersToUserPool();
             InitialiseBuckets();
         }
 
@@ -54,8 +53,13 @@ namespace MeloMeloCdk
                     EmailSubject = "Verify your MeloMelo account",
                     EmailStyle = VerificationEmailStyle.CODE
                 },
+                LambdaTriggers = new UserPoolTriggers()
+                {
+                    PostConfirmation = PostConfirmationFunction,
+                    PreSignUp = CheckEmailExistenceFunction
+                }
             });
-            
+
             UserPool.AddClient($"{Env}_AppClient", new UserPoolClientOptions()
             {
                 OAuth = new OAuthSettings()
@@ -74,13 +78,7 @@ namespace MeloMeloCdk
                 },
                 PreventUserExistenceErrors = true
             });
-        }
 
-        private void AddTriggersToUserPool()
-        {
-            UserPool.AddTrigger(UserPoolOperation.POST_CONFIRMATION, PostConfirmationFunction);
-            UserPool.AddTrigger(UserPoolOperation.PRE_SIGN_UP, CheckEmailExistenceFunction);
-            
             CheckEmailExistenceFunction.Role!.AttachInlinePolicy(
                 new Policy(this, "userpool-policy", new PolicyProps
                 {
@@ -95,8 +93,6 @@ namespace MeloMeloCdk
                     }
                 })
             );
-
-            CheckEmailExistenceFunction.AddEnvironment("USER_POOL_ID", UserPool.UserPoolId);
         }
 
         private void InitialiseTable()

@@ -21,18 +21,18 @@ public class UserValidationService : IUserValidationService
 
     public void ValidateUsername(string username)
     {
-        var isValid = !string.IsNullOrWhiteSpace(username) || UsernameRegex.IsMatch(username);
+        var isValid = !string.IsNullOrWhiteSpace(username) && UsernameRegex.IsMatch(username);
         if (!isValid)
             throw new Exception("Username is invalid");
     }
 
-    public async Task ValidateEmail(string email)
+    public async Task ValidateEmail(string email, string userPoolId)
     {
-        var isValid = !string.IsNullOrWhiteSpace(email) || EmailRegex.IsMatch(email);
+        var isValid = !string.IsNullOrWhiteSpace(email) && EmailRegex.IsMatch(email);
         if (!isValid)
             throw new Exception("Email is invalid");
 
-        var userInUserPool = await _userPoolService.EmailExistsInUserPool(email);
+        var userInUserPool = await _userPoolService.EmailExistsInUserPool(email, userPoolId);
 
         if (userInUserPool)
             throw new Exception("Email is already in use");

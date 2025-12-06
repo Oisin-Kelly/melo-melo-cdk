@@ -10,17 +10,18 @@ public class DynamoDBService : IDynamoDBService
 {
     private readonly DynamoDBContext _dbContext;
     private readonly string _tableName;
-    
+
     public DynamoDBService(IAmazonDynamoDB dynamoDbClient, string tableName)
     {
         IAmazonDynamoDB CreateClient()
         {
             return dynamoDbClient;
         }
+
         _dbContext = new DynamoDBContextBuilder()
             .WithDynamoDBClient(CreateClient)
             .Build();
-        
+
         _tableName = tableName;
     }
 
@@ -32,23 +33,17 @@ public class DynamoDBService : IDynamoDBService
         });
     }
 
-    public async Task<T> GetByPrimaryKeyAsync<T>(string hashKey, string? rangeKey = null)
+    public async Task<T?> GetFromDynamoAsync<T>(string pk, string sk)
     {
-        if (rangeKey == null)
-            return await _dbContext.LoadAsync<T>(hashKey, new LoadConfig()
-            {
-                OverrideTableName = _tableName
-            });
-        
-        return await _dbContext.LoadAsync<T>(hashKey, rangeKey, new LoadConfig()
+        return await _dbContext.LoadAsync<T>(pk, sk, new LoadConfig()
         {
             OverrideTableName = _tableName
         });
     }
 
-    public async Task<List<T>> QueryByGsiAsync<T>(
-        string gsiName, 
-        string gsiHashKey, 
+    public async Task<List<T?>> QueryByGsiAsync<T>(
+        string gsiName,
+        string gsiHashKey,
         string? gsiRangeKey = null,
         QueryOperator queryOperator = QueryOperator.Equal)
     {
@@ -58,23 +53,22 @@ public class DynamoDBService : IDynamoDBService
             OverrideTableName = _tableName
         };
 
-        IAsyncSearch<T> search;
-        
+        IAsyncSearch<T?> search;
+
         if (gsiRangeKey == null)
         {
-            search = _dbContext.QueryAsync<T>(gsiHashKey, queryConfig);
+            search = _dbContext.QueryAsync<T?>(gsiHashKey, queryConfig);
         }
         else
         {
-            search = _dbContext.QueryAsync<T>(
+            search = _dbContext.QueryAsync<T?>(
                 gsiHashKey,
                 queryOperator,
                 new string[] { gsiRangeKey },
                 queryConfig
             );
         }
-        
+
         return await search.GetRemainingAsync();
     }
 }
-

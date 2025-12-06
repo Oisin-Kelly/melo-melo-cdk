@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Amazon.CDK;
+using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 
@@ -9,8 +10,9 @@ public partial class MeloMeloCdkStack
 {
     private IFunction PostConfirmationFunction { get; set; }
     private IFunction CheckEmailExistenceFunction { get; set; }
+    private IFunction GetUserFunction { get; set; }
 
-    private void InitialiseLambdas()
+    private void InitialiseUserPoolLambdas()
     {
         PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
         DynamoDbTable.GrantReadWriteData(PostConfirmationFunction);
@@ -18,6 +20,28 @@ public partial class MeloMeloCdkStack
         CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
     }
 
+    private void InitialiseApiLambdas()
+    {
+        GetUserFunction = CreateLambdaFunction("GetUserLambda");
+        DynamoDbTable.GrantReadData(GetUserFunction);
+   
+    }
+
+    private void InitialiseLambdaIntegrations()
+    {
+        var methodOptions = new MethodOptions()
+        {
+            AuthorizationType = AuthorizationType.COGNITO,
+            Authorizer = CognitoAuthorizer,
+        };
+
+        var getUserIntegration = new LambdaIntegration(GetUserFunction);
+        var usersResource = RestApi.Root.AddResource("users");
+        var userResource = usersResource.AddResource("{username}");
+    
+        userResource.AddMethod("GET", getUserIntegration, methodOptions);
+    }
+ 
     private IFunction CreateLambdaFunction(string lambdaName)
     {
         var buildOption = new BundlingOptions()

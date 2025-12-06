@@ -18,15 +18,20 @@ namespace MeloMeloCdk
 
         private IUserPool UserPool { get; set; }
 
-
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
 
             InitialiseTable();
-            InitialiseLambdas();
+            
+            InitialiseUserPoolLambdas();
             InitialiseCognito();
+            
             InitialiseBuckets();
+
+            InitialiseApi();
+            InitialiseApiLambdas();
+            InitialiseLambdaIntegrations();
         }
 
         private void InitialiseCognito()

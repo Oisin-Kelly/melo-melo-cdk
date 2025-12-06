@@ -6,8 +6,8 @@ namespace Ports;
 public interface IDynamoDBService
 {
     public Task WriteToDynamoAsync<T>(T value);
-
-    public Task<List<T>> QueryByGsiAsync<T>(
+    public Task<T?> GetFromDynamoAsync<T>(string pk, string sk);
+    public Task<List<T?>> QueryByGsiAsync<T>(
         string gsiName,
         string gsiHashKey,
         string? gsiRangeKey = null,

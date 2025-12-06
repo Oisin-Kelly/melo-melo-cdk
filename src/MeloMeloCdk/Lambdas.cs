@@ -7,30 +7,30 @@ namespace MeloMeloCdk;
 
 public partial class MeloMeloCdkStack
 {
-    private IFunction PostConfirmationFunction { get; set; }
-    private IFunction CheckEmailExistenceFunction { get; set; }
-    
+    private Function PostConfirmationFunction { get; set; }
+    private Function CheckEmailExistenceFunction { get; set; }
+
     private void InitialiseLambdas()
     {
         PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
         DynamoDbTable.GrantReadWriteData(PostConfirmationFunction);
-        
+
         CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
-        DynamoDbTable.GrantReadData(CheckEmailExistenceFunction);
     }
-    
-    private IFunction CreateLambdaFunction(string lambdaName)
+
+    private Function CreateLambdaFunction(string lambdaName)
     {
         var buildOption = new BundlingOptions()
         {
             Image = Runtime.DOTNET_8.BundlingImage,
             User = "root",
             OutputType = BundlingOutput.ARCHIVED,
-            Command = new string[]{
+            Command = new string[]
+            {
                 "/bin/sh",
                 "-c",
                 "dotnet tool install -g Amazon.Lambda.Tools && " +
-                "cd src && " + 
+                "cd src && " +
                 $"cd Lambda/{lambdaName} && " +
                 "dotnet build && " +
                 "dotnet lambda package --output-package /asset-output/function.zip"

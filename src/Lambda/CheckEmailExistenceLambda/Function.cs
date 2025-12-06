@@ -1,5 +1,6 @@
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Ports;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
@@ -10,26 +11,37 @@ namespace CheckEmailExistenceLambda;
 public class Function
 {
     private readonly IUserValidationService _userValidationService;
+    private readonly IDynamoDBService _dynamoDbService;
 
-    public Function(IUserValidationService userValidationService)
+    public Function()
+    {
+        var services = new ServiceCollection();
+        new Startup().ConfigureServices(services);
+        var serviceProvider = services.BuildServiceProvider();
+
+        _userValidationService = serviceProvider.GetRequiredService<IUserValidationService>();
+        _dynamoDbService = serviceProvider.GetRequiredService<IDynamoDBService>();
+    }
+
+    public Function(IDynamoDBService dynamoDbService, IUserValidationService userValidationService)
     {
         _userValidationService = userValidationService;
+        _dynamoDbService = dynamoDbService;
     }
 
     public async Task<CognitoPreAuthenticationEvent> FunctionHandler(CognitoPreAuthenticationEvent cognitoEvent,
         ILambdaContext context)
     {
-        var userPoolId = cognitoEvent.UserPoolId;
         var userName = cognitoEvent.UserName;
         var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
 
         try
         {
-            // make sure username and email match criteria
-            ValidateUserDetails(userName, email);
+            if (string.IsNullOrEmpty(email))
+                throw new ArgumentNullException("email");
 
-// TODO: Check if email is part of database
-            
+            await ValidateUserDetails(context, userName, email);
+
             return cognitoEvent;
         }
         catch (Exception e)
@@ -39,17 +51,18 @@ public class Function
         }
     }
 
-    private void ValidateUserDetails(string username, string? email)
+    private async Task ValidateUserDetails(ILambdaContext context, string username, string email)
     {
-        if (string.IsNullOrEmpty(email))
-            throw new ArgumentNullException(nameof(email));
+        try
+        {
+            _userValidationService.ValidateUsername(username);
 
-        var isUsernameValid = _userValidationService.ValidateUsername(username);
-        if (!isUsernameValid)
-            throw new Exception($"Username {username} is not valid");
-
-        var isEmailValid = _userValidationService.ValidateEmail(email);
-        if (!isEmailValid)
-            throw new Exception($"Email {email} is not valid");
+            await _userValidationService.ValidateEmail(email);
+        }
+        catch (Exception e)
+        {
+            context.Logger.LogLine($"Error in ValidateUserDetails {e.Message}");
+            throw;
+        }
     }
 }

@@ -1,10 +1,7 @@
-using System.Collections.Generic;
 using Amazon.CDK;
-using Amazon.CDK.Alexa.Ask;
 using Amazon.CDK.AWS.Cognito;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.IAM;
-using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.S3;
 using Constructs;
 
@@ -19,7 +16,7 @@ namespace MeloMeloCdk
         private IBucket PrivateReadonlyBucket { get; set; }
         private IBucket PublicReadonlyBucket { get; set; }
 
-        private IUserPool UserPool { get; set; }
+        private UserPool UserPool { get; set; }
 
 
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
@@ -27,8 +24,9 @@ namespace MeloMeloCdk
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
 
             InitialiseTable();
-            InitialiseCognito();
             InitialiseLambdas();
+            InitialiseCognito();
+            AddTriggersToUserPool();
             InitialiseBuckets();
         }
 
@@ -56,13 +54,8 @@ namespace MeloMeloCdk
                     EmailSubject = "Verify your MeloMelo account",
                     EmailStyle = VerificationEmailStyle.CODE
                 },
-                LambdaTriggers = new UserPoolTriggers()
-                {
-                    PostConfirmation = PostConfirmationFunction,
-                    PreSignUp = CheckEmailExistenceFunction
-                }
             });
-
+            
             UserPool.AddClient($"{Env}_AppClient", new UserPoolClientOptions()
             {
                 OAuth = new OAuthSettings()
@@ -81,6 +74,29 @@ namespace MeloMeloCdk
                 },
                 PreventUserExistenceErrors = true
             });
+        }
+
+        private void AddTriggersToUserPool()
+        {
+            UserPool.AddTrigger(UserPoolOperation.POST_CONFIRMATION, PostConfirmationFunction);
+            UserPool.AddTrigger(UserPoolOperation.PRE_SIGN_UP, CheckEmailExistenceFunction);
+            
+            CheckEmailExistenceFunction.Role!.AttachInlinePolicy(
+                new Policy(this, "userpool-policy", new PolicyProps
+                {
+                    Statements = new[]
+                    {
+                        new PolicyStatement(new PolicyStatementProps
+                        {
+                            Actions = new[] { "cognito-idp:ListUsers" },
+                            Resources = new[] { UserPool.UserPoolArn },
+                            Effect = Effect.ALLOW
+                        })
+                    }
+                })
+            );
+
+            CheckEmailExistenceFunction.AddEnvironment("USER_POOL_ID", UserPool.UserPoolId);
         }
 
         private void InitialiseTable()

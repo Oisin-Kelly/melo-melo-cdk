@@ -24,7 +24,6 @@ public partial class MeloMeloCdkStack
     {
         GetUserFunction = CreateLambdaFunction("GetUserLambda");
         DynamoDbTable.GrantReadData(GetUserFunction);
-   
     }
 
     private void InitialiseLambdaIntegrations()
@@ -42,7 +41,7 @@ public partial class MeloMeloCdkStack
         userResource.AddMethod("GET", getUserIntegration, methodOptions);
     }
  
-    private IFunction CreateLambdaFunction(string lambdaName)
+    private IFunction CreateLambdaFunction(string lambdaName, int memorySize = 512)
     {
         var buildOption = new BundlingOptions()
         {
@@ -69,7 +68,7 @@ public partial class MeloMeloCdkStack
         var lambdaProps = new FunctionProps()
         {
             Runtime = Runtime.DOTNET_8,
-            MemorySize = 512,
+            MemorySize = memorySize,
             Environment = environment,
             Handler = $"{lambdaName}::{lambdaName}.Function::FunctionHandler",
             Code = Code.FromAsset(".", new Amazon.CDK.AWS.S3.Assets.AssetOptions

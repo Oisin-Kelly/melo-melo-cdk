@@ -81,27 +81,5 @@ namespace Domain
         public UserDataModel()
         {
         }
-
-        public static UserDataModel CreateFromCognitoSignUp(string username, string email)
-        {
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-            return new UserDataModel
-            {
-                Pk = $"USER#{username}",
-                Sk = "PROFILE",
-                Gsi1Pk = $"EMAIL#{email}",
-                Gsi1Sk = "PROFILE",
-                Username = username,
-                DisplayName = username,
-                Country = "Ireland",
-                Bio = "Hey! I'm using MeloMelo!",
-                FollowingCount = 0,
-                FollowerCount = 0,
-                FollowingsPrivate = false,
-                FollowersPrivate = false,
-                CreatedAt = now
-            };
-        }
     }
 }

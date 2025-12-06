@@ -42,7 +42,7 @@ public class Function
             if (string.IsNullOrEmpty(email))
                 throw new NullReferenceException("email");
 
-            var userData = UserDataModel.CreateFromCognitoSignUp(userName, email);
+            var userData = CreateUserFromCognitoSignUp(userName, email);
 
             await _dbService.WriteToDynamoAsync(userData);
 
@@ -55,5 +55,27 @@ public class Function
             context.Logger.LogError($"Error inserting user {userName} (Email: {email}): {ex.Message}");
             throw new Exception($"Database operation failed for user {userName}");
         }
+    }
+
+    private UserDataModel CreateUserFromCognitoSignUp(string username, string email)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        return new UserDataModel
+        {
+            Pk = $"USER#{username}",
+            Sk = "PROFILE",
+            Gsi1Pk = $"EMAIL#{email.ToLower()}",
+            Gsi1Sk = "PROFILE",
+            Username = username,
+            DisplayName = username,
+            Country = "Ireland",
+            Bio = "Hey! I'm using MeloMelo!",
+            FollowingCount = 0,
+            FollowerCount = 0,
+            FollowingsPrivate = false,
+            FollowersPrivate = false,
+            CreatedAt = now
+        };
     }
 }

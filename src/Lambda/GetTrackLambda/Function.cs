@@ -12,6 +12,7 @@ namespace GetTrackLambda;
 public class Function
 {
     private readonly ITrackRepository _trackRepository;
+    private readonly ITrackSharingService _trackSharingService;
 
     public Function()
     {
@@ -20,6 +21,7 @@ public class Function
         var serviceProvider = services.BuildServiceProvider();
 
         _trackRepository = serviceProvider.GetRequiredService<ITrackRepository>();
+        _trackSharingService = serviceProvider.GetRequiredService<ITrackSharingService>();
     }
     
     public Function(ITrackRepository trackRepository)
@@ -30,8 +32,7 @@ public class Function
     public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
         var trackId = request.PathParameters["trackId"];
-        
-        // request.RequestContext.Authorizer.Claims['cognito:username']
+        var requestorUsername = request.RequestContext.Authorizer.Claims["cognito:username"];
         
         if (string.IsNullOrWhiteSpace(trackId))
         {
@@ -45,8 +46,6 @@ public class Function
                 })
             };
         }
-
-        // TODO: Add permissions check to see if track has been shared with requestor
         
         try
         {
@@ -63,6 +62,22 @@ public class Function
                         message = "Error: no track found"
                     })
                 };
+            }
+
+            if (track.Owner.Username != requestorUsername)
+            {
+                if (!await _trackSharingService.IsTrackSharedWithUser(trackId, requestorUsername))
+                {
+                    return new APIGatewayProxyResponse
+                    {
+                        StatusCode = 404,
+                        Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
+                        Body = JsonSerializer.Serialize(new
+                        {
+                            message = "Error: no track found"
+                        })
+                    };
+                }
             }
 
             return new APIGatewayProxyResponse
@@ -82,7 +97,7 @@ public class Function
                 Body = JsonSerializer.Serialize(new
                 {
                     message = "Internal server error",
-                    error = ex.Message
+                    error = ex.Message,
                 })
             };
         }

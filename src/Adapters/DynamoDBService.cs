@@ -41,7 +41,7 @@ public class DynamoDBService : IDynamoDBService
         });
     }
 
-    public async Task<List<T?>> QueryByGsiAsync<T>(
+    public async Task<List<T>> QueryByGsiAsync<T>(
         string gsiName,
         string gsiHashKey,
         string? gsiRangeKey = null,
@@ -53,18 +53,18 @@ public class DynamoDBService : IDynamoDBService
             OverrideTableName = _tableName
         };
 
-        IAsyncSearch<T?> search;
+        IAsyncSearch<T> search;
 
         if (gsiRangeKey == null)
         {
-            search = _dbContext.QueryAsync<T?>(gsiHashKey, queryConfig);
+            search = _dbContext.QueryAsync<T>(gsiHashKey, queryConfig);
         }
         else
         {
-            search = _dbContext.QueryAsync<T?>(
+            search = _dbContext.QueryAsync<T>(
                 gsiHashKey,
                 queryOperator,
-                new string[] { gsiRangeKey },
+                new[] { gsiRangeKey },
                 queryConfig
             );
         }

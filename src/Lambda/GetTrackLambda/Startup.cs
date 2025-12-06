@@ -34,5 +34,11 @@ public class Startup
             var userRepository = provider.GetRequiredService<IUserRepository>();
             return new TrackRepository(dbClient, userRepository);
         });
+
+        services.AddTransient<ITrackSharingService>(provider =>
+        {
+            var client = provider.GetRequiredService<IDynamoDBService>();
+            return new TrackSharingService(client);
+        });
     }
 }

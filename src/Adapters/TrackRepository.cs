@@ -42,15 +42,12 @@ public class TrackRepository : ITrackRepository
     private async Task<TrackDataModel?> GetTrackDtoAsync(string trackId)
     {
         var tracks = await _dynamoDbService.QueryByGsiAsync<TrackDataModel>(
-            "GSI",
+            "GSI1",
             $"TRACK#{trackId}",
             "INFO"
         );
-
-        if (tracks.Count == 0)
-            return null;
-
-        return tracks[0];
+        
+        return tracks.FirstOrDefault();
     }
 
     private async Task<User?> GetTrackOwner(TrackDataModel trackDto)

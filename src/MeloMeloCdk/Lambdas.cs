@@ -11,6 +11,7 @@ public partial class MeloMeloCdkStack
     private IFunction PostConfirmationFunction { get; set; }
     private IFunction CheckEmailExistenceFunction { get; set; }
     private IFunction GetUserFunction { get; set; }
+    private IFunction GetTrackFunction { get; set; }
 
     private void InitialiseUserPoolLambdas()
     {
@@ -24,6 +25,9 @@ public partial class MeloMeloCdkStack
     {
         GetUserFunction = CreateLambdaFunction("GetUserLambda");
         DynamoDbTable.GrantReadData(GetUserFunction);
+        
+        GetTrackFunction = CreateLambdaFunction("GetTrackLambda");
+        DynamoDbTable.GrantReadData(GetTrackFunction);
     }
 
     private void InitialiseLambdaIntegrations()
@@ -39,6 +43,12 @@ public partial class MeloMeloCdkStack
         var userResource = usersResource.AddResource("{username}");
     
         userResource.AddMethod("GET", getUserIntegration, methodOptions);
+        
+        var getTrackIntegration = new LambdaIntegration(GetTrackFunction);
+        var tracksResource = userResource.AddResource("tracks");
+        var trackResource = tracksResource.AddResource("{trackId}");
+        
+        trackResource.AddMethod("GET", getTrackIntegration, methodOptions);
     }
  
     private IFunction CreateLambdaFunction(string lambdaName, int memorySize = 512)

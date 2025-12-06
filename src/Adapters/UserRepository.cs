@@ -12,8 +12,9 @@ public class UserRepository : IUserRepository
         _dynamoDbService = dynamoDbService;
     }
 
-    public Task<User?> GetUserByUsername(string username)
+    public async Task<User?> GetUserByUsername(string username)
     {
-        return _dynamoDbService.GetFromDynamoAsync<User>($"USER#{username}", "PROFILE");
+        var userDataModel = await _dynamoDbService.GetFromDynamoAsync<UserDataModel>($"USER#{username}", "PROFILE");
+        return userDataModel;
     }
 }

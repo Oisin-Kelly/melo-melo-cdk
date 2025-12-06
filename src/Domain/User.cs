@@ -1,37 +1,65 @@
-﻿using Amazon.DynamoDBv2.DataModel;
+﻿using System.Text.Json.Serialization;
+using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
     public class User
     {
-        [DynamoDBProperty("username")] public required string Username { get; set; }
+        [JsonPropertyName("username")]
+        [DynamoDBProperty("username")]
+        public required string Username { get; set; }
 
-        [DynamoDBProperty("displayName")] public string? DisplayName { get; set; }
+        [JsonPropertyName("displayName")]
+        [DynamoDBProperty("displayName")]
+        public string? DisplayName { get; set; }
 
-        [DynamoDBProperty("firstName")] public string? FirstName { get; set; }
+        [JsonPropertyName("firstName")]
+        [DynamoDBProperty("firstName")]
+        public string? FirstName { get; set; }
 
-        [DynamoDBProperty("lastName")] public string? LastName { get; set; }
+        [JsonPropertyName("lastName")]
+        [DynamoDBProperty("lastName")]
+        public string? LastName { get; set; }
 
-        [DynamoDBProperty("country")] public string? Country { get; set; }
+        [JsonPropertyName("country")]
+        [DynamoDBProperty("country")]
+        public string? Country { get; set; }
 
-        [DynamoDBProperty("city")] public string? City { get; set; }
+        [JsonPropertyName("city")]
+        [DynamoDBProperty("city")]
+        public string? City { get; set; }
 
-        [DynamoDBProperty("bio")] public string? Bio { get; set; }
+        [JsonPropertyName("bio")]
+        [DynamoDBProperty("bio")]
+        public string? Bio { get; set; }
 
-        [DynamoDBProperty("imageUrl")] public string? ImageUrl { get; set; }
+        [JsonPropertyName("imageUrl")]
+        [DynamoDBProperty("imageUrl")]
+        public string? ImageUrl { get; set; }
 
-        [DynamoDBProperty("imageBgColor")] public string? ImageBgColor { get; set; }
+        [JsonPropertyName("imageBgColor")]
+        [DynamoDBProperty("imageBgColor")]
+        public string? ImageBgColor { get; set; }
 
-        [DynamoDBProperty("followingCount")] public required int FollowingCount { get; set; }
+        [JsonPropertyName("followingCount")]
+        [DynamoDBProperty("followingCount")]
+        public required int FollowingCount { get; set; }
 
-        [DynamoDBProperty("followerCount")] public required int FollowerCount { get; set; }
+        [JsonPropertyName("followerCount")]
+        [DynamoDBProperty("followerCount")]
+        public required int FollowerCount { get; set; }
 
+        [JsonPropertyName("followingsPrivate")]
         [DynamoDBProperty("followingsPrivate")]
         public required bool FollowingsPrivate { get; set; }
 
-        [DynamoDBProperty("followersPrivate")] public required bool FollowersPrivate { get; set; }
+        [JsonPropertyName("followersPrivate")]
+        [DynamoDBProperty("followersPrivate")]
+        public required bool FollowersPrivate { get; set; }
 
-        [DynamoDBProperty("createdAt")] public required long CreatedAt { get; set; }
+        [JsonPropertyName("createdAt")]
+        [DynamoDBProperty("createdAt")]
+        public required long CreatedAt { get; set; }
 
         public User()
         {
@@ -47,7 +75,7 @@ namespace Domain
         [DynamoDBGlobalSecondaryIndexHashKey("GSI1", AttributeName = "GSI1PK")]
         public required string Gsi1Pk { get; set; }
 
-        [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName =  "GSI1SK")]
+        [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
         public string? Gsi1Sk { get; set; }
 
         public UserDataModel()

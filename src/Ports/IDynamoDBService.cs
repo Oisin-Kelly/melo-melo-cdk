@@ -12,4 +12,5 @@ public interface IDynamoDBService
         string gsiHashKey,
         string? gsiRangeKey = null,
         QueryOperator queryOperator = QueryOperator.Equal);
+    public Task<List<T>> BatchGetAsync<T>(IEnumerable<(string pk, string sk)> keys);
 }

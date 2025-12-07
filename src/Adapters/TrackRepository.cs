@@ -36,6 +36,7 @@ public class TrackRepository : ITrackRepository
             Segments = trackDto.Segments,
             TrackName = trackDto.TrackName,
             Owner = owner,
+            Id = trackDto.Sk.Replace("TRACK#", "")
         };
     }
 

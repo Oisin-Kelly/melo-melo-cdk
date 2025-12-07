@@ -5,10 +5,10 @@ namespace MeloMeloCdk;
 
 public partial class MeloMeloCdkStack
 {
-    public IRestApi RestApi { get; set; }
-    public IAuthorizer CognitoAuthorizer { get; set; }
+    private IRestApi RestApi { get; set; }
+    private IAuthorizer CognitoAuthorizer { get; set; }
 
-    public void InitialiseApi()
+    private void InitialiseApi()
     {
         RestApi = new RestApi(this, "MeloMeloCdk", new RestApiProps()
         {

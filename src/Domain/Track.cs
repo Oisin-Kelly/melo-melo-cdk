@@ -5,6 +5,9 @@ namespace Domain
 {
     public class Track
     {
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+        
         [JsonPropertyName("trackName")]
         public required string TrackName { get; set; }
         

@@ -12,7 +12,7 @@ namespace GetTrackLambda;
 public class Function
 {
     private readonly ITrackRepository _trackRepository;
-    private readonly ITrackSharingService _trackSharingService;
+    private readonly ISharedTrackRepository _sharedTrackRepository;
 
     public Function()
     {
@@ -21,19 +21,20 @@ public class Function
         var serviceProvider = services.BuildServiceProvider();
 
         _trackRepository = serviceProvider.GetRequiredService<ITrackRepository>();
-        _trackSharingService = serviceProvider.GetRequiredService<ITrackSharingService>();
+        _sharedTrackRepository = serviceProvider.GetRequiredService<ISharedTrackRepository>();
     }
-    
-    public Function(ITrackRepository trackRepository)
+
+    public Function(ITrackRepository trackRepository,  ISharedTrackRepository sharedTrackRepository)
     {
         _trackRepository = trackRepository;
+        _sharedTrackRepository = sharedTrackRepository;
     }
-    
+
     public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
         var trackId = request.PathParameters["trackId"];
         var requestorUsername = request.RequestContext.Authorizer.Claims["cognito:username"];
-        
+
         if (string.IsNullOrWhiteSpace(trackId))
         {
             return new APIGatewayProxyResponse
@@ -46,11 +47,11 @@ public class Function
                 })
             };
         }
-        
+
         try
         {
             var track = await _trackRepository.GetTrackAsync(trackId);
-            
+
             if (track == null)
             {
                 return new APIGatewayProxyResponse
@@ -64,20 +65,18 @@ public class Function
                 };
             }
 
-            if (track.Owner.Username != requestorUsername)
+            if (track.Owner.Username != requestorUsername &&
+                !await _sharedTrackRepository.IsTrackSharedWithUser(trackId, requestorUsername))
             {
-                if (!await _trackSharingService.IsTrackSharedWithUser(trackId, requestorUsername))
+                return new APIGatewayProxyResponse
                 {
-                    return new APIGatewayProxyResponse
+                    StatusCode = 404,
+                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
+                    Body = JsonSerializer.Serialize(new
                     {
-                        StatusCode = 404,
-                        Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                        Body = JsonSerializer.Serialize(new
-                        {
-                            message = "Error: no track found"
-                        })
-                    };
-                }
+                        message = "Error: no track found"
+                    })
+                };
             }
 
             return new APIGatewayProxyResponse

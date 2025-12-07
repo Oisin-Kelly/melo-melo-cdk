@@ -1,10 +1,19 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
     public class SharedTrack
     {
+        [JsonPropertyName("caption")]
+        public string? Caption { get; set; }
+        
+        [JsonPropertyName("sharedAt")]
+        public required long SharedAt { get; set; }
+        
+        [JsonPropertyName("track")]
+        public required Track Track { get; set; }
     }
 
     public class SharedTrackDataModel
@@ -24,7 +33,7 @@ namespace Domain
         [DynamoDBProperty("caption")]
         public string? Caption { get; set; }
 
-        [DynamoDBProperty("createdAt")]
-        public required long CreatedAt { get; set; }
+        [DynamoDBProperty("sharedAt")]
+        public required long SharedAt { get; set; }
     }
 }

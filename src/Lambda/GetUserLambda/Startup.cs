@@ -22,10 +22,6 @@ public class Startup
             return new DynamoDBService(client, tableName);
         });
 
-        services.AddTransient<IUserRepository>(provider =>
-        {
-            var client = provider.GetRequiredService<IDynamoDBService>();
-            return new UserRepository(client);
-        });
+        services.AddTransient<IUserRepository, UserRepository>();
     }
 }

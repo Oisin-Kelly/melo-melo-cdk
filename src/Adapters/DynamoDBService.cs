@@ -71,4 +71,20 @@ public class DynamoDBService : IDynamoDBService
 
         return await search.GetRemainingAsync();
     }
+
+    public async Task<List<T>> BatchGetAsync<T>(IEnumerable<(string pk, string sk)> keys)
+    {
+        var batchGet = _dbContext.CreateBatchGet<T>(new BatchGetConfig()
+        {
+            OverrideTableName = _tableName,
+        });
+
+        foreach (var (pk, sk) in keys)
+        {
+            batchGet.AddKey(pk, sk);
+        }
+
+        await batchGet.ExecuteAsync();
+        return batchGet.Results;
+    }
 }

@@ -12,6 +12,8 @@ public partial class MeloMeloCdkStack
     private IFunction CheckEmailExistenceFunction { get; set; }
     private IFunction GetUserFunction { get; set; }
     private IFunction GetTrackFunction { get; set; }
+    private IFunction GetTracksSharedWithUserFunction { get; set; }
+    private IFunction GetTracksSharedFromUserFunction{ get; set; }
 
     private void InitialiseUserPoolLambdas()
     {
@@ -25,9 +27,15 @@ public partial class MeloMeloCdkStack
     {
         GetUserFunction = CreateLambdaFunction("GetUserLambda");
         DynamoDbTable.GrantReadData(GetUserFunction);
-        
+
         GetTrackFunction = CreateLambdaFunction("GetTrackLambda");
         DynamoDbTable.GrantReadData(GetTrackFunction);
+
+        GetTracksSharedWithUserFunction = CreateLambdaFunction("GetTracksSharedWithUserLambda");
+        DynamoDbTable.GrantReadData(GetTracksSharedWithUserFunction);
+        
+        GetTracksSharedFromUserFunction  = CreateLambdaFunction("GetTracksSharedFromUserLambda");
+        DynamoDbTable.GrantReadData(GetTracksSharedFromUserFunction);
     }
 
     private void InitialiseLambdaIntegrations()
@@ -38,19 +46,29 @@ public partial class MeloMeloCdkStack
             Authorizer = CognitoAuthorizer,
         };
 
-        var getUserIntegration = new LambdaIntegration(GetUserFunction);
         var usersResource = RestApi.Root.AddResource("users");
+
         var userResource = usersResource.AddResource("{username}");
-    
+        var getUserIntegration = new LambdaIntegration(GetUserFunction);
         userResource.AddMethod("GET", getUserIntegration, methodOptions);
         
-        var getTrackIntegration = new LambdaIntegration(GetTrackFunction);
-        var tracksResource = userResource.AddResource("tracks");
-        var trackResource = tracksResource.AddResource("{trackId}");
+        var sharedResource = userResource.AddResource("shared");
+        var getTracksSharedFromserIntegration = new LambdaIntegration(GetTracksSharedFromUserFunction);
+        sharedResource.AddMethod("GET", getTracksSharedFromserIntegration, methodOptions);
         
+        // MARK: Tracks:
+
+        var tracksResource = RestApi.Root.AddResource("tracks");
+
+        var trackResource = tracksResource.AddResource("{trackId}");
+        var getTrackIntegration = new LambdaIntegration(GetTrackFunction);
         trackResource.AddMethod("GET", getTrackIntegration, methodOptions);
+
+        var tracksSharedResource = tracksResource.AddResource("shared");
+        var getTracksSharedWithUserIntegration = new LambdaIntegration(GetTracksSharedWithUserFunction);
+        tracksSharedResource.AddMethod("GET", getTracksSharedWithUserIntegration, methodOptions);
     }
- 
+
     private IFunction CreateLambdaFunction(string lambdaName, int memorySize = 512)
     {
         var buildOption = new BundlingOptions()

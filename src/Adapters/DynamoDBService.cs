@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
+using Amazon.DynamoDBv2.Model;
 using Ports;
 
 namespace Adapters;
@@ -11,16 +12,14 @@ public class DynamoDBService : IDynamoDBService
 {
     private readonly DynamoDBContext _dbContext;
     private readonly string _tableName;
+    private readonly IAmazonDynamoDB _dynamoDbClient;
 
     public DynamoDBService(IAmazonDynamoDB dynamoDbClient, string tableName)
     {
-        IAmazonDynamoDB CreateClient()
-        {
-            return dynamoDbClient;
-        }
+        _dynamoDbClient = dynamoDbClient;
 
         _dbContext = new DynamoDBContextBuilder()
-            .WithDynamoDBClient(CreateClient)
+            .WithDynamoDBClient(() => dynamoDbClient)
             .Build();
 
         _tableName = tableName;
@@ -89,5 +88,23 @@ public class DynamoDBService : IDynamoDBService
 
         await batchGet.ExecuteAsync();
         return batchGet.Results;
+    }
+
+    public async Task ExecuteTransactWriteAsync(List<TransactWriteItem> transactionItems)
+    {
+        var request = new TransactWriteItemsRequest
+        {
+            TransactItems = transactionItems
+        };
+
+        foreach (var item in request.TransactItems)
+        {
+            if (item.Delete != null) item.Delete.TableName = _tableName;
+            if (item.Update != null) item.Update.TableName = _tableName;
+            if (item.Put != null) item.Put.TableName = _tableName;
+            if (item.ConditionCheck != null) item.ConditionCheck.TableName = _tableName;
+        }
+
+        await _dynamoDbClient.TransactWriteItemsAsync(request);
     }
 }

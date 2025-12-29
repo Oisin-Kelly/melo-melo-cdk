@@ -16,17 +16,19 @@ namespace MeloMeloCdk
         private IBucket PrivateReadonlyBucket { get; set; }
         private IBucket PublicReadonlyBucket { get; set; }
 
-        private IUserPool UserPool { get; set; }
+        private UserPool UserPool { get; set; }
+        private IUserPoolClient UserPoolClient { get; set; }
+
 
         internal MeloMeloCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
 
             InitialiseTable();
-            
+
             InitialiseUserPoolLambdas();
             InitialiseCognito();
-            
+
             InitialiseBuckets();
 
             InitialiseApi();
@@ -65,7 +67,7 @@ namespace MeloMeloCdk
                 }
             });
 
-            UserPool.AddClient($"{Env}_AppClient", new UserPoolClientOptions()
+            UserPoolClient = UserPool.AddClient($"{Env}_AppClient", new UserPoolClientOptions()
             {
                 OAuth = new OAuthSettings()
                 {

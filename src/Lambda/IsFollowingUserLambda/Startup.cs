@@ -1,11 +1,11 @@
+using Ports;
 using Adapters;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Ports;
 
-namespace GetTracksSharedWithUserLambda;
+namespace IsFollowingUserLambda;
 
 [LambdaStartup]
 public class Startup
@@ -25,7 +25,7 @@ public class Startup
             return new DynamoDBService(client, tableName);
         });
 
-        builder.Services.AddTransient<ISharedTrackRepository, SharedTrackRepository>();
+        builder.Services.AddTransient<IUserRepository, UserRepository>();
     
         return builder;
     }

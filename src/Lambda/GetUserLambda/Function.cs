@@ -1,84 +1,49 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Ports;
 using System.Text.Json;
-using Adapters;
 using Amazon.Lambda.Annotations;
+using Amazon.Lambda.Annotations.APIGateway;
+using Lambda.Shared;
 
 namespace GetUserLambda;
 
-public class Function
+public class Function : BaseLambdaFunctionHandler
 {
     private readonly IUserRepository _userRepository;
 
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UserRepository))]
     public Function(IUserRepository userRepository)
     {
         _userRepository = userRepository;
     }
 
     [LambdaFunction]
-    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
+    [HttpApi(LambdaHttpMethod.Get, "/users/{username}")]
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
+        ILambdaContext context, string username)
     {
-        request.PathParameters.TryGetValue("username", out var requestedUsername);
-        
-        if (string.IsNullOrWhiteSpace(requestedUsername))
-        {
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.BadRequest,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(new
-                        ErrorResponse("the path parameter 'username' is missing", "Bad Request", (int)HttpStatusCode.BadRequest),
-                    CustomJsonSerializerContext.Default.ErrorResponse
-                )
-            };
-        }
+        if (string.IsNullOrWhiteSpace(username))
+            return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
 
         try
         {
-            var user = await _userRepository.GetUserByUsername(requestedUsername);
-            
-            if (user == null)
-            {
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = (int)HttpStatusCode.BadRequest,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                    Body = JsonSerializer.Serialize(new
-                            ErrorResponse($"no user found by username {requestedUsername}", "Not Found",
-                                (int)HttpStatusCode.BadRequest),
-                        CustomJsonSerializerContext.Default.ErrorResponse
-                    )
-                };
-            }
+            var user = await _userRepository.GetUserByUsername(username);
 
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.OK,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(
+            if (user == null)
+                return Error(HttpStatusCode.NotFound, $"no user found by username {username}", "Not Found");
+
+            return Ok(
+                JsonSerializer.Serialize(
                     user,
                     CustomJsonSerializerContext.Default.User
                 )
-            };
+            );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUserLambda. Error: {ex.Message}");
-            
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.InternalServerError,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(new
-                        ErrorResponse(ex.Message, "Internal Server Error", (int)HttpStatusCode.InternalServerError),
-                    CustomJsonSerializerContext.Default.ErrorResponse
-                )
-            };
+            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
         }
     }
 }

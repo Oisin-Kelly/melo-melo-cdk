@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using Amazon.CDK;
-using Amazon.CDK.AWS.APIGateway;
-using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Apigatewayv2;
 using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AwsApigatewayv2Integrations;
 using AssetOptions = Amazon.CDK.AWS.S3.Assets.AssetOptions;
+using HttpMethod = Amazon.CDK.AWS.Apigatewayv2.HttpMethod;
 
 namespace MeloMeloCdk;
 
@@ -15,6 +16,9 @@ public partial class MeloMeloCdkStack
     private IFunction GetTrackFunction { get; set; }
     private IFunction GetTracksSharedWithUserFunction { get; set; }
     private IFunction GetTracksSharedFromUserFunction { get; set; }
+
+    private IFunction IsFollowingUserFunction { get; set; }
+    private IFunction FollowUserFunction { get; set; }
 
     private void InitialiseUserPoolLambdas()
     {
@@ -37,37 +41,60 @@ public partial class MeloMeloCdkStack
 
         GetTracksSharedFromUserFunction = CreateLambdaFunction("GetTracksSharedFromUserLambda");
         DynamoDbTable.GrantReadData(GetTracksSharedFromUserFunction);
+
+        IsFollowingUserFunction = CreateLambdaFunction("IsFollowingUserLambda");
+        DynamoDbTable.GrantReadData(IsFollowingUserFunction);
+
+        FollowUserFunction = CreateLambdaFunction("FollowUserLambda");
+        DynamoDbTable.GrantReadWriteData(FollowUserFunction);
     }
 
     private void InitialiseLambdaIntegrations()
     {
-        var methodOptions = new MethodOptions()
+        HttpLambdaIntegration CreateIntegration(IFunction function) =>
+            new HttpLambdaIntegration($"{function.Node.Id}Integration", function);
+
+        HttpApi.AddRoutes(new AddRoutesOptions
         {
-            AuthorizationType = AuthorizationType.COGNITO,
-            Authorizer = CognitoAuthorizer,
-        };
+            Path = "/users/{username}",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetUserFunction),
+        });
 
-        var usersResource = RestApi.Root.AddResource("users");
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/shared",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetTracksSharedFromUserFunction),
+        });
 
-        var userResource = usersResource.AddResource("{username}");
-        var getUserIntegration = new LambdaIntegration(GetUserFunction);
-        userResource.AddMethod("GET", getUserIntegration, methodOptions);
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/follow-status",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(IsFollowingUserFunction),
+        });
 
-        var sharedResource = userResource.AddResource("shared");
-        var getTracksSharedFromserIntegration = new LambdaIntegration(GetTracksSharedFromUserFunction);
-        sharedResource.AddMethod("GET", getTracksSharedFromserIntegration, methodOptions);
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/follow-user",
+            Methods = new[] { HttpMethod.POST },
+            Integration = CreateIntegration(FollowUserFunction),
+        });
 
-        // MARK: Tracks:
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetTrackFunction),
+        });
 
-        var tracksResource = RestApi.Root.AddResource("tracks");
-
-        var trackResource = tracksResource.AddResource("{trackId}");
-        var getTrackIntegration = new LambdaIntegration(GetTrackFunction);
-        trackResource.AddMethod("GET", getTrackIntegration, methodOptions);
-
-        var tracksSharedResource = tracksResource.AddResource("shared");
-        var getTracksSharedWithUserIntegration = new LambdaIntegration(GetTracksSharedWithUserFunction);
-        tracksSharedResource.AddMethod("GET", getTracksSharedWithUserIntegration, methodOptions);
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/shared",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetTracksSharedWithUserFunction),
+        });
     }
 
     private IFunction CreateLambdaFunction(string lambdaName, int memorySize = 512)
@@ -76,7 +103,7 @@ public partial class MeloMeloCdkStack
         {
             Image = Runtime.DOTNET_8.BundlingImage,
             User = "root",
-            OutputType = BundlingOutput.NOT_ARCHIVED, 
+            OutputType = BundlingOutput.NOT_ARCHIVED,
             Command = new string[]
             {
                 "/bin/sh",
@@ -90,7 +117,7 @@ public partial class MeloMeloCdkStack
         var environment = new Dictionary<string, string>()
         {
             { "TABLE_NAME", DynamoDbTable.TableName },
-            { "ANNOTATIONS_HANDLER", "FunctionHandler" }, 
+            { "ANNOTATIONS_HANDLER", "FunctionHandler" },
         };
 
         var lambdaProps = new FunctionProps

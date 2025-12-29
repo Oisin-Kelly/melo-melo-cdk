@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using Adapters;
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
@@ -8,12 +6,10 @@ using Ports;
 
 namespace PostConfirmationLambda;
 
-public class Function
+public class Function 
 {
     private readonly IDynamoDBService _dbService;
 
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DynamoDBService))]
     public Function(IDynamoDBService dbService)
     {
         _dbService = dbService;
@@ -31,7 +27,7 @@ public class Function
 
         try
         {
-            if (string.IsNullOrEmpty(email))
+            if (string.IsNullOrWhiteSpace(email))
                 throw new NullReferenceException("email");
 
             var userData = CreateUserFromCognitoSignUp(username, email);

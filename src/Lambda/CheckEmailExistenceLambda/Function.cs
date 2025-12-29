@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using Adapters;
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
@@ -11,8 +9,6 @@ public class Function
 {
     private readonly IUserValidationService _userValidationService;
 
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UserValidationService))]
     public Function(IUserValidationService userValidationService)
     {
         _userValidationService = userValidationService;
@@ -27,7 +23,7 @@ public class Function
             var username = cognitoEvent.UserName;
             var userPoolId = cognitoEvent.UserPoolId;
 
-            cognitoEvent.Request.UserAttributes.TryGetValue("email", out var email);
+            var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
             if (string.IsNullOrWhiteSpace(email))
             {
                 throw new ArgumentNullException(nameof(cognitoEvent),

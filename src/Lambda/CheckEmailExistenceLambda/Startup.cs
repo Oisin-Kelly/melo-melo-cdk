@@ -1,21 +1,24 @@
 using Ports;
 using Adapters;
 using Amazon.CognitoIdentityProvider;
-using Amazon.DynamoDBv2;
 using Amazon.Lambda.Annotations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace CheckEmailExistenceLambda;
 
 [LambdaStartup]
 public class Startup
 {
-    public void ConfigureServices(IServiceCollection services)
+    public HostApplicationBuilder ConfigureHostBuilder()
     {
-        var cognitoClient = new AmazonCognitoIdentityProviderClient();
-        services.AddSingleton<IAmazonCognitoIdentityProvider>(cognitoClient);
+        var builder = new HostApplicationBuilder();
         
-        services.AddTransient<IUserPoolService, UserPoolService>();
-        services.AddTransient<IUserValidationService, UserValidationService>();
+        builder.Services.AddSingleton<IAmazonCognitoIdentityProvider>(new AmazonCognitoIdentityProviderClient());
+
+        builder.Services.AddTransient<IUserPoolService, UserPoolService>();
+        builder.Services.AddTransient<IUserValidationService, UserValidationService>();
+    
+        return builder;
     }
 }

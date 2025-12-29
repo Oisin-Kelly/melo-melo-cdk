@@ -1,11 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
-using Microsoft.Extensions.DependencyInjection;
 using Ports;
 using System.Text.Json;
-
-// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
+using Adapters;
+using Amazon.Lambda.Annotations;
 
 namespace GetUserLambda;
 
@@ -13,34 +13,28 @@ public class Function
 {
     private readonly IUserRepository _userRepository;
 
-    public Function()
-    {
-        var services = new ServiceCollection();
-        new Startup().ConfigureServices(services);
-        var serviceProvider = services.BuildServiceProvider();
-
-        _userRepository = serviceProvider.GetRequiredService<IUserRepository>();
-    }
-    
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UserRepository))]
     public Function(IUserRepository userRepository)
     {
         _userRepository = userRepository;
     }
-    
+
+    [LambdaFunction]
     public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
-        var requestedUsername = request.PathParameters["username"];
+        request.PathParameters.TryGetValue("username", out var requestedUsername);
         
         if (string.IsNullOrWhiteSpace(requestedUsername))
         {
             return new APIGatewayProxyResponse
             {
-                StatusCode = 400,
+                StatusCode = (int)HttpStatusCode.BadRequest,
                 Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
                 Body = JsonSerializer.Serialize(new
-                {
-                    message = "Error: You are missing the path parameter username"
-                })
+                        ErrorResponse("the path parameter 'username' is missing", "Bad Request", (int)HttpStatusCode.BadRequest),
+                    CustomJsonSerializerContext.Default.ErrorResponse
+                )
             };
         }
 
@@ -52,34 +46,38 @@ public class Function
             {
                 return new APIGatewayProxyResponse
                 {
-                    StatusCode = 404,
+                    StatusCode = (int)HttpStatusCode.BadRequest,
                     Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
                     Body = JsonSerializer.Serialize(new
-                    {
-                        message = "Error: no user found by username"
-                    })
+                            ErrorResponse($"no user found by username {requestedUsername}", "Not Found",
+                                (int)HttpStatusCode.BadRequest),
+                        CustomJsonSerializerContext.Default.ErrorResponse
+                    )
                 };
             }
 
             return new APIGatewayProxyResponse
             {
-                StatusCode = 200,
+                StatusCode = (int)HttpStatusCode.OK,
                 Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(user)
+                Body = JsonSerializer.Serialize(
+                    user,
+                    CustomJsonSerializerContext.Default.User
+                )
             };
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUserLambda. Error: {ex.Message}");
+            
             return new APIGatewayProxyResponse
             {
-                StatusCode = 500,
+                StatusCode = (int)HttpStatusCode.InternalServerError,
                 Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
                 Body = JsonSerializer.Serialize(new
-                {
-                    message = "Internal server error",
-                    error = ex.Message
-                })
+                        ErrorResponse(ex.Message, "Internal Server Error", (int)HttpStatusCode.InternalServerError),
+                    CustomJsonSerializerContext.Default.ErrorResponse
+                )
             };
         }
     }

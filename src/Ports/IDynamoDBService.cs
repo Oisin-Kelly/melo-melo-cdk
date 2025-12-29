@@ -5,12 +5,16 @@ namespace Ports;
 // ReSharper disable once InconsistentNaming
 public interface IDynamoDBService
 {
-    public Task WriteToDynamoAsync<T>(T value);
-    public Task<T?> GetFromDynamoAsync<T>(string pk, string sk);
-    public Task<List<T>> QueryByGsiAsync<T>(
+    Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value);
+
+    Task<T?> GetFromDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string pk, string sk);
+
+    Task<List<T>> QueryByGsiAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         string gsiName,
         string gsiHashKey,
         string? gsiRangeKey = null,
         QueryOperator queryOperator = QueryOperator.Equal);
-    public Task<List<T>> BatchGetAsync<T>(IEnumerable<(string pk, string sk)> keys);
+
+    Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        IEnumerable<(string pk, string sk)> keys);
 }

@@ -1,12 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
+using Adapters;
+using Amazon.Lambda.Annotations;
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
-using Amazon.Lambda.Serialization.SystemTextJson;
 using Domain;
-using Microsoft.Extensions.DependencyInjection;
 using Ports;
-
-// Assembly attribute to enable Lambda logging
-[assembly: LambdaSerializer(typeof(DefaultLambdaJsonSerializer))]
 
 namespace PostConfirmationLambda;
 
@@ -14,27 +12,21 @@ public class Function
 {
     private readonly IDynamoDBService _dbService;
 
-    public Function()
-    {
-        var services = new ServiceCollection();
-        new Startup().ConfigureServices(services);
-        var serviceProvider = services.BuildServiceProvider();
-
-        _dbService = serviceProvider.GetRequiredService<IDynamoDBService>();
-    }
-
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DynamoDBService))]
     public Function(IDynamoDBService dbService)
     {
         _dbService = dbService;
     }
 
+    [LambdaFunction]
     public async Task<CognitoPostConfirmationEvent> FunctionHandler(CognitoPostConfirmationEvent cognitoEvent,
         ILambdaContext context)
     {
         if (cognitoEvent.TriggerSource != "PostConfirmation_ConfirmSignUp")
             return cognitoEvent;
 
-        var userName = cognitoEvent.UserName;
+        var username = cognitoEvent.UserName;
         var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
 
         try
@@ -42,7 +34,7 @@ public class Function
             if (string.IsNullOrEmpty(email))
                 throw new NullReferenceException("email");
 
-            var userData = CreateUserFromCognitoSignUp(userName, email);
+            var userData = CreateUserFromCognitoSignUp(username, email);
 
             await _dbService.WriteToDynamoAsync(userData);
 
@@ -52,8 +44,8 @@ public class Function
         }
         catch (Exception ex)
         {
-            context.Logger.LogError($"Error inserting user {userName} (Email: {email}): {ex.Message}");
-            throw new Exception($"Database operation failed for user {userName}");
+            context.Logger.LogError($"Error inserting user {username} (Email: {email}): {ex.Message}");
+            throw new Exception($"Database operation failed for user {username}");
         }
     }
 
@@ -69,7 +61,6 @@ public class Function
             Gsi1Sk = "PROFILE",
             Username = username,
             DisplayName = username,
-            Country = "Ireland",
             Bio = "Hey! I'm using MeloMelo!",
             FollowingCount = 0,
             FollowerCount = 0,

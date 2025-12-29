@@ -3,7 +3,7 @@ using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
-    public class User
+    public record User
     {
         [JsonPropertyName("username")]
         [DynamoDBProperty("username")]
@@ -66,7 +66,7 @@ namespace Domain
         }
     }
 
-    public class UserDataModel : User
+    public record UserDataModel : User
     {
         [DynamoDBHashKey("PK")] public required string Pk { get; set; }
 

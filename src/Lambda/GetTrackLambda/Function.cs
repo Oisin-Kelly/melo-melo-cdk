@@ -1,11 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Text.Json;
+using Adapters;
+using Amazon.Lambda.Annotations;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
-using Microsoft.Extensions.DependencyInjection;
 using Ports;
-
-// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
 
 namespace GetTrackLambda;
 
@@ -14,91 +14,58 @@ public class Function
     private readonly ITrackRepository _trackRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
 
-    public Function()
-    {
-        var services = new ServiceCollection();
-        new Startup().ConfigureServices(services);
-        var serviceProvider = services.BuildServiceProvider();
-
-        _trackRepository = serviceProvider.GetRequiredService<ITrackRepository>();
-        _sharedTrackRepository = serviceProvider.GetRequiredService<ISharedTrackRepository>();
-    }
-
-    public Function(ITrackRepository trackRepository,  ISharedTrackRepository sharedTrackRepository)
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Function))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TrackRepository))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SharedTrackRepository))]
+    public Function(ITrackRepository trackRepository, ISharedTrackRepository sharedTrackRepository)
     {
         _trackRepository = trackRepository;
         _sharedTrackRepository = sharedTrackRepository;
     }
 
-    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
+    [LambdaFunction]
+    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request,
+        ILambdaContext context)
     {
         var trackId = request.PathParameters["trackId"];
         var requestorUsername = request.RequestContext.Authorizer.Claims["cognito:username"];
 
         if (string.IsNullOrWhiteSpace(trackId))
-        {
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = 400,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(new
-                {
-                    message = "Error: You are missing the path parameter trackId"
-                })
-            };
-        }
+            return Error(HttpStatusCode.BadRequest, "the path parameter 'trackId' is missing", "Bad Request");
 
         try
         {
             var track = await _trackRepository.GetTrackAsync(trackId);
 
-            if (track == null)
-            {
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = 404,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                    Body = JsonSerializer.Serialize(new
-                    {
-                        message = "Error: no track found"
-                    })
-                };
-            }
-
-            if (track.Owner.Username != requestorUsername &&
+            if (track == null || track.Owner.Username != requestorUsername &&
                 !await _sharedTrackRepository.IsTrackSharedWithUser(trackId, requestorUsername))
-            {
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = 404,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                    Body = JsonSerializer.Serialize(new
-                    {
-                        message = "Error: no track found"
-                    })
-                };
-            }
+                return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
             return new APIGatewayProxyResponse
             {
-                StatusCode = 200,
+                StatusCode = (int)HttpStatusCode.OK,
                 Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(track)
+                Body = JsonSerializer.Serialize(
+                    track,
+                    CustomJsonSerializerContext.Default.Track
+                )
             };
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTrackLambda. Error: {ex.Message}");
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = 500,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
-                Body = JsonSerializer.Serialize(new
-                {
-                    message = "Internal server error",
-                    error = ex.Message,
-                })
-            };
+            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
         }
+    }
+
+    private static APIGatewayProxyResponse Error(HttpStatusCode statusCode, string message, string error)
+    {
+        return new APIGatewayProxyResponse
+        {
+            StatusCode = (int)statusCode,
+            Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } },
+            Body = JsonSerializer.Serialize(new
+                ErrorResponse(error, message, (int)statusCode), CustomJsonSerializerContext.Default.ErrorResponse)
+        };
     }
 }

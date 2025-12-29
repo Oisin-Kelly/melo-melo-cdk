@@ -3,10 +3,10 @@ using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
-    public class Track
+    public record Track
     {
         [JsonPropertyName("id")]
-        public string Id { get; set; }
+        public required string Id { get; set; }
         
         [JsonPropertyName("trackName")]
         public required string TrackName { get; set; }
@@ -36,7 +36,7 @@ namespace Domain
         public required User Owner { get; set; }
     }
 
-    public class TrackDataModel
+    public record TrackDataModel
     {
         [DynamoDBHashKey("PK")] 
         public required string Pk { get; set; }

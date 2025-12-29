@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
@@ -25,7 +26,7 @@ public class DynamoDBService : IDynamoDBService
         _tableName = tableName;
     }
 
-    public async Task WriteToDynamoAsync<T>(T value)
+    public async Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value)
     {
         await _dbContext.SaveAsync(value, new SaveConfig()
         {
@@ -33,7 +34,8 @@ public class DynamoDBService : IDynamoDBService
         });
     }
 
-    public async Task<T?> GetFromDynamoAsync<T>(string pk, string sk)
+    public async Task<T?> GetFromDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        string pk, string sk)
     {
         return await _dbContext.LoadAsync<T>(pk, sk, new LoadConfig()
         {
@@ -41,7 +43,7 @@ public class DynamoDBService : IDynamoDBService
         });
     }
 
-    public async Task<List<T>> QueryByGsiAsync<T>(
+    public async Task<List<T>> QueryByGsiAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         string gsiName,
         string gsiHashKey,
         string? gsiRangeKey = null,
@@ -72,7 +74,8 @@ public class DynamoDBService : IDynamoDBService
         return await search.GetRemainingAsync();
     }
 
-    public async Task<List<T>> BatchGetAsync<T>(IEnumerable<(string pk, string sk)> keys)
+    public async Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        IEnumerable<(string pk, string sk)> keys)
     {
         var batchGet = _dbContext.CreateBatchGet<T>(new BatchGetConfig()
         {

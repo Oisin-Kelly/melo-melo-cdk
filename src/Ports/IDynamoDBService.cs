@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Amazon.DynamoDBv2.DocumentModel;
 
 namespace Ports;

@@ -25,6 +25,7 @@ public class Startup
             return new DynamoDBService(client, tableName);
         });
 
+        builder.Services.AddTransient<IUserRepository, UserRepository>();
         builder.Services.AddTransient<ITrackRepository, TrackRepository>();
         builder.Services.AddTransient<ISharedTrackRepository, SharedTrackRepository>();
     

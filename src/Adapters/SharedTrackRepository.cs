@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DocumentModel;
 using Ports;
 using Domain;
 
@@ -14,8 +15,10 @@ public class SharedTrackRepository : ISharedTrackRepository
 
     public async Task<bool> IsTrackSharedWithUser(string trackId, string userId)
     {
+        var normalisedTrackId = trackId.ToLowerInvariant();
+        
         var sharedResult = await _dynamoDbService.GetFromDynamoAsync<SharedTrackDataModel>(
-            $"TRACK#{trackId}",
+            $"TRACK#{normalisedTrackId}",
             $"SHARED#{userId}"
         );
 
@@ -24,9 +27,11 @@ public class SharedTrackRepository : ISharedTrackRepository
 
     public async Task<List<SharedTrack>> GetTracksSharedWithUser(string userId)
     {
-        var sharedItems = await _dynamoDbService.QueryByGsiAsync<SharedTrackDataModel>(
-            "GSI1",
-            $"SHARED#{userId}"
+        var sharedItems = await _dynamoDbService.QueryAsync<SharedTrackDataModel>(
+            $"SHARED#{userId}",
+            null,
+            QueryOperator.Equal,
+            "GSI1"
         );
 
         if (sharedItems.Count == 0)
@@ -37,10 +42,11 @@ public class SharedTrackRepository : ISharedTrackRepository
 
     public async Task<List<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId)
     {
-        var sharedItems = await _dynamoDbService.QueryByGsiAsync<SharedTrackDataModel>(
-            "GSI1",
+        var sharedItems = await _dynamoDbService.QueryAsync<SharedTrackDataModel>(
             $"SHARED#{receiverUserId}",
-            $"USER#{senderUserId}"
+            $"USER#{senderUserId}",
+            QueryOperator.Equal,
+            "GSI1"
         );
 
         if (sharedItems.Count == 0)
@@ -113,7 +119,7 @@ public class SharedTrackRepository : ISharedTrackRepository
     {
         return new Track
         {
-            Id = trackDto.Sk.Replace("TRACK#", ""),
+            Id = trackDto.TrackId,
             TrackName = trackDto.TrackName,
             Genre = trackDto.Genre,
             Description = trackDto.Description,

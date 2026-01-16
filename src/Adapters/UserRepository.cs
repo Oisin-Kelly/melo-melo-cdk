@@ -1,4 +1,5 @@
-using Amazon.DynamoDBv2.Model;
+using Amazon.DynamoDBv2.DataModel;
+using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports;
 
@@ -19,89 +20,117 @@ public class UserRepository : IUserRepository
         return userDataModel;
     }
 
+    public async Task<User?> UpdateUser(User user, bool clearImage)
+    {
+        var builder = new UpdateExpressionBuilder();
+
+        builder.AddNullableString("displayName", "dn", user.DisplayName);
+        builder.AddNullableString("firstName", "fn", user.FirstName);
+        builder.AddNullableString("lastName", "ln", user.LastName);
+        builder.AddNullableString("country", "ctr", user.Country);
+        builder.AddNullableString("city", "ct", user.City);
+        builder.AddNullableString("bio", "bio", user.Bio);
+
+        HandleImageUpdate(builder, user, clearImage);
+
+        builder.AddValue("followersPrivate", "fp", user.FollowersPrivate);
+        builder.AddValue("followingsPrivate", "fip", user.FollowingsPrivate);
+
+        if (builder.IsEmpty)
+            return await GetUserByUsername(user.Username);
+
+        var updateTransaction = _dynamoDbService.CreateTransactionPart<UserDataModel>();
+        updateTransaction.AddSaveItem($"USER#{user.Username}", "PROFILE", builder.Build());
+
+        await _dynamoDbService.ExecuteTransactWriteAsync(updateTransaction);
+        return await GetUserByUsername(user.Username);
+    }
+
+    private void HandleImageUpdate(UpdateExpressionBuilder builder, User user, bool clearImage)
+    {
+        if (clearImage)
+        {
+            builder.RemoveField("imageUrl", "img");
+            builder.RemoveField("imageBgColor", "ibc");
+
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.ImageUrl))
+            builder.AddNullableString("imageUrl", "img", user.ImageUrl);
+        if (!string.IsNullOrWhiteSpace(user.ImageBgColor))
+            builder.AddNullableString("imageBgColor", "ibc", user.ImageBgColor);
+    }
+
+    private static string BuildUpdateExpression(List<string> setParts, List<string> removeParts)
+    {
+        var expressionParts = new List<string>(2);
+
+        if (setParts.Any())
+            expressionParts.Add($"SET {string.Join(", ", setParts)}");
+
+        if (removeParts.Any())
+            expressionParts.Add($"REMOVE {string.Join(", ", removeParts)}");
+
+        return string.Join(" ", expressionParts);
+    }
+
+
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
-        var transactionItems = GetBaseFollowTransactionItems(usernameToFollow, followerUsername, true);
-
-        transactionItems.Add(new TransactWriteItem()
+        var followRecord = new UserFollowDataModel
         {
-            Put = new Put()
-            {
-                Item = new Dictionary<string, AttributeValue>
-                {
-                    ["PK"] = new() { S = $"FOLLOW#{usernameToFollow}" },
-                    ["SK"] = new() { S = $"USER#{followerUsername}" },
-                    ["createdAt"] = new() { N = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString() },
-                    ["GSI1PK"] = new() { S = $"FOLLOWING#{followerUsername}" },
-                    ["GSI1SK"] = new() { S = $"FOLLOWING#{followerUsername}" }
-                },
-                ConditionExpression = "attribute_not_exists(PK)"
-            }
-        });
+            Pk = $"FOLLOW#{usernameToFollow}",
+            Sk = $"USER#{followerUsername}",
+            CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Gsi1Pk = $"FOLLOWING#{followerUsername}",
+            Gsi1Sk = $"FOLLOWING#{followerUsername}"
+        };
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(transactionItems);
+        var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
+        followTx.AddSaveItem(followRecord);
+
+        var userProfileTx = CreateCounterUpdate(usernameToFollow, "followerCount", 1);
+        var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", 1);
+
+        await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
+    }
+
+    private ITransactWrite CreateCounterUpdate(string username, string attribute, int value)
+    {
+        var tx = _dynamoDbService.CreateTransactionPart<UserDataModel>();
+
+        tx.AddSaveItem(
+            $"USER#{username}",
+            "PROFILE",
+            new Expression()
+            {
+                ExpressionStatement = $"ADD {attribute} :val",
+                ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> { { ":val", value } }
+            }
+        );
+
+        return tx;
     }
 
     public async Task UnfollowUser(string usernameToUnfollow, string followerUsername)
     {
-        var transactionItems = GetBaseFollowTransactionItems(usernameToUnfollow, followerUsername, false);
-
-        transactionItems.Add(new TransactWriteItem()
+        var followRecordToDelete = new UserFollowDataModel
         {
-            Delete = new Delete
-            {
-                Key = new Dictionary<string, AttributeValue>
-                {
-                    ["PK"] = new() { S = $"FOLLOW#{usernameToUnfollow}" },
-                    ["SK"] = new() { S = $"USER#{followerUsername}" }
-                },
-                ConditionExpression = "attribute_exists(PK)"
-            }
-        });
-
-        await _dynamoDbService.ExecuteTransactWriteAsync(transactionItems);
-    }
-
-    private static List<TransactWriteItem> GetBaseFollowTransactionItems(string username, string requestorUsername, bool following)
-    {
-        var transactionItems = new List<TransactWriteItem>
-        {
-            new TransactWriteItem()
-            {
-                Update = new Update()
-                {
-                    Key = new Dictionary<string, AttributeValue>
-                    {
-                        ["PK"] = new() { S = $"USER#{username}" },
-                        ["SK"] = new() { S = "PROFILE" }
-                    },
-                    UpdateExpression = "ADD followerCount :val",
-                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                    {
-                        [":val"] = new() { N = following ? "1" : "-1" }
-                    }
-                }
-            },
-
-            new TransactWriteItem()
-            {
-                Update = new Update()
-                {
-                    Key = new Dictionary<string, AttributeValue>
-                    {
-                        ["PK"] = new() { S = $"USER#{requestorUsername}" },
-                        ["SK"] = new() { S = "PROFILE" }
-                    },
-                    UpdateExpression = "ADD followingCount :val",
-                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                    {
-                        [":val"] = new() { N = following ? "1" : "-1" }
-                    }
-                }
-            }
+            Pk = $"FOLLOW#{usernameToUnfollow}",
+            Sk = $"USER#{followerUsername}",
+            CreatedAt = 0,
+            Gsi1Pk = "",
+            Gsi1Sk = ""
         };
 
-        return transactionItems;
+        var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
+        followTx.AddDeleteItem(followRecordToDelete);
+
+        var userProfileTx = CreateCounterUpdate(usernameToUnfollow, "followerCount", -1);
+        var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", -1);
+
+        await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
     }
 
     public async Task<UserFollow> GetFollowStatus(string username, string followerUsername)
@@ -115,5 +144,34 @@ public class UserRepository : IUserRepository
             FollowStatus = userFollowDataModel != null,
             CreatedAt = userFollowDataModel?.CreatedAt,
         };
+    }
+
+    public async Task<List<User>> GetUserFollowers(string username)
+    {
+        var userFollows = await _dynamoDbService.QueryAsync<UserFollowDataModel>($"FOLLOW#{username}");
+
+        if (userFollows.Count == 0) return [];
+
+        var keys = userFollows.Select(f => (f.Sk, "PROFILE"));
+
+        var followerProfiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
+        return followerProfiles.ToList<User>();
+    }
+
+    public async Task<List<User>> GetUserFollowings(string username)
+    {
+        var userFollowing = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOWING#{username}",
+            rangeKey: $"FOLLOWING#{username}",
+            queryOperator: QueryOperator.Equal,
+            indexName: "GSI1"
+        );
+
+        if (userFollowing.Count == 0) return [];
+
+        var keys = userFollowing.Select(f => ($"USER#{f.Pk.Replace("FOLLOW#", "")}", "PROFILE"));
+
+        var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
+        return profiles.ToList<User>();
     }
 }

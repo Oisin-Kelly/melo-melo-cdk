@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports;
 
@@ -19,12 +20,11 @@ public class TrackRepository : ITrackRepository
         var trackDto = await GetTrackDtoAsync(trackId);
         if (trackDto == null)
             return null;
-
-
+        
         var owner = await GetTrackOwner(trackDto);
         if (owner == null)
             return null;
-
+        
         return new Track()
         {
             CreatedAt = trackDto.CreatedAt,
@@ -36,24 +36,26 @@ public class TrackRepository : ITrackRepository
             Segments = trackDto.Segments,
             TrackName = trackDto.TrackName,
             Owner = owner,
-            Id = trackDto.Sk.Replace("TRACK#", "")
+            Id = trackDto.TrackId,
         };
     }
 
     private async Task<TrackDataModel?> GetTrackDtoAsync(string trackId)
     {
-        var tracks = await _dynamoDbService.QueryByGsiAsync<TrackDataModel>(
-            "GSI1",
-            $"TRACK#{trackId}",
-            "INFO"
+        var normalisedTrackId = trackId.ToLowerInvariant();
+
+        var tracks = await _dynamoDbService.QueryAsync<TrackDataModel>(
+            $"TRACK#{normalisedTrackId}",
+            "INFO",
+            QueryOperator.Equal,
+            "GSI1"
         );
-        
+
         return tracks.FirstOrDefault();
     }
 
-    private async Task<User?> GetTrackOwner(TrackDataModel trackDto)
+    private Task<User?> GetTrackOwner(TrackDataModel trackDto)
     {
-        var ownerUsername = trackDto.Pk.Replace("USER#", "");
-        return await _userRepository.GetUserByUsername(ownerUsername);
+        return _userRepository.GetUserByUsername(trackDto.OwnerUsername);
     }
 }

@@ -25,11 +25,10 @@ namespace MeloMeloCdk
             Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
 
             InitialiseTable();
+            InitialiseBuckets();
 
             InitialiseUserPoolLambdas();
             InitialiseCognito();
-
-            InitialiseBuckets();
 
             InitialiseApi();
             InitialiseApiLambdas();

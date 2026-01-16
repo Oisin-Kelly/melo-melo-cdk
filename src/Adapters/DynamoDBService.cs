@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
-using Amazon.DynamoDBv2.Model;
 using Ports;
 
 namespace Adapters;
@@ -12,12 +11,9 @@ public class DynamoDBService : IDynamoDBService
 {
     private readonly DynamoDBContext _dbContext;
     private readonly string _tableName;
-    private readonly IAmazonDynamoDB _dynamoDbClient;
 
     public DynamoDBService(IAmazonDynamoDB dynamoDbClient, string tableName)
     {
-        _dynamoDbClient = dynamoDbClient;
-
         _dbContext = new DynamoDBContextBuilder()
             .WithDynamoDBClient(() => dynamoDbClient)
             .Build();
@@ -25,9 +21,9 @@ public class DynamoDBService : IDynamoDBService
         _tableName = tableName;
     }
 
-    public async Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value)
+    public Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value)
     {
-        await _dbContext.SaveAsync(value, new SaveConfig()
+        return _dbContext.SaveAsync(value, new SaveConfig()
         {
             OverrideTableName = _tableName
         });
@@ -42,35 +38,35 @@ public class DynamoDBService : IDynamoDBService
         });
     }
 
-    public async Task<List<T>> QueryByGsiAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
-        string gsiName,
-        string gsiHashKey,
-        string? gsiRangeKey = null,
-        QueryOperator queryOperator = QueryOperator.Equal)
+    public Task<List<T>> QueryAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        string hashKey,
+        string? rangeKey = null,
+        QueryOperator queryOperator = QueryOperator.Equal,
+        string? indexName = null)
     {
         var queryConfig = new QueryConfig()
         {
-            IndexName = gsiName,
+            IndexName = indexName,
             OverrideTableName = _tableName
         };
 
         IAsyncSearch<T> search;
 
-        if (gsiRangeKey == null)
+        if (rangeKey == null)
         {
-            search = _dbContext.QueryAsync<T>(gsiHashKey, queryConfig);
+            search = _dbContext.QueryAsync<T>(hashKey, queryConfig);
         }
         else
         {
             search = _dbContext.QueryAsync<T>(
-                gsiHashKey,
+                hashKey,
                 queryOperator,
-                new[] { gsiRangeKey },
+                [rangeKey],
                 queryConfig
             );
         }
 
-        return await search.GetRemainingAsync();
+        return search.GetRemainingAsync();
     }
 
     public async Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
@@ -90,21 +86,17 @@ public class DynamoDBService : IDynamoDBService
         return batchGet.Results;
     }
 
-    public async Task ExecuteTransactWriteAsync(List<TransactWriteItem> transactionItems)
+    public ITransactWrite<T> CreateTransactionPart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
     {
-        var request = new TransactWriteItemsRequest
+        return _dbContext.CreateTransactWrite<T>(new TransactWriteConfig
         {
-            TransactItems = transactionItems
-        };
+            OverrideTableName = _tableName
+        });
+    }
 
-        foreach (var item in request.TransactItems)
-        {
-            if (item.Delete != null) item.Delete.TableName = _tableName;
-            if (item.Update != null) item.Update.TableName = _tableName;
-            if (item.Put != null) item.Put.TableName = _tableName;
-            if (item.ConditionCheck != null) item.ConditionCheck.TableName = _tableName;
-        }
-
-        await _dynamoDbClient.TransactWriteItemsAsync(request);
+    public Task ExecuteTransactWriteAsync(params ITransactWrite[] transactionItems)
+    {
+        var multiTableTx = _dbContext.CreateMultiTableTransactWrite(transactionItems);
+        return multiTableTx.ExecuteAsync();
     }
 }

@@ -32,9 +32,13 @@ public class Function : BaseLambdaFunctionHandler
         try
         {
             var track = await _trackRepository.GetTrackAsync(trackId);
+            
+            if (track == null)
+                return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
-            if (track == null || track.Owner.Username != requestorUsername &&
-                !await _sharedTrackRepository.IsTrackSharedWithUser(trackId, requestorUsername))
+            var isTrackSharedWithUser = await _sharedTrackRepository.IsTrackSharedWithUser(trackId, requestorUsername);
+
+            if (track.Owner.Username != requestorUsername && !isTrackSharedWithUser)
                 return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
             return Ok(

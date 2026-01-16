@@ -10,4 +10,8 @@
     <ProjectReference Include="../Domain/Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.16.1" />
+  </ItemGroup>
+
 </Project>

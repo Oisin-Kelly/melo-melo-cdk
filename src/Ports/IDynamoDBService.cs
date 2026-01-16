@@ -9,18 +9,22 @@ namespace Ports;
 // ReSharper disable once InconsistentNaming
 public interface IDynamoDBService
 {
-    Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value);
+    public Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value);
 
-    Task<T?> GetFromDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string pk, string sk);
+    public Task<T?> GetFromDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        string pk, string sk);
 
-    Task<List<T>> QueryByGsiAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
-        string gsiName,
-        string gsiHashKey,
-        string? gsiRangeKey = null,
-        QueryOperator queryOperator = QueryOperator.Equal);
+    public Task<List<T>> QueryAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        string hashKey,
+        string? rangeKey = null,
+        QueryOperator queryOperator = QueryOperator.Equal,
+        string? indexName = null);
 
-    Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+    public Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         IEnumerable<(string pk, string sk)> keys);
 
-    Task ExecuteTransactWriteAsync(List<TransactWriteItem> transactionItems);
+    public ITransactWrite<T>
+        CreateTransactionPart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>();
+
+    public Task ExecuteTransactWriteAsync(params ITransactWrite[] transactionItems);
 }

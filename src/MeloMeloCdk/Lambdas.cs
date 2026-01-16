@@ -19,6 +19,9 @@ public partial class MeloMeloCdkStack
 
     private IFunction IsFollowingUserFunction { get; set; }
     private IFunction FollowUserFunction { get; set; }
+    private IFunction GetUserFollowersFunction { get; set; }
+    private IFunction GetUserFollowingFunction { get; set; }
+    private IFunction UpdateProfileFunction { get; set; }
 
     private void InitialiseUserPoolLambdas()
     {
@@ -47,6 +50,17 @@ public partial class MeloMeloCdkStack
 
         FollowUserFunction = CreateLambdaFunction("FollowUserLambda");
         DynamoDbTable.GrantReadWriteData(FollowUserFunction);
+
+        GetUserFollowersFunction = CreateLambdaFunction("GetUserFollowersLambda");
+        DynamoDbTable.GrantReadData(GetUserFollowersFunction);
+
+        GetUserFollowingFunction = CreateLambdaFunction("GetUserFollowingLambda");
+        DynamoDbTable.GrantReadData(GetUserFollowingFunction);
+
+        UpdateProfileFunction = CreateLambdaFunction("UpdateUserProfileLambda");
+        DynamoDbTable.GrantReadWriteData(UpdateProfileFunction);
+        DropboxBucket.GrantReadWrite(UpdateProfileFunction);
+        PublicReadonlyBucket.GrantReadWrite(UpdateProfileFunction);
     }
 
     private void InitialiseLambdaIntegrations()
@@ -84,6 +98,20 @@ public partial class MeloMeloCdkStack
 
         HttpApi.AddRoutes(new AddRoutesOptions
         {
+            Path = "/users/{username}/followers",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetUserFollowersFunction),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/followings",
+            Methods = new[] { HttpMethod.GET },
+            Integration = CreateIntegration(GetUserFollowingFunction),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
             Path = "/tracks/{trackId}",
             Methods = new[] { HttpMethod.GET },
             Integration = CreateIntegration(GetTrackFunction),
@@ -94,6 +122,13 @@ public partial class MeloMeloCdkStack
             Path = "/tracks/shared",
             Methods = new[] { HttpMethod.GET },
             Integration = CreateIntegration(GetTracksSharedWithUserFunction),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/profile/update",
+            Methods = new[] { HttpMethod.POST },
+            Integration = CreateIntegration(UpdateProfileFunction),
         });
     }
 
@@ -117,6 +152,8 @@ public partial class MeloMeloCdkStack
         var environment = new Dictionary<string, string>()
         {
             { "TABLE_NAME", DynamoDbTable.TableName },
+            { "DROPBOX_BUCKET_NAME", DropboxBucket.BucketName },
+            { "PUBLIC_READONLY_BUCKET_NAME", PublicReadonlyBucket.BucketName },
             { "ANNOTATIONS_HANDLER", "FunctionHandler" },
         };
 

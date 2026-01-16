@@ -73,5 +73,10 @@ namespace Domain
 
         [DynamoDBProperty("segments")]
         public required int Segments { get; set; }
+
+        [DynamoDBIgnore]
+        public string OwnerUsername => Pk.Replace("USER#", "");
+
+        [DynamoDBIgnore] public string TrackId => Sk.Replace("TRACK#", "");
     }
 }

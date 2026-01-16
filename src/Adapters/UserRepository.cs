@@ -62,20 +62,6 @@ public class UserRepository : IUserRepository
             builder.AddNullableString("imageBgColor", "ibc", user.ImageBgColor);
     }
 
-    private static string BuildUpdateExpression(List<string> setParts, List<string> removeParts)
-    {
-        var expressionParts = new List<string>(2);
-
-        if (setParts.Any())
-            expressionParts.Add($"SET {string.Join(", ", setParts)}");
-
-        if (removeParts.Any())
-            expressionParts.Add($"REMOVE {string.Join(", ", removeParts)}");
-
-        return string.Join(" ", expressionParts);
-    }
-
-
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
         var followRecord = new UserFollowDataModel

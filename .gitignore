@@ -341,3 +341,6 @@ ASALocalRun/
 
 # End of https://www.gitignore.io/api/csharp
 serverless.template
+
+# Claude
+**/.claude/settings.local.json

@@ -1,5 +1,5 @@
 {
-  "app": "dotnet run --project src/MeloMeloCdk/MeloMeloCdk.csproj",
+  "app": "dotnet run --project infra/MeloMeloCdk.csproj",
   "watch": {
     "include": [
       "**"
@@ -7,11 +7,14 @@
     "exclude": [
       "README.md",
       "cdk*.json",
-      "src/*/obj",
-      "src/*/bin",
-      "src/*.sln",
-      "src/*/GlobalSuppressions.cs",
-      "src/*/*.csproj"
+      "api/*/obj",
+      "api/*/bin",
+      "infra/obj",
+      "infra/bin",
+      "api/*.sln",
+      "api/*/GlobalSuppressions.cs",
+      "api/*/*.csproj",
+      "infra/*.csproj"
     ]
   },
   "context": {

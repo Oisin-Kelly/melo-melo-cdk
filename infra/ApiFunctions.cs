@@ -12,5 +12,6 @@ public record ApiFunctions(
     IFunction GetUserFollowers,
     IFunction GetUserFollowing,
     IFunction UpdateProfile,
-    IFunction GetDropboxPresignedUrl
+    IFunction GetDropboxPresignedUrl,
+    IFunction GetUserTracks
 );

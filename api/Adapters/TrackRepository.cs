@@ -54,6 +54,44 @@ public sealed class TrackRepository : ITrackRepository
         return tracks.FirstOrDefault();
     }
 
+    public async Task<PaginatedResult<Track>> GetTracksByUsername(string username, int pageSize, string? cursor)
+    {
+        var (trackDtos, nextToken) = await _dynamoDbService.QueryPaginatedAsync<TrackDataModel>(
+            hashKey: $"USER#{username}",
+            rangeKey: "TRACK#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: null,
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
+        );
+
+        if (trackDtos.Count == 0)
+            return new PaginatedResult<Track> { Items = [], NextCursor = null };
+
+        var owner = await _userRepository.GetUserByUsername(username);
+        if (owner is null)
+            return new PaginatedResult<Track> { Items = [], NextCursor = null };
+
+        var tracks = trackDtos
+            .Select(t => new Track
+            {
+                Id = t.TrackId,
+                TrackName = t.TrackName,
+                Genre = t.Genre,
+                Description = t.Description,
+                ImageUrl = t.ImageUrl,
+                ImageBgColor = t.ImageBgColor,
+                Owner = owner,
+                CreatedAt = t.CreatedAt,
+                Duration = t.Duration,
+                Segments = t.Segments
+            })
+            .ToList();
+
+        return new PaginatedResult<Track> { Items = tracks, NextCursor = nextToken };
+    }
+
     private Task<User?> GetTrackOwner(TrackDataModel trackDto)
     {
         return _userRepository.GetUserByUsername(trackDto.OwnerUsername);

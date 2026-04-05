@@ -2,6 +2,7 @@
 
 Table: `melo-melo-table-{env}` | Keys: `PK` (hash), `SK` (range)
 Index: `GSI1` — `GSI1PK` (hash), `GSI1SK` (range), projection ALL
+Index: `GSI2` — `GSI1PK` (hash), `GSI2SK` (range), projection ALL
 
 ---
 
@@ -29,17 +30,24 @@ Derived: `OwnerUsername` from `PK.Replace("USER#", "")`, `TrackId` from `SK.Repl
 
 | PK | SK | GSI1PK | GSI1SK |
 |----|-----|--------|--------|
-| `FOLLOW#{usernameBeingFollowed}` | `USER#{followerUsername}` | `FOLLOWING#{followerUsername}` | `FOLLOWING#{followerUsername}` |
+| `FOLLOW#{usernameBeingFollowed}` | `USER#{followerUsername}#{epochMs}` | `FOLLOWING#{followerUsername}` | `DATE#{epochMs}#TARGET#{usernameBeingFollowed}` |
 
 Attributes: `createdAt`
 
+SK includes epoch timestamp for chronological sorting on base table (newest followers first).
+GSI1SK includes epoch timestamp for chronological sorting in GSI1 (newest followings first).
+
 ### Shared Track
 
-| PK | SK | GSI1PK | GSI1SK |
-|----|-----|--------|--------|
-| `TRACK#{trackId}` | `SHARED#{recipientUserId}` | `SHARED#{recipientUserId}` | `USER#{senderUserId}` |
+| PK | SK | GSI1PK | GSI1SK | GSI2SK |
+|----|-----|--------|--------|--------|
+| `TRACK#{trackId}` | `SHARED#{recipientUserId}` | `SHARED#{recipientUserId}` | `DATE#{epochMs}` | `SENDER#{senderUserId}#DATE#{epochMs}` |
 
-Attributes: `caption`, `sharedAt`
+Attributes: `caption`, `sharedAt`, `trackOwnerUsername`
+
+GSI1SK is a date prefix for chronological feed sorting (GSI1).
+GSI2SK is a sender+date prefix for per-sender filtered sorting (GSI2). Both GSI1 and GSI2 share GSI1PK as the hash key.
+`trackOwnerUsername` is stored for efficient BatchGet without parsing sort keys.
 
 ---
 
@@ -84,27 +92,32 @@ Request body: `{newValue: true|false}`
 **Follow** (`newValue: true`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
 2. **TransactWrite** (3 parts, atomic):
-   - `Save` follow record: `PK=FOLLOW#{username}, SK=USER#{requestor}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=FOLLOWING#{requestor}`
+   - `Save` follow record: `PK=FOLLOW#{username}, SK=USER#{requestor}#{epochMs}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}`
    - `Update` target user: `ADD followerCount :1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :1` on `PK=USER#{requestor}, SK=PROFILE`
 
 **Unfollow** (`newValue: false`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. **TransactWrite** (3 parts, atomic):
-   - `Delete` follow record: `PK=FOLLOW#{username}, SK=USER#{requestor}`
+2. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → find exact follow record SK (timestamp unknown at unfollow time)
+3. **TransactWrite** (3 parts, atomic):
+   - `Delete` follow record using exact PK+SK from step 2
    - `Update` target user: `ADD followerCount :-1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :-1` on `PK=USER#{requestor}, SK=PROFILE`
 
 #### `GET /users/{username}/followers` — GetUserFollowersLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followersPrivate` flag
-2. `Query(PK=FOLLOW#{username})` → all follow records (SK = `USER#{followerUsername}`)
-3. `BatchGet` each follower's profile: `(PK=SK_from_step2, SK=PROFILE)` → returns `List<User>`
+2. `Query(PK=FOLLOW#{username}, SK begins_with USER#, Limit=10, ScanIndexForward=false, cursor)` → paginated follow records newest-first
+3. Extract follower username from SK: `USER#{followerUsername}#{epochMs}` → `split('#')[1]`
+4. `BatchGet` each follower's profile → returns `PaginatedResult<User>`
 
 #### `GET /users/{username}/followings` — GetUserFollowingLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followingsPrivate` flag
-2. `Query(GSI1, GSI1PK=FOLLOWING#{username}, GSI1SK=FOLLOWING#{username})` → all following records
-3. Extract followed usernames from `PK.Replace("FOLLOW#", "")`
-4. `BatchGet` each followed user's profile: `(PK=USER#{followedUsername}, SK=PROFILE)` → returns `List<User>`
+2. `Query(GSI1, GSI1PK=FOLLOWING#{username}, GSI1SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated following records newest-first
+3. Extract followed username from GSI1SK: `DATE#{epochMs}#TARGET#{targetUsername}` → `split("#TARGET#")[1]`
+4. `BatchGet` each followed user's profile → returns `PaginatedResult<User>`
+
+#### `GET /users/{username}/follow-status` — IsFollowingUserLambda
+1. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → check if follow record exists (1 item max)
 
 ---
 
@@ -117,12 +130,17 @@ Request body: `{newValue: true|false}`
 4. Returns track only if requestor is owner OR track is shared with them (else 404)
 
 #### `GET /tracks/shared` — GetTracksSharedWithUserLambda
-1. `Query(GSI1, GSI1PK=SHARED#{requestor})` → all SharedTrackDataModel items for this user
+1. `Query(GSI1, GSI1PK=SHARED#{requestor}, GSI1SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated shared items newest-first
 2. **Parallel BatchGet** (two concurrent calls):
-   - Tracks: `BatchGet(PK=item.Gsi1Sk, SK=item.Pk)` for each shared item
-   - Owners: `BatchGet(PK=trackPk, SK=PROFILE)` for each unique track owner (deduplicated)
-3. In-memory join: match tracks to owners, build `List<SharedTrack>`
+   - Tracks: `BatchGet(PK=USER#{item.TrackOwnerUsername}, SK=item.Pk)` for each shared item
+   - Owners: `BatchGet(PK=USER#{item.TrackOwnerUsername}, SK=PROFILE)` for each unique owner (deduplicated)
+3. In-memory join: match tracks to owners → returns `PaginatedResult<SharedTrack>`
 
 #### `GET /users/{username}/shared` — GetTracksSharedFromUserLambda
-1. `Query(GSI1, GSI1PK=SHARED#{requestor}, GSI1SK=USER#{username})` → shared items from specific sender
-2. Same parallel BatchGet + join as above
+1. `Query(GSI2, GSI1PK=SHARED#{requestor}, GSI2SK begins_with SENDER#{username}#, Limit=10, ScanIndexForward=false, cursor)` → paginated shared items from specific sender newest-first
+2. Same parallel BatchGet + join as above → returns `PaginatedResult<SharedTrack>`
+
+#### `GET /tracks` — GetUserTracksLambda
+1. `Query(PK=USER#{requestor}, SK begins_with TRACK#, Limit=10, ScanIndexForward=false, cursor)` → paginated track items
+2. Sort in memory by `createdAt` descending
+3. Fetch owner profile once: `GetItem(PK=USER#{requestor}, SK=PROFILE)` → returns `PaginatedResult<Track>`

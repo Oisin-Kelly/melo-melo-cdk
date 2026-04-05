@@ -5,6 +5,6 @@ namespace Ports;
 public interface ISharedTrackRepository
 {
     public Task<bool> IsTrackSharedWithUser(string trackId, string userId);
-    public Task<List<SharedTrack>> GetTracksSharedWithUser(string userId);
-    public Task<List<SharedTrack>> GetTracksSharedFromUser(string userId, string receiverUserId);
+    public Task<PaginatedResult<SharedTrack>> GetTracksSharedWithUser(string userId, int pageSize, string? cursor);
+    public Task<PaginatedResult<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId, int pageSize, string? cursor);
 }

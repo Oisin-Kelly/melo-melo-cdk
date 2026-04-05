@@ -344,3 +344,7 @@ serverless.template
 
 # Claude
 **/.claude/settings.local.json
+
+.env
+e2e/test-accounts.json
+e2e/test-results

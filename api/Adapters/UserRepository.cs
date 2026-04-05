@@ -64,13 +64,15 @@ public sealed class UserRepository : IUserRepository
 
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         var followRecord = new UserFollowDataModel
         {
             Pk = $"FOLLOW#{usernameToFollow}",
-            Sk = $"USER#{followerUsername}",
-            CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Sk = $"USER#{followerUsername}#{timestamp}",
+            CreatedAt = timestamp,
             Gsi1Pk = $"FOLLOWING#{followerUsername}",
-            Gsi1Sk = $"FOLLOWING#{followerUsername}"
+            Gsi1Sk = $"DATE#{timestamp}#TARGET#{usernameToFollow}"
         };
 
         var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
@@ -92,6 +94,7 @@ public sealed class UserRepository : IUserRepository
             new Expression()
             {
                 ExpressionStatement = $"ADD {attribute} :val",
+                ExpressionAttributeNames = null,
                 ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> { { ":val", value } }
             }
         );
@@ -101,17 +104,18 @@ public sealed class UserRepository : IUserRepository
 
     public async Task UnfollowUser(string usernameToUnfollow, string followerUsername)
     {
-        var followRecordToDelete = new UserFollowDataModel
-        {
-            Pk = $"FOLLOW#{usernameToUnfollow}",
-            Sk = $"USER#{followerUsername}",
-            CreatedAt = 0,
-            Gsi1Pk = "",
-            Gsi1Sk = ""
-        };
+        // Query to find the exact record (SK includes timestamp, unknown at unfollow time)
+        var existingRecords = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOW#{usernameToUnfollow}",
+            rangeKey: $"USER#{followerUsername}#",
+            queryOperator: QueryOperator.BeginsWith
+        );
+
+        var existingRecord = existingRecords.FirstOrDefault();
+        if (existingRecord is null) return;
 
         var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
-        followTx.AddDeleteItem(followRecordToDelete);
+        followTx.AddDeleteItem(existingRecord);
 
         var userProfileTx = CreateCounterUpdate(usernameToUnfollow, "followerCount", -1);
         var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", -1);
@@ -121,43 +125,62 @@ public sealed class UserRepository : IUserRepository
 
     public async Task<UserFollow> GetFollowStatus(string username, string followerUsername)
     {
-        var userFollowDataModel =
-            await _dynamoDbService.GetFromDynamoAsync<UserFollowDataModel>($"FOLLOW#{username}",
-                $"USER#{followerUsername}");
+        var records = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOW#{username}",
+            rangeKey: $"USER#{followerUsername}#",
+            queryOperator: QueryOperator.BeginsWith
+        );
 
-        return new UserFollow()
+        var userFollowDataModel = records.FirstOrDefault();
+
+        return new UserFollow
         {
             FollowStatus = userFollowDataModel != null,
             CreatedAt = userFollowDataModel?.CreatedAt,
         };
     }
 
-    public async Task<List<User>> GetUserFollowers(string username)
+    public async Task<PaginatedResult<User>> GetUserFollowers(string username, int pageSize, string? cursor)
     {
-        var userFollows = await _dynamoDbService.QueryAsync<UserFollowDataModel>($"FOLLOW#{username}");
-
-        if (userFollows.Count == 0) return [];
-
-        var keys = userFollows.Select(f => (f.Sk, "PROFILE"));
-
-        var followerProfiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
-        return followerProfiles.ToList<User>();
-    }
-
-    public async Task<List<User>> GetUserFollowings(string username)
-    {
-        var userFollowing = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
-            hashKey: $"FOLLOWING#{username}",
-            rangeKey: $"FOLLOWING#{username}",
-            queryOperator: QueryOperator.Equal,
-            indexName: "GSI1"
+        var (followRecords, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOW#{username}",
+            rangeKey: "USER#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: null,
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
         );
 
-        if (userFollowing.Count == 0) return [];
+        if (followRecords.Count == 0)
+            return new PaginatedResult<User> { Items = [], NextCursor = null };
 
-        var keys = userFollowing.Select(f => ($"USER#{f.Pk.Replace("FOLLOW#", "")}", "PROFILE"));
-
+        // SK format: USER#{followerUsername}#{timestamp} — extract username at index 1
+        var keys = followRecords.Select(f => ($"USER#{f.Sk.Split('#')[1]}", "PROFILE"));
         var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
-        return profiles.ToList<User>();
+
+        return new PaginatedResult<User> { Items = profiles.ToList<User>(), NextCursor = nextToken };
+    }
+
+    public async Task<PaginatedResult<User>> GetUserFollowings(string username, int pageSize, string? cursor)
+    {
+        var (followingRecords, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOWING#{username}",
+            rangeKey: "DATE#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: "GSI1",
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
+        );
+
+        if (followingRecords.Count == 0)
+            return new PaginatedResult<User> { Items = [], NextCursor = null };
+
+        // GSI1SK format: DATE#{timestamp}#TARGET#{usernameToFollow}
+        var keys = followingRecords.Select(f => ($"USER#{f.Gsi1Sk!.Split("#TARGET#")[1]}", "PROFILE"));
+        var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
+
+        return new PaginatedResult<User> { Items = profiles.ToList<User>(), NextCursor = nextToken };
     }
 }

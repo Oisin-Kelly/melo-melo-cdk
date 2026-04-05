@@ -115,5 +115,12 @@ public class ApiStack : BaseStack
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetDropboxPresignedUrl),
         });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetUserTracks),
+        });
     }
 }

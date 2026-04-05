@@ -62,7 +62,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         }
         catch (Exception ex)
         {
-            context.Logger.LogError($"Error occured in GetTrackLambda. Error: {ex.Message}");
+            context.Logger.LogError($"Error occured in FollowUserLambda. Error: {ex.Message}");
             return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
         }
     }

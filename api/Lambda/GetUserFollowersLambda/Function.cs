@@ -11,6 +11,8 @@ namespace GetUserFollowersLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
+    private const int PageSize = 10;
+
     private readonly IUserRepository _userRepository;
 
     public Function(IUserRepository userRepository)
@@ -27,6 +29,9 @@ public sealed class Function : BaseLambdaFunctionHandler
         if (string.IsNullOrWhiteSpace(username))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
 
+        string? cursor = null;
+        request.QueryStringParameters?.TryGetValue("cursor", out cursor);
+
         try
         {
             var user = await _userRepository.GetUserByUsername(username);
@@ -36,12 +41,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (user.FollowersPrivate && username != requestorUsername)
                 return Error(HttpStatusCode.Forbidden, $"{username} has their followers private", "Forbidden");
 
-            var userFollowers = await _userRepository.GetUserFollowers(username);
+            var result = await _userRepository.GetUserFollowers(username, PageSize, cursor);
 
             return Ok(
                 JsonSerializer.Serialize(
-                    userFollowers,
-                    CustomJsonSerializerContext.Default.ListUser
+                    result,
+                    CustomJsonSerializerContext.Default.PaginatedResultUser
                 )
             );
         }

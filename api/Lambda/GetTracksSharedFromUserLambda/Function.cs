@@ -11,6 +11,8 @@ namespace GetTracksSharedFromUserLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
+    private const int PageSize = 10;
+
     private readonly ISharedTrackRepository _sharedTrackRepository;
 
     public Function(ISharedTrackRepository sharedTrackRepository)
@@ -25,13 +27,15 @@ public sealed class Function : BaseLambdaFunctionHandler
     {
         var requestorUsername = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
 
+        string? cursor = null;
+        request.QueryStringParameters?.TryGetValue("cursor", out cursor);
+
         try
         {
-            var sharedTracks =
-                await _sharedTrackRepository.GetTracksSharedFromUser(username, requestorUsername);
+            var result = await _sharedTrackRepository.GetTracksSharedFromUser(username, requestorUsername, PageSize, cursor);
 
             return Ok(
-                JsonSerializer.Serialize(sharedTracks, CustomJsonSerializerContext.Default.ListSharedTrack)
+                JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultSharedTrack)
             );
         }
         catch (Exception ex)

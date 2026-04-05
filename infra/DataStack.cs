@@ -43,6 +43,22 @@ public class DataStack : BaseStack
             ProjectionType = ProjectionType.ALL
         });
 
+        table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()
+        {
+            IndexName = "GSI2",
+            PartitionKey = new Attribute
+            {
+                Name = "GSI1PK",
+                Type = AttributeType.STRING
+            },
+            SortKey = new Attribute
+            {
+                Name = "GSI2SK",
+                Type = AttributeType.STRING
+            },
+            ProjectionType = ProjectionType.ALL
+        });
+
         Table = table;
     }
 }

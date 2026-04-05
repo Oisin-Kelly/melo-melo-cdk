@@ -14,15 +14,17 @@ public record UserFollow
 
 public record UserFollowDataModel
 {
-    [DynamoDBHashKey("PK")] 
+    [DynamoDBHashKey("PK")]
     public required string Pk { get; set; }
 
-    [DynamoDBRangeKey("SK")] 
+    // USER#{followerUsername}#{ISO-timestamp} — chronological sort on base table
+    [DynamoDBRangeKey("SK")]
     public required string Sk { get; set; }
 
     [DynamoDBGlobalSecondaryIndexHashKey("GSI1", AttributeName = "GSI1PK")]
     public required string Gsi1Pk { get; set; }
 
+    // DATE#{ISO-timestamp}#TARGET#{usernameToFollow} — chronological sort in GSI1
     [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
     public string? Gsi1Sk { get; set; }
 

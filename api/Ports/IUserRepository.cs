@@ -9,6 +9,6 @@ public interface IUserRepository
     public Task FollowUser(string usernameToFollow, string followerUsername);
     public Task UnfollowUser(string usernameToUnfollow, string followerUsername);
     public Task<UserFollow> GetFollowStatus(string username, string followerUsername);
-    public Task<List<User>> GetUserFollowers(string username);
-    public Task<List<User>> GetUserFollowings(string username);
+    public Task<PaginatedResult<User>> GetUserFollowers(string username, int pageSize, string? cursor);
+    public Task<PaginatedResult<User>> GetUserFollowings(string username, int pageSize, string? cursor);
 }

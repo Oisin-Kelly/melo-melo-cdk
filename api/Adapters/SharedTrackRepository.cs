@@ -16,7 +16,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
     public async Task<bool> IsTrackSharedWithUser(string trackId, string userId)
     {
         var normalisedTrackId = trackId.ToLowerInvariant();
-        
+
         var sharedResult = await _dynamoDbService.GetFromDynamoAsync<SharedTrackDataModel>(
             $"TRACK#{normalisedTrackId}",
             $"SHARED#{userId}"
@@ -25,34 +25,42 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         return sharedResult != null;
     }
 
-    public async Task<List<SharedTrack>> GetTracksSharedWithUser(string userId)
+    public async Task<PaginatedResult<SharedTrack>> GetTracksSharedWithUser(string userId, int pageSize, string? cursor)
     {
-        var sharedItems = await _dynamoDbService.QueryAsync<SharedTrackDataModel>(
-            $"SHARED#{userId}",
-            null,
-            QueryOperator.Equal,
-            "GSI1"
+        var (sharedItems, nextToken) = await _dynamoDbService.QueryPaginatedAsync<SharedTrackDataModel>(
+            hashKey: $"SHARED#{userId}",
+            rangeKey: "DATE#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: "GSI1",
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
         );
 
         if (sharedItems.Count == 0)
-            return [];
+            return new PaginatedResult<SharedTrack> { Items = [], NextCursor = null };
 
-        return await GetSharedTracksFromSharedTrackItems(sharedItems);
+        var items = await GetSharedTracksFromSharedTrackItems(sharedItems);
+        return new PaginatedResult<SharedTrack> { Items = items, NextCursor = nextToken };
     }
 
-    public async Task<List<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId)
+    public async Task<PaginatedResult<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId, int pageSize, string? cursor)
     {
-        var sharedItems = await _dynamoDbService.QueryAsync<SharedTrackDataModel>(
-            $"SHARED#{receiverUserId}",
-            $"USER#{senderUserId}",
-            QueryOperator.Equal,
-            "GSI1"
+        var (sharedItems, nextToken) = await _dynamoDbService.QueryPaginatedAsync<SharedTrackDataModel>(
+            hashKey: $"SHARED#{receiverUserId}",
+            rangeKey: $"SENDER#{senderUserId}#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: "GSI2",
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
         );
 
         if (sharedItems.Count == 0)
-            return [];
+            return new PaginatedResult<SharedTrack> { Items = [], NextCursor = null };
 
-        return await GetSharedTracksFromSharedTrackItems(sharedItems);
+        var items = await GetSharedTracksFromSharedTrackItems(sharedItems);
+        return new PaginatedResult<SharedTrack> { Items = items, NextCursor = nextToken };
     }
 
     private async Task<List<SharedTrack>> GetSharedTracksFromSharedTrackItems(List<SharedTrackDataModel> sharedItems)
@@ -67,33 +75,28 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         var tracks = ((Task<List<TrackDataModel>>)tasks[0]).Result.ToDictionary(t => t.Sk);
         var owners = ((Task<List<UserDataModel>>)tasks[1]).Result.ToDictionary(u => u.Pk);
 
-        var sharedTracks = sharedItems
+        return sharedItems
             .Select(share => JoinOnOwnerAndTrack(tracks, owners, share))
             .OfType<SharedTrack>()
             .ToList();
-
-        return sharedTracks;
     }
 
     private Task<List<TrackDataModel>> GetBatchTracksAsync(List<SharedTrackDataModel> sharedItems)
     {
         var trackKeys = sharedItems
-            .Where(item => !string.IsNullOrEmpty(item.Gsi1Sk))
-            .Select(item => (pk: item.Gsi1Sk!, sk: item.Pk));
+            .Where(item => !string.IsNullOrEmpty(item.TrackOwnerUsername))
+            .Select(item => (pk: $"USER#{item.TrackOwnerUsername}", sk: item.Pk));
 
         return _dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
     }
 
-    private Task<List<UserDataModel>> GetBatchUniqueOwnersAsync(
-        List<SharedTrackDataModel> sharedItems)
+    private Task<List<UserDataModel>> GetBatchUniqueOwnersAsync(List<SharedTrackDataModel> sharedItems)
     {
-        var trackPks = sharedItems
-            .Select(item => item.Gsi1Sk)
-            .Where(pk => !string.IsNullOrEmpty(pk))
-            .Distinct();
-
-        var userKeys = trackPks
-            .Select(pk => (pk: pk!, sk: "PROFILE"));
+        var userKeys = sharedItems
+            .Select(item => item.TrackOwnerUsername)
+            .Where(owner => !string.IsNullOrEmpty(owner))
+            .Distinct()
+            .Select(owner => (pk: $"USER#{owner}", sk: "PROFILE"));
 
         return _dynamoDbService.BatchGetAsync<UserDataModel>(userKeys);
     }

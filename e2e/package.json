@@ -1,0 +1,16 @@
+{
+  "name": "melo-melo-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:api": "playwright test --project=api",
+    "test:ui": "playwright test --project=ui",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.0.0"
+  }
+}

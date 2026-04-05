@@ -71,6 +71,9 @@ public class LambdaStack : BaseStack
             CreateLambdaFunction("GetDropboxPresignedUrlLambda");
         dropboxBucket.GrantWrite(getDropboxPresignedUrl);
 
+        var getUserTracks = CreateLambdaFunction("GetUserTracksLambda");
+        table.GrantReadData(getUserTracks);
+
         ApiFunctions = new ApiFunctions(
             GetUser: getUser,
             GetTrack: getTrack,
@@ -81,7 +84,8 @@ public class LambdaStack : BaseStack
             GetUserFollowers: getUserFollowers,
             GetUserFollowing: getUserFollowing,
             UpdateProfile: updateProfile,
-            GetDropboxPresignedUrl: getDropboxPresignedUrl
+            GetDropboxPresignedUrl: getDropboxPresignedUrl,
+            GetUserTracks: getUserTracks
         );
     }
 

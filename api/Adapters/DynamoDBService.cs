@@ -69,6 +69,38 @@ public sealed class DynamoDBService : IDynamoDBService
         return search.GetRemainingAsync();
     }
 
+    public async Task<(List<T> Items, string? NextToken)> QueryPaginatedAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        string hashKey,
+        string? rangeKey,
+        QueryOperator queryOperator,
+        string? indexName,
+        int pageSize,
+        string? paginationToken,
+        bool scanIndexForward = false)
+    {
+        var (pkAttr, skAttr) = GetKeyAttributeNames(indexName);
+
+        var filter = new QueryFilter();
+        filter.AddCondition(pkAttr, QueryOperator.Equal, hashKey);
+        if (rangeKey != null)
+            filter.AddCondition(skAttr, queryOperator, rangeKey);
+
+        var search = _dbContext.FromQueryAsync<T>(
+            new QueryOperationConfig
+            {
+                IndexName = indexName,
+                Limit = pageSize,
+                PaginationToken = paginationToken,
+                BackwardSearch = !scanIndexForward,
+                Filter = filter,
+            },
+            new FromQueryConfig { OverrideTableName = _tableName }
+        );
+
+        var results = await search.GetNextSetAsync();
+        return (results, search.PaginationToken);
+    }
+
     public async Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         IEnumerable<(string pk, string sk)> keys)
     {
@@ -99,4 +131,11 @@ public sealed class DynamoDBService : IDynamoDBService
         var multiTableTx = _dbContext.CreateMultiTableTransactWrite(transactionItems);
         return multiTableTx.ExecuteAsync();
     }
+
+    private static (string pk, string sk) GetKeyAttributeNames(string? indexName) => indexName switch
+    {
+        "GSI1" => ("GSI1PK", "GSI1SK"),
+        "GSI2" => ("GSI1PK", "GSI2SK"),
+        _ => ("PK", "SK")
+    };
 }

@@ -4,7 +4,7 @@ name: E2E
 # test users, runs the Playwright API suite against it, then tears everything
 # down (destroy runs even when the tests fail).
 on:
-  workflow_dispatch:
+  push:
 
 permissions:
   id-token: write

@@ -28,6 +28,7 @@ public class Startup
         builder.Services.AddTransient<IUserRepository, UserRepository>();
         builder.Services.AddTransient<ITrackRepository, TrackRepository>();
         builder.Services.AddTransient<ISharedTrackRepository, SharedTrackRepository>();
+        builder.Services.AddTransient<ILikeRepository, LikeRepository>();
     
         return builder;
     }

@@ -1,3 +1,4 @@
+using Adapters;
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.CognitoEvents;
 using Amazon.Lambda.Core;
@@ -30,9 +31,16 @@ public sealed class Function
             if (string.IsNullOrWhiteSpace(email))
                 throw new NullReferenceException("email");
 
-            var userData = CreateUserFromCognitoSignUp(username, email);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var userData = CreateUserFromCognitoSignUp(username, email, now);
 
-            await _dbService.WriteToDynamoAsync(userData);
+            var userTx = _dbService.CreateTransactionPart<UserDataModel>();
+            userTx.AddSaveItem(userData);
+
+            var likesTx = _dbService.CreateTransactionPart<PlaylistDataModel>();
+            likesTx.AddSaveItem(PlaylistRepository.BuildLikesPlaylistItem(username, now));
+
+            await _dbService.ExecuteTransactWriteAsync(userTx, likesTx);
 
             context.Logger.LogLine($"User {userData.Username} successfully inserted into DynamoDB.");
 
@@ -45,10 +53,8 @@ public sealed class Function
         }
     }
 
-    private UserDataModel CreateUserFromCognitoSignUp(string username, string email)
+    private UserDataModel CreateUserFromCognitoSignUp(string username, string email, long now)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
         return new UserDataModel
         {
             Pk = $"USER#{username}",

@@ -48,6 +48,12 @@ public record {Entity}DataModel : {Entity}
     [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
     public string? Gsi1Sk { get; set; }
 
+    // GSI2 reuses GSI1PK as its hash key — do NOT declare a second hash key attribute.
+    // Only add a GSI2 range key attribute when this entity needs a second sort dimension
+    // over the same GSI1PK partition.
+    // [DynamoDBGlobalSecondaryIndexRangeKey("GSI2", AttributeName = "GSI2SK")]
+    // public string? Gsi2Sk { get; set; }
+
     // Derived properties computed from keys
     // [DynamoDBIgnore]
     // public string OwnerId => Pk.Replace("USER#", "");

@@ -25,6 +25,82 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         return sharedResult != null;
     }
 
+    public async Task<bool> IsTrackSharedWithUserViaAlbum(string trackId, string userId)
+    {
+        var normalisedTrackId = trackId.ToLowerInvariant();
+
+        var grants = await _dynamoDbService.QueryAsync<AlbumTrackGrantDataModel>(
+            $"TRACK#{normalisedTrackId}",
+            $"SHARED#{userId}#ALBUM#",
+            QueryOperator.BeginsWith);
+
+        return grants.Count > 0;
+    }
+
+    public async Task<bool> IsTrackAccessibleToUser(string trackId, string userId)
+    {
+        var directTask = IsTrackSharedWithUser(trackId, userId);
+        var albumTask = IsTrackSharedWithUserViaAlbum(trackId, userId);
+        await Task.WhenAll(directTask, albumTask);
+
+        return directTask.Result || albumTask.Result;
+    }
+
+    public async Task<List<string>> GetTrackRecipientsAsync(string trackId)
+    {
+        var shares = await GetDirectShareItemsAsync(trackId);
+        return shares.Select(s => s.Sk.Replace("SHARED#", "")).ToList();
+    }
+
+    public async Task ShareTrackAsync(string trackId, string ownerUsername, IReadOnlyList<string> addRecipients,
+        IReadOnlyList<string> removeRecipients, string? caption)
+    {
+        var normalisedTrackId = trackId.ToLowerInvariant();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var batch = _dynamoDbService.CreateBatchWritePart<SharedTrackDataModel>();
+
+        foreach (var recipient in addRecipients)
+        {
+            batch.AddPutItem(new SharedTrackDataModel
+            {
+                Pk = $"TRACK#{normalisedTrackId}",
+                Sk = $"SHARED#{recipient}",
+                Gsi1Pk = $"SHARED#{recipient}",
+                Gsi1Sk = $"DATE#{now}",
+                Gsi2Sk = $"SENDER#{ownerUsername}#DATE#{now}",
+                TrackOwnerUsername = ownerUsername,
+                SharedAt = now,
+                Caption = caption,
+            });
+        }
+
+        if (removeRecipients.Count > 0)
+        {
+            var existingShares = await GetDirectShareItemsAsync(normalisedTrackId);
+            var toRemove = existingShares
+                .Where(s => removeRecipients.Contains(s.Sk.Replace("SHARED#", ""), StringComparer.OrdinalIgnoreCase));
+
+            foreach (var share in toRemove)
+                batch.AddDeleteItem(share);
+        }
+
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
+    }
+
+    private async Task<List<SharedTrackDataModel>> GetDirectShareItemsAsync(string trackId)
+    {
+        var normalisedTrackId = trackId.ToLowerInvariant();
+
+        var shares = await _dynamoDbService.QueryAsync<SharedTrackDataModel>(
+            $"TRACK#{normalisedTrackId}",
+            "SHARED#",
+            QueryOperator.BeginsWith);
+
+        // exclude album shares e.g., SHARED#{user}#ALBUM#{id}
+        return shares.Where(s => !s.Sk.Contains("#ALBUM#")).ToList();
+    }
+
     public async Task<PaginatedResult<SharedTrack>> GetTracksSharedWithUser(string userId, int pageSize, string? cursor)
     {
         var (sharedItems, nextToken) = await _dynamoDbService.QueryPaginatedAsync<SharedTrackDataModel>(

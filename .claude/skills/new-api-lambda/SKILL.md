@@ -26,6 +26,10 @@ Once you have the answers, follow the patterns in the reference files below.
    - [get-for-caller.md](templates/get-for-caller.md) — GET the caller's own data (no path param, uses JWT)
    - [post-action.md](templates/post-action.md) — POST action/mutation with a request body and custom response
    - [post-update.md](templates/post-update.md) — POST partial update with multiple services (image processing etc.)
+
+   Variants:
+   - **Paginated list** — reuse `get-for-caller.md`, add `PageSize` constant, read `cursor` from `request.QueryStringParameters`, call a repository method that returns `PaginatedResult<T>` (see `GetUserTracksLambda` + `TrackRepository.GetTracksByUsername`), and register the `PaginatedResult<T>` type in `CustomJsonSerializerContext`.
+   - **Async / long-running** — kick off a Step Function instead of doing the work inline. Inject `IAmazonStepFunctions`, read `STATE_MACHINE_ARN` from env (wired in `Program.cs`), call `StartExecutionAsync`, return `Accepted(...)` (see `UploadTrackLambda`). The actual worker lives in `sfn-stack` as an SFN-invoked Lambda (no `[HttpApi]`, no `BaseLambdaFunctionHandler`, takes a plain input record).
 3. Create the remaining 4 files using [templates/boilerplate.md](templates/boilerplate.md)
 4. Register DI services in Startup.cs using patterns from [di-patterns.md](di-patterns.md)
 4. Add to `infra/ApiFunctions.cs` record

@@ -25,6 +25,7 @@ public class DataStack : BaseStack
             BillingMode = BillingMode.PAY_PER_REQUEST,
             TableName = $"melo-melo-table-{Env}",
             RemovalPolicy = DeletionPolicy,
+            TimeToLiveAttribute = "expiresAt",
         });
 
         table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()
@@ -54,6 +55,22 @@ public class DataStack : BaseStack
             SortKey = new Attribute
             {
                 Name = "GSI2SK",
+                Type = AttributeType.STRING
+            },
+            ProjectionType = ProjectionType.ALL
+        });
+
+        table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()
+        {
+            IndexName = "GSI3",
+            PartitionKey = new Attribute
+            {
+                Name = "GSI3PK",
+                Type = AttributeType.STRING
+            },
+            SortKey = new Attribute
+            {
+                Name = "GSI3SK",
                 Type = AttributeType.STRING
             },
             ProjectionType = ProjectionType.ALL

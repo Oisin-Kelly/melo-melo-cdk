@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
-using Amazon.DynamoDBv2.Model;
 
 namespace Ports;
 
@@ -36,4 +34,8 @@ public interface IDynamoDBService
         CreateTransactionPart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>();
 
     public Task ExecuteTransactWriteAsync(params ITransactWrite[] transactionItems);
+
+    public IBatchWrite<T> CreateBatchWritePart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>();
+
+    public Task ExecuteBatchWriteAsync(params IBatchWrite[] batchParts);
 }

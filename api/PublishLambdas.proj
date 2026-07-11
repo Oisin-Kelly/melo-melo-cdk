@@ -1,0 +1,22 @@
+<!-- Traversal project used by scripts/build-lambdas.sh: publishes every Lambda in one
+     MSBuild invocation so shared projects (Lambda.Shared, Ports, Adapters, Domain) are
+     built exactly once and parallel scheduling is safe. Not part of the solution. -->
+<Project>
+  <ItemGroup>
+    <LambdaProject Include="Lambda/*/*.csproj" Exclude="Lambda/Lambda.Shared/Lambda.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- Build only: the AOT native compilation (ILC) exclusively runs through the
+       `dotnet publish` CLI flow, so publishing happens per-project in the build script
+       (dotnet publish with the no-build flag) after this parallel build pass. -->
+  <!-- Build ONLY. Restore runs beforehand via the dotnet CLI in build-lambdas.sh:
+       running Restore and Build in the same MSBuild invocation is unreliable
+       (evaluation caching makes Build read pre-restore state), and the MSBuild
+       Restore target does not dependably produce RID-targeted assets. -->
+  <Target Name="BuildAll">
+    <MSBuild Projects="@(LambdaProject)"
+             Targets="Build"
+             BuildInParallel="true"
+             Properties="Configuration=Release;RuntimeIdentifier=linux-arm64;SelfContained=true" />
+  </Target>
+</Project>

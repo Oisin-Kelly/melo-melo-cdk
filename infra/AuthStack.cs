@@ -64,6 +64,10 @@ public class AuthStack : BaseStack
             PreventUserExistenceErrors = true,
         });
 
+        // Consumed by CI (--outputs-file) to point the e2e suite at the deployed pool
+        new CfnOutput(this, "UserPoolId", new CfnOutputProps { Value = UserPool.UserPoolId });
+        new CfnOutput(this, "UserPoolClientId", new CfnOutputProps { Value = UserPoolClient.UserPoolClientId });
+
         checkEmailExistenceFunction.Role!.AttachInlinePolicy(
             new Policy(this, "UserPoolPolicy", new PolicyProps
             {

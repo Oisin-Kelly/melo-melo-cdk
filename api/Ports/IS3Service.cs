@@ -8,4 +8,6 @@ public interface IS3Service
     public Task<string> PutObjectAsync(Stream stream, string objectName);
     public Task<GetObjectMetadataResponse> GetObjectMetadata(string objectName);
     public Task<string> GetPresignedPutUrlAsync(string key, TimeSpan expiry);
+    public Task<string> GetPresignedGetUrlAsync(string key, TimeSpan expiry);
+    public Task DeleteObjectAsync(string key);
 }

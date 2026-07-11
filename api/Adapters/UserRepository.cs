@@ -183,4 +183,20 @@ public sealed class UserRepository : IUserRepository
 
         return new PaginatedResult<User> { Items = profiles.ToList<User>(), NextCursor = nextToken };
     }
+
+    public async Task<List<string>> GetValidatedRecipientsAsync(List<string> usernames, string senderUsername)
+    {
+        var distinct = usernames
+            .Where(u => !string.IsNullOrWhiteSpace(u) && !string.Equals(u, senderUsername, StringComparison.OrdinalIgnoreCase)) //remove senders's username
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (distinct.Count == 0)
+            return [];
+
+        var keys = distinct.Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
+        var foundUsers = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
+
+        return foundUsers.Select(u => u.Username).ToList();
+    }
 }

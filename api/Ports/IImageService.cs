@@ -9,4 +9,5 @@ public interface IImageService
         string publicImageKey,
         int width,
         int height);
+    public Task DeleteImageAsync(string publicImageKey);
 }

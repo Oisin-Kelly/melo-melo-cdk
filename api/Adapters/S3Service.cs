@@ -57,6 +57,28 @@ public sealed class S3Service : IS3Service
         return _s3Client.GetPreSignedURLAsync(request);
     }
 
+    public Task<string> GetPresignedGetUrlAsync(string key, TimeSpan expiry)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(expiry)
+        };
+
+        return _s3Client.GetPreSignedURLAsync(request);
+    }
+
+    public Task DeleteObjectAsync(string key)
+    {
+        return _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = key
+        });
+    }
+
     public Task<GetObjectMetadataResponse> GetObjectMetadata(string objectName)
     {
         var request = new GetObjectMetadataRequest

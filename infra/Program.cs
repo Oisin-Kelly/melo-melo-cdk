@@ -11,8 +11,16 @@ namespace MeloMeloCdk
 
             var data = new DataStack(app, $"data-stack-{env}");
             var storage = new StorageStack(app, $"storage-stack-{env}");
-            var lambda = new LambdaStack(app, $"lambda-stack-{env}", data.Table, storage.DropboxBucket, storage.PublicReadonlyBucket, storage.PrivateReadonlyBucket);
-            var auth = new AuthStack(app, $"auth-stack-{env}", lambda.PostConfirmationFunction, lambda.CheckEmailExistenceFunction);
+            var lambda = new LambdaStack(app, $"lambda-stack-{env}", data.Table, storage.DropboxBucket,
+                storage.PublicReadonlyBucket, storage.PrivateReadonlyBucket);
+            var auth = new AuthStack(app, $"auth-stack-{env}", lambda.PostConfirmationFunction,
+                lambda.CheckEmailExistenceFunction);
+            var sfn = new StepFunctionStack(app, $"sfn-stack-{env}", data.Table, storage.DropboxBucket,
+                storage.PublicReadonlyBucket, storage.PrivateReadonlyBucket);
+
+            sfn.UploadTrackStateMachine.GrantStartExecution(lambda.UploadTrackFunction);
+            lambda.UploadTrackFunction.AddEnvironment("STATE_MACHINE_ARN", sfn.UploadTrackStateMachine.StateMachineArn);
+
             var api = new ApiStack(app, $"api-stack-{env}", lambda.ApiFunctions, auth.UserPool, auth.UserPoolClient);
 
             app.Synth();

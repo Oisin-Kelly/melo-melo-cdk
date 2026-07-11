@@ -7,6 +7,13 @@ test.describe('GET /tracks/{trackId}', () => {
   });
 });
 
+test.describe('GET /tracks/{trackId}/segments', () => {
+  test('returns 404 for a nonexistent track', async ({ apiContext }) => {
+    const res = await apiContext.get('/tracks/nonexistent-track-id/segments');
+    expect(res.status()).toBe(404);
+  });
+});
+
 test.describe('GET /tracks', () => {
   test('returns a paginated result shape', async ({ apiContext }) => {
     const res = await apiContext.get('/tracks');

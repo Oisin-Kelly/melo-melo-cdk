@@ -51,6 +51,44 @@ var items = await _dynamoDbService.QueryAsync<{Entity}DataModel>(
     indexName: "GSI1");
 ```
 
+## Query on GSI2
+
+GSI2 shares its hash key (`GSI1PK`) with GSI1 but uses a separate sort attribute (`GSI2SK`). Use it when the same partition needs a second sort dimension (e.g. sort by `createdAt` on GSI1 and by `title` on GSI2 for the same `USER#{username}` partition).
+
+```csharp
+var items = await _dynamoDbService.QueryAsync<{Entity}DataModel>(
+    hashKey: $"GSI1PREFIX#{value}",
+    rangeKey: $"GSI2_SORT",
+    queryOperator: QueryOperator.BeginsWith,
+    indexName: "GSI2");
+```
+
+The DataModel needs both a `Gsi2Sk` property mapped with `[DynamoDBGlobalSecondaryIndexRangeKey("GSI2")]` on top of the existing `Gsi1Pk`/`Gsi1Sk` attributes.
+
+## Paginated query (returns cursor)
+
+Prefer this over `QueryAsync` for large result sets served by an HTTP endpoint. Returns `(Items, NextToken)`; wrap in `PaginatedResult<T>` on the way out of the repository.
+
+```csharp
+var (items, nextToken) = await _dynamoDbService.QueryPaginatedAsync<{Entity}DataModel>(
+    hashKey: $"USER#{username}",
+    rangeKey: "TRACK#",
+    queryOperator: QueryOperator.BeginsWith,
+    indexName: null,          // or "GSI1" / "GSI2"
+    pageSize: 10,
+    paginationToken: cursor,  // null on first page
+    scanIndexForward: false   // newest first
+);
+
+return new PaginatedResult<{Entity}>
+{
+    Items = items.Select(Map).ToList(),
+    NextCursor = nextToken,
+};
+```
+
+The HTTP handler forwards `cursor` from `request.QueryStringParameters` and serialises the `PaginatedResult<T>` via the AOT context.
+
 ## Batch get multiple items
 
 ```csharp

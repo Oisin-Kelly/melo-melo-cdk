@@ -3,6 +3,22 @@ using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
+    public record UpdateTrackRequest
+    {
+        [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("genre")] public string? Genre { get; set; }
+        [JsonPropertyName("description")] public string? Description { get; set; }
+        [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
+        [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
+    }
+
+    public record ShareTrackRequest
+    {
+        [JsonPropertyName("add")] public List<string> Add { get; set; } = [];
+        [JsonPropertyName("remove")] public List<string> Remove { get; set; } = [];
+        [JsonPropertyName("caption")] public string? Caption { get; set; }
+    }
+
     public record Track
     {
         [JsonPropertyName("id")]
@@ -34,6 +50,16 @@ namespace Domain
         
         [JsonPropertyName("owner")]
         public required User Owner { get; set; }
+        
+        // ---------------------------------------------
+
+        [JsonPropertyName("likeCount")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? LikeCount { get; set; }
+
+        [JsonPropertyName("likedByMe")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? LikedByMe { get; set; }
     }
 
     public record TrackDataModel
@@ -49,6 +75,13 @@ namespace Domain
 
         [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
         public string? Gsi1Sk { get; set; }
+
+        // GSI3 lists a user's own tracks newest-first: USER#{owner} / DATE#{createdAt}
+        [DynamoDBGlobalSecondaryIndexHashKey("GSI3", AttributeName = "GSI3PK")]
+        public string? Gsi3Pk { get; set; }
+
+        [DynamoDBGlobalSecondaryIndexRangeKey("GSI3", AttributeName = "GSI3SK")]
+        public string? Gsi3Sk { get; set; }
 
         [DynamoDBProperty("trackName")]
         public required string TrackName { get; set; }
@@ -73,6 +106,9 @@ namespace Domain
 
         [DynamoDBProperty("segments")]
         public required int Segments { get; set; }
+
+        [DynamoDBProperty("likeCount")]
+        public int LikeCount { get; set; }
 
         [DynamoDBIgnore]
         public string OwnerUsername => Pk.Replace("USER#", "");

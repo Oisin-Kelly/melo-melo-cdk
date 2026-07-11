@@ -1,6 +1,9 @@
 # CDK asset staging directory
 .cdk.staging
-cdk.out
+cdk.out*
+
+# macOS
+.DS_Store
 
 # Created by https://www.gitignore.io/api/csharp
 
@@ -347,4 +350,9 @@ serverless.template
 
 .env
 e2e/test-accounts.json
-e2e/test-results
+
+# Playwright output (e2e/test-results, and stray runs from the repo root)
+test-results/
+
+# Prebuilt lambda binaries from scripts/build-lambdas.sh (api/.build)
+.build/

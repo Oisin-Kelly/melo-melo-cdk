@@ -9,6 +9,8 @@ namespace Adapters;
 
 public sealed class ImageService : IImageService
 {
+    private const long MaxImageBytes = 20L * 1024 * 1024;
+
     private readonly IS3Service _dropboxS3Service;
     private readonly IS3Service _publicS3Service;
 
@@ -33,6 +35,11 @@ public sealed class ImageService : IImageService
             throw new ArgumentException($"Object '{imageKey}' is not an image.");
         }
 
+        if (metadata.Headers.ContentLength > MaxImageBytes)
+        {
+            throw new ArgumentException($"Image '{imageKey}' exceeds the {MaxImageBytes / (1024 * 1024)} MB limit.");
+        }
+
         using var response = await _dropboxS3Service.GetObjectResponseAsync(imageKey);
         using var image = await Image.LoadAsync<Rgba32>(response.ResponseStream);
 
@@ -54,6 +61,11 @@ public sealed class ImageService : IImageService
         var imageHex = GetDominantColor(image);
 
         return new ImageProcessingResult(imageHex, url);
+    }
+
+    public Task DeleteImageAsync(string publicImageKey)
+    {
+        return _publicS3Service.DeleteObjectAsync(publicImageKey);
     }
 
     private static string GetDominantColor(Image<Rgba32> image)

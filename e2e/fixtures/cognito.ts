@@ -1,8 +1,5 @@
 import {
     CognitoIdentityProviderClient,
-    AdminGetUserCommand,
-    SignUpCommand,
-    AdminConfirmSignUpCommand,
     InitiateAuthCommand,
     AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider';
@@ -25,46 +22,32 @@ function getClient() {
 
 export async function signIn(account: TestAccount): Promise<TestUser> {
     const client = getClient();
-    const userPoolId = process.env.COGNITO_USER_POOL_ID!;
     const clientId = process.env.COGNITO_CLIENT_ID!;
 
-    let userExists = false;
     try {
-        await client.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: account.username }));
-        userExists = true;
-    } catch {
-        // UserNotFoundException
-    }
-
-    if (!userExists) {
-        await client.send(
-            new SignUpCommand({
+        const authResult = await client.send(
+            new InitiateAuthCommand({
+                AuthFlow: AuthFlowType.USER_PASSWORD_AUTH,
                 ClientId: clientId,
-                Username: account.username,
-                Password: account.password,
-                UserAttributes: [{ Name: 'email', Value: `${account.username}@melo-e2e.invalid` }],
+                AuthParameters: {
+                    USERNAME: account.username,
+                    PASSWORD: account.password,
+                },
             })
         );
 
-        // Triggers PostConfirmation Lambda → creates DynamoDB profile
-        await client.send(
-            new AdminConfirmSignUpCommand({ UserPoolId: userPoolId, Username: account.username })
-        );
+        return {
+            username: account.username,
+            idToken: authResult.AuthenticationResult!.IdToken!,
+        };
+    } catch (e) {
+        const name = (e as Error).name;
+        if (name === 'UserNotFoundException' || name === 'NotAuthorizedException') {
+            throw new Error(
+                `Test user '${account.username}' cannot sign in — run e2e/setup-test-users.sh ` +
+                    'to provision the test users first.'
+            );
+        }
+        throw e;
     }
-
-    const authResult = await client.send(
-        new InitiateAuthCommand({
-            AuthFlow: AuthFlowType.USER_PASSWORD_AUTH,
-            ClientId: clientId,
-            AuthParameters: {
-                USERNAME: account.username,
-                PASSWORD: account.password,
-            },
-        })
-    );
-
-    return {
-        username: account.username,
-        idToken: authResult.AuthenticationResult!.IdToken!,
-    };
 }

@@ -1,30 +1,17 @@
-import { test as base, Page } from '@playwright/test';
-import { createTestUser, deleteTestUser, TestUser } from './cognito';
+import { Page } from '@playwright/test';
+import { test as base } from './auth';
 
-export interface UiFixtures {
-  authenticatedPage: Page;
-  user: TestUser;
-}
-
-// Placeholder for future browser-based UI tests.
-// When the React app is built, extend this fixture to:
+// Placeholder for future browser-based UI tests. Reuses the auth fixture's
+// signed-in `user`. When the React app is built, extend this fixture to:
 // 1. Navigate to the login page
-// 2. Fill in user.username + user.password
+// 2. Fill in credentials
 // 3. Wait for redirect / auth token stored
 // 4. Yield the logged-in page
-export const test = base.extend<UiFixtures>({
-  user: async ({}, use) => {
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const user = await createTestUser(suffix);
-    await use(user);
-    await deleteTestUser(user.username);
-  },
-
+export const test = base.extend<{ authenticatedPage: Page }>({
   authenticatedPage: async ({ page, user }, use) => {
     // TODO: implement login flow once React app is available
     // await page.goto('/login');
     // await page.fill('[name=username]', user.username);
-    // await page.fill('[name=password]', user.password);
     // await page.click('[type=submit]');
     // await page.waitForURL('/home');
     await use(page);

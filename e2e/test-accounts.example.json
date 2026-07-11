@@ -1,4 +1,5 @@
 {
   "userA": { "username": "melotesta", "password": "" },
-  "userB": { "username": "melotestb", "password": "" }
+  "userB": { "username": "melotestb", "password": "" },
+  "userC": { "username": "melotestc", "password": "" }
 }

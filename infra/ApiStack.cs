@@ -43,6 +43,9 @@ public class ApiStack : BaseStack
         });
         HttpApi.ApplyRemovalPolicy(DeletionPolicy);
 
+        // Consumed by CI (--outputs-file) to point the e2e suite at the deployed API
+        new CfnOutput(this, "ApiBaseUrl", new CfnOutputProps { Value = HttpApi.Url! });
+
         HttpLambdaIntegration CreateIntegration(IFunction function) =>
             new HttpLambdaIntegration($"{function.Node.Id}Integration", function);
 
@@ -97,6 +100,41 @@ public class ApiStack : BaseStack
 
         HttpApi.AddRoutes(new AddRoutesOptions
         {
+            Path = "/tracks/{trackId}",
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.UpdateTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.DeleteTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/share",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.ShareTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/uploads/{trackId}",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetUploadStatus),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/segments",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetTrackSegments),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
             Path = "/tracks/shared",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTracksSharedWithUser),
@@ -121,6 +159,125 @@ public class ApiStack : BaseStack
             Path = "/tracks",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetUserTracks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/upload",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.UploadTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.CreatePlaylist),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetPlaylists),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetPlaylist),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}",
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.UpdatePlaylist),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.DeletePlaylist),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}/tracks",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.ModifyPlaylistTracks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/like",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.LikeTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/likes",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetTrackLikes),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.CreateAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbums),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/shared",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbumsSharedWithMe),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}",
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.UpdateAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.DeleteAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}/tracks",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.ModifyAlbumTracks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}/share",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.ShareAlbum),
         });
     }
 }

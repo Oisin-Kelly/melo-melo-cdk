@@ -13,11 +13,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly ITrackRepository _trackRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
+    private readonly ILikeRepository _likeRepository;
 
-    public Function(ITrackRepository trackRepository, ISharedTrackRepository sharedTrackRepository)
+    public Function(ITrackRepository trackRepository, ISharedTrackRepository sharedTrackRepository,
+        ILikeRepository likeRepository)
     {
         _trackRepository = trackRepository;
         _sharedTrackRepository = sharedTrackRepository;
+        _likeRepository = likeRepository;
     }
 
     [LambdaFunction]
@@ -36,10 +39,14 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (track == null)
                 return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
-            var isTrackSharedWithUser = await _sharedTrackRepository.IsTrackSharedWithUser(trackId, requestorUsername);
+            var isOwner = track.Owner.Username == requestorUsername;
 
-            if (track.Owner.Username != requestorUsername && !isTrackSharedWithUser)
+            if (!isOwner && !await _sharedTrackRepository.IsTrackAccessibleToUser(trackId, requestorUsername))
                 return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
+
+            track.LikedByMe = await _likeRepository.IsTrackLikedByUserAsync(trackId, requestorUsername);
+            if (!isOwner)
+                track.LikeCount = null; // like counts are visible to the owner only
 
             return Ok(
                 JsonSerializer.Serialize(

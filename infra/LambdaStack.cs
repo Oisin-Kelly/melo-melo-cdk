@@ -1,9 +1,7 @@
-using System.Collections.Generic;
 using Amazon.CDK;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.S3;
-using AssetOptions = Amazon.CDK.AWS.S3.Assets.AssetOptions;
 using Constructs;
 
 namespace MeloMeloCdk;
@@ -12,6 +10,7 @@ public class LambdaStack : BaseStack
 {
     public IFunction PostConfirmationFunction { get; }
     public IFunction CheckEmailExistenceFunction { get; }
+    public Function UploadTrackFunction { get; }
     public ApiFunctions ApiFunctions { get; }
 
     private ITable Table { get; }
@@ -27,52 +26,127 @@ public class LambdaStack : BaseStack
         PublicReadonlyBucket = publicReadonlyBucket;
         PrivateReadonlyBucket = privateReadonlyBucket;
 
-        PostConfirmationFunction =
-            CreateLambdaFunction("PostConfirmationLambda");
+        // Cognito triggers
+        PostConfirmationFunction = CreateLambdaFunction("PostConfirmationLambda");
         table.GrantReadWriteData(PostConfirmationFunction);
 
-        CheckEmailExistenceFunction =
-            CreateLambdaFunction("CheckEmailExistenceLambda");
+        CheckEmailExistenceFunction = CreateLambdaFunction("CheckEmailExistenceLambda");
 
+        // Users
         var getUser = CreateLambdaFunction("GetUserLambda");
         table.GrantReadData(getUser);
-
-        var getTrack = CreateLambdaFunction("GetTrackLambda");
-        table.GrantReadData(getTrack);
-
-        var getTracksSharedWithUser =
-            CreateLambdaFunction("GetTracksSharedWithUserLambda");
-        table.GrantReadData(getTracksSharedWithUser);
-
-        var getTracksSharedFromUser =
-            CreateLambdaFunction("GetTracksSharedFromUserLambda");
-        table.GrantReadData(getTracksSharedFromUser);
-
-        var isFollowingUser = CreateLambdaFunction("IsFollowingUserLambda");
-        table.GrantReadData(isFollowingUser);
-
-        var followUser = CreateLambdaFunction("FollowUserLambda");
-        table.GrantReadWriteData(followUser);
-
-        var getUserFollowers =
-            CreateLambdaFunction("GetUserFollowersLambda");
-        table.GrantReadData(getUserFollowers);
-
-        var getUserFollowing =
-            CreateLambdaFunction("GetUserFollowingLambda");
-        table.GrantReadData(getUserFollowing);
 
         var updateProfile = CreateLambdaFunction("UpdateUserProfileLambda");
         table.GrantReadWriteData(updateProfile);
         dropboxBucket.GrantReadWrite(updateProfile);
         publicReadonlyBucket.GrantReadWrite(updateProfile);
 
-        var getDropboxPresignedUrl =
-            CreateLambdaFunction("GetDropboxPresignedUrlLambda");
-        dropboxBucket.GrantWrite(getDropboxPresignedUrl);
+        // Follows
+        var isFollowingUser = CreateLambdaFunction("IsFollowingUserLambda");
+        table.GrantReadData(isFollowingUser);
+
+        var followUser = CreateLambdaFunction("FollowUserLambda");
+        table.GrantReadWriteData(followUser);
+
+        var getUserFollowers = CreateLambdaFunction("GetUserFollowersLambda");
+        table.GrantReadData(getUserFollowers);
+
+        var getUserFollowing = CreateLambdaFunction("GetUserFollowingLambda");
+        table.GrantReadData(getUserFollowing);
+
+        // Tracks
+        var getTrack = CreateLambdaFunction("GetTrackLambda");
+        table.GrantReadData(getTrack);
 
         var getUserTracks = CreateLambdaFunction("GetUserTracksLambda");
         table.GrantReadData(getUserTracks);
+
+        var getTracksSharedWithUser = CreateLambdaFunction("GetTracksSharedWithUserLambda");
+        table.GrantReadData(getTracksSharedWithUser);
+
+        var getTracksSharedFromUser = CreateLambdaFunction("GetTracksSharedFromUserLambda");
+        table.GrantReadData(getTracksSharedFromUser);
+
+        var updateTrack = CreateLambdaFunction("UpdateTrackLambda");
+        table.GrantReadWriteData(updateTrack);
+        dropboxBucket.GrantReadWrite(updateTrack);
+        publicReadonlyBucket.GrantReadWrite(updateTrack);
+
+        var shareTrack = CreateLambdaFunction("ShareTrackLambda");
+        table.GrantReadWriteData(shareTrack);
+
+        var getTrackSegments = CreateLambdaFunction("GetTrackSegmentsLambda");
+        table.GrantReadData(getTrackSegments);
+        // Presigned GET URLs authorize with the signing role's permissions
+        privateReadonlyBucket.GrantRead(getTrackSegments);
+
+        var deleteTrack = CreateLambdaFunction("DeleteTrackLambda");
+        table.GrantReadWriteData(deleteTrack);
+        privateReadonlyBucket.GrantReadWrite(deleteTrack); // deletes audio segments
+        publicReadonlyBucket.GrantReadWrite(deleteTrack); // deletes cover image
+
+        // Track upload pipeline
+        UploadTrackFunction = CreateLambdaFunction("UploadTrackLambda");
+        table.GrantReadWriteData(UploadTrackFunction); // writes the upload-status record
+        dropboxBucket.GrantRead(UploadTrackFunction); // HeadObject for existence/size validation
+
+        var getUploadStatus = CreateLambdaFunction("GetUploadStatusLambda");
+        table.GrantReadData(getUploadStatus);
+
+        // Playlists
+        var createPlaylist = CreateLambdaFunction("CreatePlaylistLambda");
+        table.GrantReadWriteData(createPlaylist);
+
+        var getPlaylists = CreateLambdaFunction("GetPlaylistsLambda");
+        table.GrantReadData(getPlaylists);
+
+        var getPlaylist = CreateLambdaFunction("GetPlaylistLambda");
+        table.GrantReadData(getPlaylist);
+
+        var updatePlaylist = CreateLambdaFunction("UpdatePlaylistLambda");
+        table.GrantReadWriteData(updatePlaylist);
+
+        var deletePlaylist = CreateLambdaFunction("DeletePlaylistLambda");
+        table.GrantReadWriteData(deletePlaylist);
+
+        var modifyPlaylistTracks = CreateLambdaFunction("ModifyPlaylistTracksLambda");
+        table.GrantReadWriteData(modifyPlaylistTracks);
+
+        // Likes
+        var likeTrack = CreateLambdaFunction("LikeTrackLambda");
+        table.GrantReadWriteData(likeTrack);
+
+        var getTrackLikes = CreateLambdaFunction("GetTrackLikesLambda");
+        table.GrantReadData(getTrackLikes);
+
+        // Albums
+        var createAlbum = CreateLambdaFunction("CreateAlbumLambda");
+        table.GrantReadWriteData(createAlbum);
+
+        var getAlbums = CreateLambdaFunction("GetAlbumsLambda");
+        table.GrantReadData(getAlbums);
+
+        var getAlbum = CreateLambdaFunction("GetAlbumLambda");
+        table.GrantReadData(getAlbum);
+
+        var updateAlbum = CreateLambdaFunction("UpdateAlbumLambda");
+        table.GrantReadWriteData(updateAlbum);
+
+        var deleteAlbum = CreateLambdaFunction("DeleteAlbumLambda");
+        table.GrantReadWriteData(deleteAlbum);
+
+        var modifyAlbumTracks = CreateLambdaFunction("ModifyAlbumTracksLambda");
+        table.GrantReadWriteData(modifyAlbumTracks);
+
+        var shareAlbum = CreateLambdaFunction("ShareAlbumLambda");
+        table.GrantReadWriteData(shareAlbum);
+
+        var getAlbumsSharedWithMe = CreateLambdaFunction("GetAlbumsSharedWithMeLambda");
+        table.GrantReadData(getAlbumsSharedWithMe);
+
+        // S3
+        var getDropboxPresignedUrl = CreateLambdaFunction("GetDropboxPresignedUrlLambda");
+        dropboxBucket.GrantWrite(getDropboxPresignedUrl);
 
         ApiFunctions = new ApiFunctions(
             GetUser: getUser,
@@ -85,48 +159,35 @@ public class LambdaStack : BaseStack
             GetUserFollowing: getUserFollowing,
             UpdateProfile: updateProfile,
             GetDropboxPresignedUrl: getDropboxPresignedUrl,
-            GetUserTracks: getUserTracks
+            GetUserTracks: getUserTracks,
+            UploadTrack: UploadTrackFunction,
+            GetUploadStatus: getUploadStatus,
+            UpdateTrack: updateTrack,
+            ShareTrack: shareTrack,
+            GetTrackSegments: getTrackSegments,
+            DeleteTrack: deleteTrack,
+            CreatePlaylist: createPlaylist,
+            GetPlaylists: getPlaylists,
+            GetPlaylist: getPlaylist,
+            UpdatePlaylist: updatePlaylist,
+            DeletePlaylist: deletePlaylist,
+            ModifyPlaylistTracks: modifyPlaylistTracks,
+            LikeTrack: likeTrack,
+            GetTrackLikes: getTrackLikes,
+            CreateAlbum: createAlbum,
+            GetAlbums: getAlbums,
+            GetAlbum: getAlbum,
+            UpdateAlbum: updateAlbum,
+            DeleteAlbum: deleteAlbum,
+            ModifyAlbumTracks: modifyAlbumTracks,
+            ShareAlbum: shareAlbum,
+            GetAlbumsSharedWithMe: getAlbumsSharedWithMe
         );
     }
 
     private Function CreateLambdaFunction(string lambdaName, int memorySize = 512)
     {
-        var buildOption = new BundlingOptions()
-        {
-            Image = Runtime.DOTNET_10.BundlingImage,
-            User = "root",
-            OutputType = BundlingOutput.NOT_ARCHIVED,
-            Command =
-            [
-                "/bin/sh",
-                "-c",
-                $"cd api/Lambda/{lambdaName} && " +
-                "dotnet publish -c Release -r linux-arm64 --self-contained true && " +
-                "cp bin/Release/net10.0/linux-arm64/publish/bootstrap /asset-output/"
-            ]
-        };
-
-        var environment = new Dictionary<string, string>()
-        {
-            { "TABLE_NAME", Table.TableName },
-            { "DROPBOX_BUCKET_NAME", DropboxBucket.BucketName },
-            { "PUBLIC_READONLY_BUCKET_NAME", PublicReadonlyBucket.BucketName },
-            { "PRIVATE_READONLY_BUCKET_NAME", PrivateReadonlyBucket.BucketName },
-            { "ANNOTATIONS_HANDLER", "FunctionHandler" },
-        };
-
-        var lambdaProps = new FunctionProps
-        {
-            Runtime = Runtime.PROVIDED_AL2023,
-            Architecture = Architecture.ARM_64,
-            Handler = "bootstrap",
-            Code = Code.FromAsset(".", new AssetOptions { Bundling = buildOption }),
-            MemorySize = memorySize,
-            Environment = environment,
-        };
-
-        var function = new Function(this, lambdaName, lambdaProps);
-        function.ApplyRemovalPolicy(DeletionPolicy);
-        return function;
+        return CreateAotFunction(lambdaName, Table, DropboxBucket, PublicReadonlyBucket, PrivateReadonlyBucket,
+            memorySize);
     }
 }

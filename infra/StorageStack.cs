@@ -12,12 +12,17 @@ public class StorageStack : BaseStack
 
     public StorageStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
+        // Non-prod buckets must empty themselves on delete or `cdk destroy` fails
+        // once tests/dev uploads have written objects
+        var autoDelete = DeletionPolicy == RemovalPolicy.DESTROY;
+
         DropboxBucket = new Bucket(this, "DropboxBucket", new BucketProps
         {
             BucketName = $"melo-melo-dropbox-bucket-{Env}",
             PublicReadAccess = false,
             BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
             RemovalPolicy = DeletionPolicy,
+            AutoDeleteObjects = autoDelete,
             LifecycleRules =
             [
                 new LifecycleRule
@@ -33,6 +38,7 @@ public class StorageStack : BaseStack
             PublicReadAccess = false,
             BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
             RemovalPolicy = DeletionPolicy,
+            AutoDeleteObjects = autoDelete,
         });
 
         PublicReadonlyBucket = new Bucket(this, "PublicReadonlyBucket", new BucketProps
@@ -41,6 +47,7 @@ public class StorageStack : BaseStack
             PublicReadAccess = true,
             BlockPublicAccess = BlockPublicAccess.BLOCK_ACLS_ONLY,
             RemovalPolicy = DeletionPolicy,
+            AutoDeleteObjects = autoDelete,
         });
     }
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
@@ -19,6 +20,14 @@ public sealed class DynamoDBService : IDynamoDBService
             .Build();
 
         _tableName = tableName;
+
+        _dbContext.RegisterTableDefinition(new TableBuilder(dynamoDbClient, tableName)
+            .AddHashKey("PK", DynamoDBEntryType.String)
+            .AddRangeKey("SK", DynamoDBEntryType.String)
+            .AddGlobalSecondaryIndex("GSI1", "GSI1PK", DynamoDBEntryType.String, "GSI1SK", DynamoDBEntryType.String)
+            .AddGlobalSecondaryIndex("GSI2", "GSI1PK", DynamoDBEntryType.String, "GSI2SK", DynamoDBEntryType.String)
+            .AddGlobalSecondaryIndex("GSI3", "GSI3PK", DynamoDBEntryType.String, "GSI3SK", DynamoDBEntryType.String)
+            .Build());
     }
 
     public Task WriteToDynamoAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(T value)
@@ -34,7 +43,8 @@ public sealed class DynamoDBService : IDynamoDBService
     {
         return await _dbContext.LoadAsync<T>(pk, sk, new LoadConfig()
         {
-            OverrideTableName = _tableName
+            OverrideTableName = _tableName,
+            ConsistentRead = true
         });
     }
 
@@ -47,7 +57,8 @@ public sealed class DynamoDBService : IDynamoDBService
         var queryConfig = new QueryConfig()
         {
             IndexName = indexName,
-            OverrideTableName = _tableName
+            OverrideTableName = _tableName,
+            ConsistentRead = indexName == null
         };
 
         IAsyncSearch<T> search;
@@ -90,7 +101,7 @@ public sealed class DynamoDBService : IDynamoDBService
             {
                 IndexName = indexName,
                 Limit = pageSize,
-                PaginationToken = paginationToken,
+                PaginationToken = DecodeCursor(paginationToken),
                 BackwardSearch = !scanIndexForward,
                 Filter = filter,
             },
@@ -98,7 +109,34 @@ public sealed class DynamoDBService : IDynamoDBService
         );
 
         var results = await search.GetNextSetAsync();
-        return (results, search.PaginationToken);
+        return (results, EncodeCursor(search.PaginationToken));
+    }
+
+    private static string? EncodeCursor(string? paginationToken)
+    {
+        if (string.IsNullOrEmpty(paginationToken) || paginationToken == "{}")
+            return null;
+
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(paginationToken))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static string? DecodeCursor(string? cursor)
+    {
+        if (string.IsNullOrEmpty(cursor))
+            return null;
+
+        var base64 = cursor.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight(base64.Length + (4 - base64.Length % 4) % 4, '=');
+
+        try
+        {
+            return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+        }
+        catch (FormatException)
+        {
+            throw new ArgumentException("invalid pagination cursor");
+        }
     }
 
     public async Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
@@ -132,10 +170,25 @@ public sealed class DynamoDBService : IDynamoDBService
         return multiTableTx.ExecuteAsync();
     }
 
+    public IBatchWrite<T> CreateBatchWritePart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
+    {
+        return _dbContext.CreateBatchWrite<T>(new BatchWriteConfig
+        {
+            OverrideTableName = _tableName
+        });
+    }
+
+    public Task ExecuteBatchWriteAsync(params IBatchWrite[] batchParts)
+    {
+        var multiTableBatch = _dbContext.CreateMultiTableBatchWrite(batchParts);
+        return multiTableBatch.ExecuteAsync();
+    }
+
     private static (string pk, string sk) GetKeyAttributeNames(string? indexName) => indexName switch
     {
         "GSI1" => ("GSI1PK", "GSI1SK"),
         "GSI2" => ("GSI1PK", "GSI2SK"),
+        "GSI3" => ("GSI3PK", "GSI3SK"),
         _ => ("PK", "SK")
     };
 }

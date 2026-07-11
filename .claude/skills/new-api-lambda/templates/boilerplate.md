@@ -113,12 +113,18 @@ IFunction {Name}
 ### `infra/LambdaStack.cs` — add in constructor:
 
 ```csharp
-var {camelName} = CreateLambdaFunction("{Name}Lambda", table, dropboxBucket, publicReadonlyBucket);
+var {camelName} = CreateLambdaFunction("{Name}Lambda");
+// Optional second arg: memorySize in MB (default 512), e.g. CreateLambdaFunction("{Name}Lambda", 1024)
+
 table.GrantReadData({camelName});        // read-only
 // table.GrantReadWriteData({camelName}); // if the Lambda writes to DynamoDB
-// dropboxBucket.GrantReadWrite({camelName});         // if the Lambda reads from dropbox
+// dropboxBucket.GrantReadWrite({camelName});         // if the Lambda reads/writes dropbox
+// dropboxBucket.GrantWrite({camelName});             // if the Lambda only writes dropbox (e.g. presigned URL)
 // publicReadonlyBucket.GrantReadWrite({camelName});  // if the Lambda writes public assets
+// privateReadonlyBucket.GrantReadWrite({camelName}); // if the Lambda writes private assets
 ```
+
+`CreateLambdaFunction` injects `TABLE_NAME`, `DROPBOX_BUCKET_NAME`, `PUBLIC_READONLY_BUCKET_NAME`, and `PRIVATE_READONLY_BUCKET_NAME` as environment variables automatically — the buckets/table are read from private properties on `LambdaStack`. Only the Lambda name (and optional memory) is passed in.
 
 Then add `{Name}: {camelName}` to the `ApiFunctions` constructor call.
 

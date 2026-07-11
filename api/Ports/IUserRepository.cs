@@ -11,4 +11,5 @@ public interface IUserRepository
     public Task<UserFollow> GetFollowStatus(string username, string followerUsername);
     public Task<PaginatedResult<User>> GetUserFollowers(string username, int pageSize, string? cursor);
     public Task<PaginatedResult<User>> GetUserFollowings(string username, int pageSize, string? cursor);
+    public Task<List<string>> GetValidatedRecipientsAsync(List<string> usernames, string senderUsername);
 }

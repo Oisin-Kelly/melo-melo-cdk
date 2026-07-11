@@ -174,7 +174,7 @@ test.describe('POST /tracks/upload — processing failures', () => {
 
     const runId = Date.now();
     const audioKey = `e2e/${user.username}/${runId}-image.jpg`;
-    const image = fs.readFileSync(path.join(__dirname, '../fixtures/assets/not-audio.jpg'));
+    const image = fs.readFileSync(path.join(__dirname, '../fixtures/assets/image.jpg'));
 
     await putToDropbox(apiContext, audioKey, image, 'image/jpeg');
 

@@ -68,7 +68,7 @@ GSI2SK is a sender+date prefix for per-sender filtered sorting (GSI2). Both GSI1
 |----|-----|--------|--------|
 | `USER#{username}` | `PLAYLIST#{playlistId}` | `PLAYLISTS#{username}` | `DATE#{createdAt}` |
 
-Attributes: `name`, `description`, `type` (`LIKES` \| `CUSTOM`), `createdAt`
+Attributes: `name`, `description`, `type` (`LIKES` \| `CUSTOM`), `imageUrl`, `imageBgColor`, `createdAt`
 
 The built-in likes playlist uses the reserved id `likes` (created at PostConfirmation). Custom playlist ids are server-generated lowercase GUIDs. GSI3 gives the owner's paginated listing newest-first; the likes playlist carries the sentinel sort key `DATE#9999999999999` so it always sorts first on page 1.
 
@@ -98,7 +98,7 @@ Track-side base key lets the owner query who liked; GSI1 gives the user's liked-
 |----|-----|--------|--------|--------|--------|
 | `USER#{ownerUsername}` | `ALBUM#{albumId}` | `ALBUM#{albumId}` | `INFO` | `ALBUMS#{ownerUsername}` | `DATE#{createdAt}` |
 
-Attributes: `name`, `description`, `createdAt`
+Attributes: `name`, `description`, `imageUrl`, `imageBgColor`, `createdAt`
 
 GSI1 mirrors the Track pattern for by-id lookup (recipients don't know the owner); GSI3 gives the owner's paginated listing newest-first.
 
@@ -269,7 +269,8 @@ Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct rec
 ### Playlist APIs
 
 #### `POST /playlists` — CreatePlaylistLambda
-1. `SaveAsync(PlaylistDataModel)` — `PK=USER#{requestor}, SK=PLAYLIST#{guid}`, `type=CUSTOM` (server-generated id, type never client-controlled) → 201
+1. Optional `imageKey` → ImageService: process staged image to `playlists/{id}/cover_400x400.jpg` (public bucket) + dominant color — before any write, so a bad image 400s cleanly
+2. `SaveAsync(PlaylistDataModel)` — `PK=USER#{requestor}, SK=PLAYLIST#{guid}`, `type=CUSTOM` (server-generated id, type never client-controlled) → 201
 
 #### `GET /playlists` — GetPlaylistsLambda
 1. `Query(GSI3, GSI3PK=PLAYLISTS#{requestor}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated metas; likes' sentinel sort key puts it first, then customs newest-first
@@ -282,11 +283,13 @@ Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct rec
 
 #### `PUT /playlists/{playlistId}` — UpdatePlaylistLambda
 1. Meta get → 404 if missing, 400 if `LIKES`
-2. `TransactWrite` UpdateExpression (`UpdateExpressionBuilder`) on name/description → returns updated playlist
+2. Optional `imageKey` → ImageService cover processing (as create); `clearedImage` → REMOVE image attributes
+3. `TransactWrite` UpdateExpression (`UpdateExpressionBuilder`) on name/description/image → returns updated playlist
 
 #### `DELETE /playlists/{playlistId}` — DeletePlaylistLambda
 1. Meta get → 404 if missing, 400 if `LIKES`
-2. `Query(PK=PLAYLIST#{id}, begins_with TRACK#)` → all memberships; **BatchWrite delete** memberships first, meta last (retryable while meta exists)
+2. Delete `playlists/{id}/cover_400x400.jpg` from the public bucket if set
+3. `Query(PK=PLAYLIST#{id}, begins_with TRACK#)` → all memberships; **BatchWrite delete** memberships first, meta last (retryable while meta exists)
 
 #### `POST /playlists/{playlistId}/tracks` — ModifyPlaylistTracksLambda
 Request body: `{add: [trackIds], remove: [trackIds]}` (≤50 each; 400 for the likes playlist — use the like endpoint)
@@ -315,9 +318,10 @@ Owner-only (404 otherwise)
 ### Album APIs
 
 #### `POST /albums` — CreateAlbumLambda
-Request body: `{name, description?, trackIds?}` (≤50 tracks)
+Request body: `{name, description?, imageKey?, trackIds?}` (≤50 tracks)
 1. Own-tracks-only: `BatchGet(PK=USER#{requestor}, SK=TRACK#{id})` for every id — any miss → 400
-2. **BatchWrite** memberships first, then meta (`SaveAsync`) — album only becomes visible once fully written → 201
+2. Optional `imageKey` → ImageService: process staged image to `albums/{id}/cover_400x400.jpg` (public bucket) + dominant color — before any write, so a bad image 400s cleanly
+3. **BatchWrite** memberships first, then meta (`SaveAsync`) — album only becomes visible once fully written → 201
 
 #### `GET /albums` — GetAlbumsLambda
 1. `Query(GSI3, GSI3PK=ALBUMS#{requestor}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → own albums newest-first, paginated
@@ -332,8 +336,8 @@ Request body: `{name, description?, trackIds?}` (≤50 tracks)
 3. `Query(GSI1, GSI1PK=ALBUM#{id}, begins_with DATE#, Limit=10, cursor)` + `TrackBatchLookup` join → meta + paginated tracks
 
 #### `PUT /albums/{albumId}` — UpdateAlbumLambda / `DELETE /albums/{albumId}` — DeleteAlbumLambda
-Owner-only (404 otherwise). Update: UpdateExpression on name/description.
-Delete order (revoke-first): grants (`PK=TRACK#{tid}, SK=SHARED#{recipient}#ALBUM#{id}` for every track × recipient) → AlbumShare records → memberships → meta. All via **BatchWrite**.
+Owner-only (404 otherwise). Update: optional `imageKey` cover processing / `clearedImage` removal, then UpdateExpression on name/description/image.
+Delete order (revoke-first): cover image (public bucket, if set) → grants (`PK=TRACK#{tid}, SK=SHARED#{recipient}#ALBUM#{id}` for every track × recipient) → AlbumShare records → memberships → meta. All via **BatchWrite**.
 
 #### `POST /albums/{albumId}/tracks` — ModifyAlbumTracksLambda
 Request body: `{add, remove}` — owner-only; adds must be own tracks; total ≤50

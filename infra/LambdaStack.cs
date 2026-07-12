@@ -96,6 +96,8 @@ public class LambdaStack : BaseStack
         // Playlists
         var createPlaylist = CreateLambdaFunction("Playlist/CreatePlaylistLambda");
         table.GrantReadWriteData(createPlaylist);
+        dropboxBucket.GrantRead(createPlaylist); // staged cover image
+        publicReadonlyBucket.GrantReadWrite(createPlaylist); // processed cover
 
         var getPlaylists = CreateLambdaFunction("Playlist/GetPlaylistsLambda");
         table.GrantReadData(getPlaylists);
@@ -105,9 +107,12 @@ public class LambdaStack : BaseStack
 
         var updatePlaylist = CreateLambdaFunction("Playlist/UpdatePlaylistLambda");
         table.GrantReadWriteData(updatePlaylist);
+        dropboxBucket.GrantRead(updatePlaylist); // staged cover image
+        publicReadonlyBucket.GrantReadWrite(updatePlaylist); // processed cover
 
         var deletePlaylist = CreateLambdaFunction("Playlist/DeletePlaylistLambda");
         table.GrantReadWriteData(deletePlaylist);
+        publicReadonlyBucket.GrantReadWrite(deletePlaylist); // deletes cover image
 
         var modifyPlaylistTracks = CreateLambdaFunction("Playlist/ModifyPlaylistTracksLambda");
         table.GrantReadWriteData(modifyPlaylistTracks);
@@ -122,6 +127,8 @@ public class LambdaStack : BaseStack
         // Albums
         var createAlbum = CreateLambdaFunction("Album/CreateAlbumLambda");
         table.GrantReadWriteData(createAlbum);
+        dropboxBucket.GrantRead(createAlbum); // staged cover image
+        publicReadonlyBucket.GrantReadWrite(createAlbum); // processed cover
 
         var getAlbums = CreateLambdaFunction("Album/GetAlbumsLambda");
         table.GrantReadData(getAlbums);
@@ -131,9 +138,12 @@ public class LambdaStack : BaseStack
 
         var updateAlbum = CreateLambdaFunction("Album/UpdateAlbumLambda");
         table.GrantReadWriteData(updateAlbum);
+        dropboxBucket.GrantRead(updateAlbum); // staged cover image
+        publicReadonlyBucket.GrantReadWrite(updateAlbum); // processed cover
 
         var deleteAlbum = CreateLambdaFunction("Album/DeleteAlbumLambda");
         table.GrantReadWriteData(deleteAlbum);
+        publicReadonlyBucket.GrantReadWrite(deleteAlbum); // deletes cover image
 
         var modifyAlbumTracks = CreateLambdaFunction("Album/ModifyAlbumTracksLambda");
         table.GrantReadWriteData(modifyAlbumTracks);

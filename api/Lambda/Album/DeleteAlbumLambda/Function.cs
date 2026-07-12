@@ -5,16 +5,19 @@ using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Services;
 
 namespace DeleteAlbumLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IAlbumRepository _albumRepository;
+    private readonly IImageService _imageService;
 
-    public Function(IAlbumRepository albumRepository)
+    public Function(IAlbumRepository albumRepository, IImageService imageService)
     {
         _albumRepository = albumRepository;
+        _imageService = imageService;
     }
 
     [LambdaFunction]
@@ -31,6 +34,11 @@ public sealed class Function : BaseLambdaFunctionHandler
             var album = await _albumRepository.GetAlbumByIdAsync(albumId);
             if (album is null || album.OwnerUsername != username)
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
+
+            // Cover first — the meta record goes last inside DeleteAlbumAsync, so a
+            // mid-delete crash stays retryable
+            if (album.ImageUrl is not null)
+                await _imageService.DeleteImageAsync($"albums/{album.Id}/cover_400x400.jpg");
 
             // Revokes all album-derived access; direct shares are untouched
             await _albumRepository.DeleteAlbumAsync(username, album.Id);

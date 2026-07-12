@@ -6,9 +6,12 @@ public interface IAlbumRepository
 {
     public Task<PaginatedResult<Album>> GetAlbumsAsync(string ownerUsername, int pageSize, string? cursor);
     public Task<Album?> GetAlbumByIdAsync(string albumId);
-    public Task<Album> CreateAlbumAsync(string ownerUsername, string name, string? description,
-        IReadOnlyList<string> trackIds);
-    public Task<Album?> UpdateAlbumAsync(string ownerUsername, string albumId, string? name, string? description);
+    // albumId is minted by the handler so the cover image can be processed to its
+    // final key before anything is written
+    public Task<Album> CreateAlbumAsync(string albumId, string ownerUsername, string name, string? description,
+        ImageProcessingResult? image, IReadOnlyList<string> trackIds);
+    public Task<Album?> UpdateAlbumAsync(string ownerUsername, string albumId, string? name, string? description,
+        ImageProcessingResult? image, bool clearImage);
     public Task DeleteAlbumAsync(string ownerUsername, string albumId);
 
     public Task<PaginatedResult<Track>> GetAlbumTracksAsync(string albumId, int pageSize, string? cursor);

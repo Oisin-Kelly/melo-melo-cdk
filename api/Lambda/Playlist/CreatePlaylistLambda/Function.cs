@@ -7,6 +7,7 @@ using Amazon.Lambda.Core;
 using Domain;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Services;
 using Ports.Validation;
 
 namespace CreatePlaylistLambda;
@@ -15,11 +16,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IPlaylistRepository _playlistRepository;
     private readonly IPlaylistValidationService _playlistValidationService;
+    private readonly IImageService _imageService;
 
-    public Function(IPlaylistRepository playlistRepository, IPlaylistValidationService playlistValidationService)
+    public Function(IPlaylistRepository playlistRepository, IPlaylistValidationService playlistValidationService,
+        IImageService imageService)
     {
         _playlistRepository = playlistRepository;
         _playlistValidationService = playlistValidationService;
+        _imageService = imageService;
     }
 
     [LambdaFunction]
@@ -35,8 +39,19 @@ public sealed class Function : BaseLambdaFunctionHandler
         {
             createRequest = _playlistValidationService.ValidateCreate(createRequest);
 
+            // Id is minted here so the cover lands on its final key before any write —
+            // a bad image 400s without leaving a half-created playlist behind
+            var playlistId = Guid.NewGuid().ToString("N").ToLowerInvariant();
+
+            ImageProcessingResult? image = null;
+            if (createRequest.ImageKey is not null)
+            {
+                image = await _imageService.ProcessImageAsync(
+                    createRequest.ImageKey, $"playlists/{playlistId}/cover_400x400.jpg", 400, 400);
+            }
+
             var playlist = await _playlistRepository.CreatePlaylistAsync(
-                username, createRequest.Name!, createRequest.Description);
+                playlistId, username, createRequest.Name!, createRequest.Description, image);
 
             return Created(JsonSerializer.Serialize(playlist, CustomJsonSerializerContext.Default.Playlist));
         }

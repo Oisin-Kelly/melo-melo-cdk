@@ -3,6 +3,7 @@ import * as path from 'path';
 import { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../fixtures/users';
 import { findAudioFixture } from '../fixtures/audio';
+import { putToDropbox } from '../fixtures/dropbox';
 
 test.describe('POST /tracks/upload — validation', () => {
   test('returns 400 when trackTitle is missing', async ({ apiContext }) => {
@@ -46,26 +47,6 @@ test.describe('POST /tracks/upload — validation', () => {
     expect((await res.json()).Message).toContain('No uploaded audio found');
   });
 });
-
-// PUT a file directly to the dropbox bucket via a presigned URL (no Bearer header —
-// the presigned query string is the auth; sending both makes S3 reject the request)
-async function putToDropbox(
-  apiContext: APIRequestContext,
-  key: string,
-  body: Buffer,
-  contentType: string
-): Promise<void> {
-  const presign = await apiContext.get(`/buckets/dropbox?key=${encodeURIComponent(key)}`);
-  expect(presign.status()).toBe(200);
-  const { url } = await presign.json();
-
-  const putRes = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: new Uint8Array(body),
-  });
-  expect(putRes.status).toBe(200);
-}
 
 interface UploadStatus {
   trackId: string;

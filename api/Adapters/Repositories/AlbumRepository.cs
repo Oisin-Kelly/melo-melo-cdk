@@ -47,10 +47,9 @@ public sealed class AlbumRepository : IAlbumRepository
         return item is null ? null : ToAlbum(item);
     }
 
-    public async Task<Album> CreateAlbumAsync(string ownerUsername, string name, string? description,
-        IReadOnlyList<string> trackIds)
+    public async Task<Album> CreateAlbumAsync(string albumId, string ownerUsername, string name, string? description,
+        ImageProcessingResult? image, IReadOnlyList<string> trackIds)
     {
-        var albumId = Guid.NewGuid().ToString("N").ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         // Memberships first, meta last — the album only becomes visible once fully written
@@ -73,6 +72,8 @@ public sealed class AlbumRepository : IAlbumRepository
             Gsi3Sk = $"DATE#{now}",
             Name = name,
             Description = description,
+            ImageUrl = image?.ImageUrl,
+            ImageBgColor = image?.ImageHex,
             CreatedAt = now,
         };
         await _dynamoDbService.WriteToDynamoAsync(meta);
@@ -81,13 +82,24 @@ public sealed class AlbumRepository : IAlbumRepository
     }
 
     public async Task<Album?> UpdateAlbumAsync(string ownerUsername, string albumId, string? name,
-        string? description)
+        string? description, ImageProcessingResult? image, bool clearImage)
     {
         var normalisedId = albumId.ToLowerInvariant();
 
         var builder = new UpdateExpressionBuilder();
         builder.AddNullableString("name", "n", name);
         builder.AddNullableString("description", "d", description);
+
+        if (image is not null)
+        {
+            builder.AddValue("imageUrl", "iu", image.ImageUrl);
+            builder.AddNullableString("imageBgColor", "ib", image.ImageHex);
+        }
+        else if (clearImage)
+        {
+            builder.RemoveField("imageUrl", "iu");
+            builder.RemoveField("imageBgColor", "ib");
+        }
 
         if (!builder.IsEmpty)
         {
@@ -409,6 +421,8 @@ public sealed class AlbumRepository : IAlbumRepository
         Id = item.AlbumId,
         Name = item.Name,
         Description = item.Description,
+        ImageUrl = item.ImageUrl,
+        ImageBgColor = item.ImageBgColor,
         CreatedAt = item.CreatedAt,
         Owner = owner,
         OwnerUsername = item.OwnerUsername,

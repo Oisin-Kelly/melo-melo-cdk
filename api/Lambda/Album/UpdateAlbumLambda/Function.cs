@@ -7,6 +7,7 @@ using Amazon.Lambda.Core;
 using Domain;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Services;
 using Ports.Validation;
 
 namespace UpdateAlbumLambda;
@@ -15,11 +16,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IAlbumRepository _albumRepository;
     private readonly IAlbumValidationService _albumValidationService;
+    private readonly IImageService _imageService;
 
-    public Function(IAlbumRepository albumRepository, IAlbumValidationService albumValidationService)
+    public Function(IAlbumRepository albumRepository, IAlbumValidationService albumValidationService,
+        IImageService imageService)
     {
         _albumRepository = albumRepository;
         _albumValidationService = albumValidationService;
+        _imageService = imageService;
     }
 
     [LambdaFunction]
@@ -40,8 +44,16 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             updateRequest = _albumValidationService.ValidateUpdate(updateRequest);
 
+            ImageProcessingResult? image = null;
+            if (updateRequest.ImageKey is not null)
+            {
+                image = await _imageService.ProcessImageAsync(
+                    updateRequest.ImageKey, $"albums/{album.Id}/cover_400x400.jpg", 400, 400);
+            }
+
             var updated = await _albumRepository.UpdateAlbumAsync(
-                username, album.Id, updateRequest.Name, updateRequest.Description);
+                username, album.Id, updateRequest.Name, updateRequest.Description,
+                image, updateRequest.ClearedImage);
 
             return Ok(JsonSerializer.Serialize(updated, CustomJsonSerializerContext.Default.Album));
         }

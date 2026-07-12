@@ -50,9 +50,9 @@ public sealed class PlaylistRepository : IPlaylistRepository
         return item is not null ? ToPlaylist(item) : null;
     }
 
-    public async Task<Playlist> CreatePlaylistAsync(string username, string name, string? description)
+    public async Task<Playlist> CreatePlaylistAsync(string playlistId, string username, string name,
+        string? description, ImageProcessingResult? image)
     {
-        var playlistId = Guid.NewGuid().ToString("N").ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var item = new PlaylistDataModel
@@ -64,6 +64,8 @@ public sealed class PlaylistRepository : IPlaylistRepository
             Name = name,
             Description = description,
             Type = PlaylistType.Custom,
+            ImageUrl = image?.ImageUrl,
+            ImageBgColor = image?.ImageHex,
             CreatedAt = now,
         };
 
@@ -72,13 +74,24 @@ public sealed class PlaylistRepository : IPlaylistRepository
     }
 
     public async Task<Playlist?> UpdatePlaylistAsync(string username, string playlistId, string? name,
-        string? description)
+        string? description, ImageProcessingResult? image, bool clearImage)
     {
         var normalisedId = playlistId.ToLowerInvariant();
 
         var builder = new UpdateExpressionBuilder();
         builder.AddNullableString("name", "n", name);
         builder.AddNullableString("description", "d", description);
+
+        if (image is not null)
+        {
+            builder.AddValue("imageUrl", "iu", image.ImageUrl);
+            builder.AddNullableString("imageBgColor", "ib", image.ImageHex);
+        }
+        else if (clearImage)
+        {
+            builder.RemoveField("imageUrl", "iu");
+            builder.RemoveField("imageBgColor", "ib");
+        }
 
         if (!builder.IsEmpty)
         {
@@ -190,6 +203,8 @@ public sealed class PlaylistRepository : IPlaylistRepository
         Name = item.Name,
         Description = item.Description,
         Type = item.Type,
+        ImageUrl = item.ImageUrl,
+        ImageBgColor = item.ImageBgColor,
         CreatedAt = item.CreatedAt,
     };
 

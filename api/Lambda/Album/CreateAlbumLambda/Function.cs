@@ -7,6 +7,7 @@ using Amazon.Lambda.Core;
 using Domain;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Services;
 using Ports.Validation;
 
 namespace CreateAlbumLambda;
@@ -16,13 +17,15 @@ public sealed class Function : BaseLambdaFunctionHandler
     private readonly IAlbumRepository _albumRepository;
     private readonly ITrackRepository _trackRepository;
     private readonly IAlbumValidationService _albumValidationService;
+    private readonly IImageService _imageService;
 
     public Function(IAlbumRepository albumRepository, ITrackRepository trackRepository,
-        IAlbumValidationService albumValidationService)
+        IAlbumValidationService albumValidationService, IImageService imageService)
     {
         _albumRepository = albumRepository;
         _trackRepository = trackRepository;
         _albumValidationService = albumValidationService;
+        _imageService = imageService;
     }
 
     [LambdaFunction]
@@ -46,8 +49,19 @@ public sealed class Function : BaseLambdaFunctionHandler
                     $"albums may only contain your own tracks; not yours or not found: {string.Join(", ", notOwned)}",
                     "Bad Request");
 
+            // Id is minted here so the cover lands on its final key before any write —
+            // a bad image 400s without leaving a half-created album behind
+            var albumId = Guid.NewGuid().ToString("N").ToLowerInvariant();
+
+            ImageProcessingResult? image = null;
+            if (createRequest.ImageKey is not null)
+            {
+                image = await _imageService.ProcessImageAsync(
+                    createRequest.ImageKey, $"albums/{albumId}/cover_400x400.jpg", 400, 400);
+            }
+
             var album = await _albumRepository.CreateAlbumAsync(
-                username, createRequest.Name!, createRequest.Description, createRequest.TrackIds);
+                albumId, username, createRequest.Name!, createRequest.Description, image, createRequest.TrackIds);
 
             return Created(JsonSerializer.Serialize(album, CustomJsonSerializerContext.Default.Album));
         }

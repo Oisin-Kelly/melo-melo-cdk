@@ -13,12 +13,15 @@ public record CreatePlaylistRequest
 {
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
 }
 
 public record UpdatePlaylistRequest
 {
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
+    [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
 }
 
 public record Playlist
@@ -34,6 +37,12 @@ public record Playlist
 
     [JsonPropertyName("type")]
     public required string Type { get; set; }
+
+    [JsonPropertyName("imageUrl")]
+    public string? ImageUrl { get; set; }
+
+    [JsonPropertyName("imageBgColor")]
+    public string? ImageBgColor { get; set; }
 
     [JsonPropertyName("createdAt")]
     public required long CreatedAt { get; set; }
@@ -63,6 +72,12 @@ public record PlaylistDataModel
 
     [DynamoDBProperty("type")]
     public required string Type { get; set; }
+
+    [DynamoDBProperty("imageUrl")]
+    public string? ImageUrl { get; set; }
+
+    [DynamoDBProperty("imageBgColor")]
+    public string? ImageBgColor { get; set; }
 
     [DynamoDBProperty("createdAt")]
     public required long CreatedAt { get; set; }

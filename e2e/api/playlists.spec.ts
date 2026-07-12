@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/auth';
+import { putToDropbox, readImageFixture } from '../fixtures/dropbox';
 
 test.describe('GET /playlists', () => {
   test('always includes the built-in likes playlist', async ({ apiContext }) => {
@@ -151,6 +152,53 @@ test.describe('POST /playlists/{playlistId}/tracks', () => {
     const afterRemove = await apiContext.get(`/playlists/${playlist.id}`);
     const afterBody = await afterRemove.json();
     expect(afterBody.tracks.items.map((t: { id: string }) => t.id)).not.toContain(trackId);
+
+    await apiContext.delete(`/playlists/${playlist.id}`);
+  });
+});
+
+test.describe('Playlist cover images', () => {
+  test('create with imageKey sets the cover', async ({ apiContext }) => {
+    const runId = Date.now();
+    const imageKey = `e2e/playlists/${runId}-create-cover.jpg`;
+    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+
+    const create = await apiContext.post('/playlists', {
+      data: { name: `E2E playlist created cover ${runId}`, imageKey },
+    });
+    expect(create.status()).toBe(201);
+    const playlist = await create.json();
+    expect(playlist.imageUrl).toBeTruthy();
+    expect(playlist.imageBgColor).toMatch(/^#[0-9A-Fa-f]{6}$/);
+
+    await apiContext.delete(`/playlists/${playlist.id}`);
+  });
+
+  test('update with imageKey sets the cover → clearedImage removes it', async ({ apiContext }) => {
+    const runId = Date.now();
+    const create = await apiContext.post('/playlists', {
+      data: { name: `E2E playlist cover ${runId}` },
+    });
+    expect(create.status()).toBe(201);
+    const playlist = await create.json();
+
+    const imageKey = `e2e/playlists/${runId}-cover.jpg`;
+    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+
+    const update = await apiContext.put(`/playlists/${playlist.id}`, { data: { imageKey } });
+    expect(update.status()).toBe(200);
+    const updated = await update.json();
+    expect(updated.imageUrl).toBeTruthy();
+    expect(updated.imageBgColor).toMatch(/^#[0-9A-Fa-f]{6}$/);
+
+    const detail = await apiContext.get(`/playlists/${playlist.id}`);
+    expect((await detail.json()).playlist.imageUrl).toBe(updated.imageUrl);
+
+    const clear = await apiContext.put(`/playlists/${playlist.id}`, {
+      data: { clearedImage: true },
+    });
+    expect(clear.status()).toBe(200);
+    expect((await clear.json()).imageUrl ?? null).toBeNull();
 
     await apiContext.delete(`/playlists/${playlist.id}`);
   });

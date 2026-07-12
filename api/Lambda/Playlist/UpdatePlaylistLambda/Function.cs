@@ -7,6 +7,7 @@ using Amazon.Lambda.Core;
 using Domain;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Services;
 using Ports.Validation;
 
 namespace UpdatePlaylistLambda;
@@ -15,11 +16,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IPlaylistRepository _playlistRepository;
     private readonly IPlaylistValidationService _playlistValidationService;
+    private readonly IImageService _imageService;
 
-    public Function(IPlaylistRepository playlistRepository, IPlaylistValidationService playlistValidationService)
+    public Function(IPlaylistRepository playlistRepository, IPlaylistValidationService playlistValidationService,
+        IImageService imageService)
     {
         _playlistRepository = playlistRepository;
         _playlistValidationService = playlistValidationService;
+        _imageService = imageService;
     }
 
     [LambdaFunction]
@@ -42,8 +46,16 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             updateRequest = _playlistValidationService.ValidateUpdate(updateRequest);
 
+            ImageProcessingResult? image = null;
+            if (updateRequest.ImageKey is not null)
+            {
+                image = await _imageService.ProcessImageAsync(
+                    updateRequest.ImageKey, $"playlists/{existing.Id}/cover_400x400.jpg", 400, 400);
+            }
+
             var updated = await _playlistRepository.UpdatePlaylistAsync(
-                username, playlistId, updateRequest.Name, updateRequest.Description);
+                username, playlistId, updateRequest.Name, updateRequest.Description,
+                image, updateRequest.ClearedImage);
 
             return Ok(JsonSerializer.Serialize(updated, CustomJsonSerializerContext.Default.Playlist));
         }

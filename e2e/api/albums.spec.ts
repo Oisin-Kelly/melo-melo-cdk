@@ -1,6 +1,7 @@
 import { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../fixtures/users';
 import { findAudioFixture } from '../fixtures/audio';
+import { putToDropbox, readImageFixture } from '../fixtures/dropbox';
 
 async function uploadUnsharedTrack(
   apiContext: APIRequestContext,
@@ -172,5 +173,44 @@ test.describe('Album sharing grants track access', () => {
 
     // The owner still has the track — only derived access was revoked
     expect((await apiContext.get(`/tracks/${trackId}`)).status()).toBe(200);
+  });
+});
+
+test.describe('Album cover images', () => {
+  test('create with imageKey → cover on album and detail → clearedImage removes it', async ({
+    apiContext,
+  }) => {
+    const runId = Date.now();
+    const imageKey = `e2e/albums/${runId}-cover.jpg`;
+    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+
+    const create = await apiContext.post('/albums', {
+      data: { name: `E2E album cover ${runId}`, imageKey },
+    });
+    expect(create.status()).toBe(201);
+    const album = await create.json();
+    expect(album.imageUrl).toBeTruthy();
+    expect(album.imageBgColor).toMatch(/^#[0-9A-Fa-f]{6}$/);
+
+    const detail = await apiContext.get(`/albums/${album.id}`);
+    expect((await detail.json()).album.imageUrl).toBe(album.imageUrl);
+
+    const clear = await apiContext.put(`/albums/${album.id}`, { data: { clearedImage: true } });
+    expect(clear.status()).toBe(200);
+    expect((await clear.json()).imageUrl ?? null).toBeNull();
+
+    await apiContext.delete(`/albums/${album.id}`);
+  });
+
+  test('returns 400 when the staged object is not an image', async ({ apiContext }) => {
+    const runId = Date.now();
+    // Image bytes uploaded under an audio content type — ImageService rejects on content type
+    const imageKey = `e2e/albums/${runId}-not-image.wav`;
+    await putToDropbox(apiContext, imageKey, readImageFixture(), 'audio/wav');
+
+    const create = await apiContext.post('/albums', {
+      data: { name: `E2E album bad cover ${runId}`, imageKey },
+    });
+    expect(create.status()).toBe(400);
   });
 });

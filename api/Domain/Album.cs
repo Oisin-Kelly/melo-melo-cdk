@@ -14,6 +14,12 @@ public record Album
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 
+    [JsonPropertyName("imageUrl")]
+    public string? ImageUrl { get; set; }
+
+    [JsonPropertyName("imageBgColor")]
+    public string? ImageBgColor { get; set; }
+
     [JsonPropertyName("createdAt")]
     public required long CreatedAt { get; set; }
 
@@ -40,6 +46,7 @@ public record CreateAlbumRequest
 {
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
     [JsonPropertyName("trackIds")] public List<string> TrackIds { get; set; } = [];
 }
 
@@ -47,6 +54,8 @@ public record UpdateAlbumRequest
 {
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
+    [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
 }
 
 public record AlbumDataModel
@@ -76,6 +85,12 @@ public record AlbumDataModel
 
     [DynamoDBProperty("description")]
     public string? Description { get; set; }
+
+    [DynamoDBProperty("imageUrl")]
+    public string? ImageUrl { get; set; }
+
+    [DynamoDBProperty("imageBgColor")]
+    public string? ImageBgColor { get; set; }
 
     [DynamoDBProperty("createdAt")]
     public required long CreatedAt { get; set; }

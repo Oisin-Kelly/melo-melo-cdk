@@ -3,6 +3,15 @@ using Amazon.DynamoDBv2.DataModel;
 
 namespace Domain
 {
+    public static class IncomingSharesSetting
+    {
+        public const string Everyone = "EVERYONE";
+        public const string Following = "FOLLOWING";
+        public const string None = "NONE";
+
+        public static readonly string[] All = [Everyone, Following, None];
+    }
+
     public record User
     {
         [JsonPropertyName("username")]
@@ -56,6 +65,10 @@ namespace Domain
         [JsonPropertyName("followersPrivate")]
         [DynamoDBProperty("followersPrivate")]
         public required bool FollowersPrivate { get; set; }
+
+        [JsonPropertyName("incomingShares")]
+        [DynamoDBProperty("incomingShares")]
+        public string? IncomingShares { get; set; }
 
         [JsonPropertyName("createdAt")]
         [DynamoDBProperty("createdAt")]

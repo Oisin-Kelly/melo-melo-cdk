@@ -16,6 +16,9 @@ internal class UserValidator : AbstractValidator<User>
         RuleFor(x => x.LastName).MaximumLength(35);
         RuleFor(x => x.City).MaximumLength(35);
         RuleFor(x => x.Country).MaximumLength(35);
+        RuleFor(x => x.IncomingShares)
+            .Must(v => v is null || IncomingSharesSetting.All.Contains(v))
+            .WithMessage("incomingShares must be one of EVERYONE, FOLLOWING, NONE");
     }
 }
 
@@ -64,6 +67,7 @@ public sealed partial class UserValidationService : IUserValidationService
         user.LastName = InputSanitiser.SingleLine(user.LastName);
         user.City = InputSanitiser.SingleLine(user.City);
         user.Country = InputSanitiser.SingleLine(user.Country);
+        user.IncomingShares = InputSanitiser.SingleLine(user.IncomingShares)?.ToUpperInvariant();
 
         var result = Validator.Validate(user);
 

@@ -34,6 +34,10 @@ public record UpdateProfileRequest
     [JsonPropertyName("followingsPrivate")]
     public bool FollowingsPrivate { get; set; }
 
+    // EVERYONE | FOLLOWING | NONE; omitted or null leaves the setting unchanged
+    [JsonPropertyName("incomingShares")]
+    public string? IncomingShares { get; set; }
+
     [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
 }
 
@@ -107,6 +111,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             Bio = updateProfileRequest.Bio,
             FollowersPrivate = updateProfileRequest.FollowersPrivate,
             FollowingsPrivate = updateProfileRequest.FollowingsPrivate,
+            IncomingShares = updateProfileRequest.IncomingShares,
             CreatedAt = 0,
             FollowerCount = 0,
             FollowingCount = 0,

@@ -1,7 +1,8 @@
 import { test, expect } from '../fixtures/auth';
 
 // POST /profile/update replaces every field it receives, so each run simply
-// re-sets the test account's profile — no cleanup needed.
+// re-sets the test account's profile — no cleanup needed. incomingShares is
+// the exception: omitted/null leaves the stored setting unchanged.
 
 test.describe('POST /profile/update', () => {
   test('updates profile fields and returns the new profile', async ({ apiContext, user }) => {
@@ -15,6 +16,7 @@ test.describe('POST /profile/update', () => {
       bio: `Updated by the e2e suite at ${runId}`,
       followersPrivate: false,
       followingsPrivate: false,
+      incomingShares: 'EVERYONE',
       clearedImage: false,
     };
 
@@ -37,7 +39,7 @@ test.describe('POST /profile/update', () => {
     const bio = `Round-trip bio ${Date.now()}`;
 
     const update = await apiContext.post('/profile/update', {
-      data: { displayName: 'Round Trip', bio },
+      data: { displayName: 'Round Trip', bio, incomingShares: 'EVERYONE' },
     });
     expect(update.status()).toBe(200);
 

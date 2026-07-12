@@ -37,6 +37,9 @@ public sealed class UserRepository : IUserRepository
         builder.AddValue("followersPrivate", "fp", user.FollowersPrivate);
         builder.AddValue("followingsPrivate", "fip", user.FollowingsPrivate);
 
+        if (user.IncomingShares is not null)
+            builder.AddValue("incomingShares", "ish", user.IncomingShares);
+
         if (builder.IsEmpty)
             return await GetUserByUsername(user.Username);
 
@@ -198,6 +201,31 @@ public sealed class UserRepository : IUserRepository
         var keys = distinct.Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
         var foundUsers = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
 
-        return foundUsers.Select(u => u.Username).ToList();
+        var allowed = new List<string>();
+        var followChecks = new List<(string Username, Task<UserFollow> Status)>();
+
+        foreach (var user in foundUsers)
+        {
+            switch (user.IncomingShares)
+            {
+                case IncomingSharesSetting.None:
+                    break;
+                case IncomingSharesSetting.Following:
+                    followChecks.Add((user.Username, GetFollowStatus(senderUsername, user.Username)));
+                    break;
+                default: // everyone
+                    allowed.Add(user.Username);
+                    break;
+            }
+        }
+
+        await Task.WhenAll(followChecks.Select(c => c.Status));
+        allowed.AddRange(
+            followChecks
+                .Where(c => c.Status.Result.FollowStatus)
+                .Select(c => c.Username)
+            );
+
+        return allowed;
     }
 }

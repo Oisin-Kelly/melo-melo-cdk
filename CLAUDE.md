@@ -68,6 +68,7 @@ Playback: `GET /tracks/{trackId}/segments` (`GetTrackSegmentsLambda`) returns 1-
 - **Likes** are stored track-side (`TRACK#{id}` / `LIKE#{user}`) so owners can see who liked; `likeCount` lives on the Track item, maintained via `ADD` counter transactions with read-before-write idempotency (`LikeRepository`). `GET /tracks/{id}` returns `likedByMe` to any authorized viewer and `likeCount` to the owner only.
 - **Albums** contain only the owner's own tracks and are the bulk-sharing mechanism: sharing an album grants recipients access to all its tracks via per-(track×recipient×album) grant records (`SHARED#{user}#ALBUM#{id}`, no GSI keys). Membership is live (adds fan out to existing recipients, removals revoke). Unshare/delete only touches `…#ALBUM#{id}` keys, so direct `SharedTrack` records always survive.
 - **Track access rule** (single source: `ISharedTrackRepository.IsTrackAccessibleToUser`): owner OR direct share OR album grant. Use it for anything gated on track access.
+- **Incoming-shares setting**: each profile carries `incomingShares` (`EVERYONE` — default, written at signup — / `FOLLOWING` / `NONE`), set via `POST /profile/update`; unlike the other profile fields, omitting it (or sending null) leaves the stored setting unchanged. Enforced only in `GetValidatedRecipientsAsync` (the choke point for upload `sharedWith`, track share, album share): `FOLLOWING` requires the *recipient* to follow the sender at share time; blocked recipients are silently dropped like unknown usernames, so senders can't probe the setting. Existing shares/grants are never revoked by changing it, and album membership fan-out to existing recipients is deliberately not re-validated.
 - **Fan-out writes** use `IDynamoDBService.CreateBatchWritePart`/`ExecuteBatchWriteAsync` (SDK chunks to 25 + retries). Ordering rule: grants first, authoritative record (share/membership/meta) last, so failed operations retry cleanly. Limits: 50 tracks and 50 recipients per album.
 
 ## Track Upload Pipeline
@@ -103,7 +104,7 @@ Input validation follows a hexagonal pattern:
 - **Adapter**: `TrackValidationService`, `UserValidationService`, `AlbumValidationService`, `PlaylistValidationService` in `api/Adapters/Validation/` using FluentValidation
 - All services sanitise inputs (trim, collapse whitespace/newlines) before validating, mutate the request in place, and throw `ArgumentException` with a user-safe message (handlers catch it → 400)
 - HTTP request records (`CreateAlbumRequest`, `UpdateTrackRequest`, …) live in `api/Domain/` alongside their entities so the Adapters-layer validators can see them
-- `IUserRepository.GetValidatedRecipientsAsync` filters a `sharedWith` list to usernames that exist in DynamoDB (it lives on the repository because it owns the `USER#`/`PROFILE` key format)
+- `IUserRepository.GetValidatedRecipientsAsync` filters a `sharedWith` list to usernames that exist in DynamoDB AND accept shares from the sender (it lives on the repository because it owns the `USER#`/`PROFILE` key format)
 - Shared sanitisation helpers live in `Adapters/Validation/InputSanitiser.cs` — use them instead of duplicating regexes
 
 ## Pagination

@@ -15,7 +15,7 @@ Index: `GSI3` — `GSI3PK` (hash), `GSI3SK` (range), projection ALL
 |----|-----|--------|--------|
 | `USER#{username}` | `PROFILE` | `EMAIL#{email}` | `PROFILE` |
 
-Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city`, `bio`, `imageUrl`, `imageBgColor`, `followingCount`, `followerCount`, `followingsPrivate`, `followersPrivate`, `createdAt`
+Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city`, `bio`, `imageUrl`, `imageBgColor`, `followingCount`, `followerCount`, `followingsPrivate`, `followersPrivate`, `incomingShares` (`EVERYONE` — default, may be absent — | `FOLLOWING` | `NONE`), `createdAt`
 
 ### Track
 
@@ -147,7 +147,7 @@ Attributes: `trackOwnerUsername`, `albumId`, `grantedAt`
 - **TransactWrite** (2 parts, atomic):
   - User profile: `PK=USER#{username}`, `SK=PROFILE`, `GSI1PK=EMAIL#{email}`, `GSI1SK=PROFILE`
   - Likes playlist meta: `PK=USER#{username}`, `SK=PLAYLIST#likes`, `type=LIKES`, `name="Likes"`
-- Default values: `displayName=username`, `bio="Hey! I'm using MeloMelo!"`, counts=0, privacy=false
+- Default values: `displayName=username`, `bio="Hey! I'm using MeloMelo!"`, counts=0, privacy=false, `incomingShares=EVERYONE`
 
 #### CheckEmailExistenceLambda — Validate email uniqueness on pre-signup
 - **Trigger:** Cognito `PreSignUp`
@@ -257,7 +257,7 @@ Owner-only (404 otherwise)
 Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct recipients.
 1. Track fetch → owner check
 2. `Query(PK=TRACK#{id}, SK begins_with SHARED#)` **excluding `#ALBUM#` grant records** → current direct recipients
-3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users)
+3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users, and recipients whose `incomingShares` setting blocks the sender — `FOLLOWING` checks `GetItem`-style `Query(PK=FOLLOW#{sender}, begins_with USER#{recipient}#)` per candidate)
 4. **BatchWrite**: put SharedTrack items for adds (`GSI1SK=DATE#{now}`, `GSI2SK=SENDER#{owner}#DATE#{now}`), delete direct-share items for removes — album grant records are never touched, so album-derived access survives
 
 #### `GET /tracks` — GetUserTracksLambda
@@ -345,6 +345,6 @@ Request body: `{add, remove}` — owner-only; adds must be own tracks; total ≤
 2. Removes: delete grants first, memberships last
 
 #### `POST /albums/{albumId}/share` — ShareAlbumLambda
-Request body: `{add: [users], remove: [users]}` — owner-only; recipients validated via `GetValidatedRecipientsAsync` (strips self/unknown/dupes); ≤50 recipients
+Request body: `{add: [users], remove: [users]}` — owner-only; recipients validated via `GetValidatedRecipientsAsync` (strips self/unknown/dupes + enforces each recipient's `incomingShares` setting); ≤50 recipients
 1. Removes: delete grants (every track × removed user) first, then AlbumShare records
 2. Adds: write grants (every track × added user) first, then AlbumShare records (the share record is the authoritative marker)

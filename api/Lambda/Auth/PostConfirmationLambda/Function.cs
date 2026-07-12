@@ -68,6 +68,7 @@ public sealed class Function
             FollowerCount = 0,
             FollowingsPrivate = false,
             FollowersPrivate = false,
+            IncomingShares = IncomingSharesSetting.Everyone,
             CreatedAt = now
         };
     }

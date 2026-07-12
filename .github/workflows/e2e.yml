@@ -5,7 +5,8 @@ name: E2E
 # down (destroy runs even when the tests fail).
 on:
   push:
-
+    branches: [main]
+      
 permissions:
   id-token: write
   contents: read
@@ -66,18 +67,7 @@ jobs:
           AWS_REGION=${AWS_REGION}
           EOF
 
-      # Random per-run passwords that satisfy the pool policy (upper/lower/digit/symbol)
-      - name: Generate test accounts
-        run: |
-          jq -n \
-            --arg a "Aa1!$(openssl rand -hex 12)" \
-            --arg b "Aa1!$(openssl rand -hex 12)" \
-            --arg c "Aa1!$(openssl rand -hex 12)" \
-            '{userA: {username: "melotesta", password: $a},
-              userB: {username: "melotestb", password: $b},
-              userC: {username: "melotestc", password: $c}}' \
-            > e2e/test-accounts.json
-
+      # Also generates e2e/test-accounts.json (random per-run passwords)
       - name: Provision Cognito test users
         run: ./e2e/setup-test-users.sh
 

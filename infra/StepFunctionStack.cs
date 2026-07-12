@@ -34,7 +34,7 @@ public class StepFunctionStack : BaseStack
         });
         ffprobeLayer.ApplyRemovalPolicy(DeletionPolicy);
 
-        var processTrackFunction = CreateAotFunction("ProcessTrackLambda", table, dropboxBucket,
+        var processTrackFunction = CreateAotFunction("Track/ProcessTrackLambda", table, dropboxBucket,
             publicReadonlyBucket, privateReadonlyBucket, memorySize: 1024, timeout: Duration.Minutes(15),
             layers: [ffmpegLayer, ffprobeLayer]);
         table.GrantReadWriteData(processTrackFunction);

@@ -66,12 +66,12 @@ Conventions:
 - `JsonPropertyName` and `DynamoDBProperty` both use camelCase
 - Timestamps are `long` (unix milliseconds via `DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()`)
 
-## 2. Port interface — `api/Ports/I{Entity}Repository.cs`
+## 2. Port interface — `api/Ports/Repositories/I{Entity}Repository.cs`
 
 ```csharp
 using Domain;
 
-namespace Ports;
+namespace Ports.Repositories;
 
 public interface I{Entity}Repository
 {
@@ -85,14 +85,15 @@ Rules:
 - Only reference Domain types
 - Return nullable for lookups that may miss
 
-## 3. Adapter — `api/Adapters/{Entity}Repository.cs`
+## 3. Adapter — `api/Adapters/Repositories/{Entity}Repository.cs`
 
 ```csharp
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
-using Ports;
+using Ports.Repositories;
+using Ports.Services;
 
-namespace Adapters;
+namespace Adapters.Repositories;
 
 public sealed class {Entity}Repository : I{Entity}Repository
 {

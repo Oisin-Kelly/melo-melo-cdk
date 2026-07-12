@@ -34,10 +34,20 @@ public abstract class BaseStack : Stack
         return Code.FromAsset(prebuiltDir);
     }
 
-    protected Function CreateAotFunction(string lambdaName, ITable table, IBucket dropboxBucket,
+    // lambdaPath is "{Group}/{Name}" (e.g. "Track/UploadTrackLambda") — lambdas live in
+    // domain group folders under api/Lambda/. The construct id and .build dir use the
+    // bare name, so grouping never changes logical ids or prebuilt paths.
+    protected Function CreateAotFunction(string lambdaPath, ITable table, IBucket dropboxBucket,
         IBucket publicReadonlyBucket, IBucket privateReadonlyBucket, int memorySize = 512,
         Duration timeout = null, ILayerVersion[] layers = null)
     {
+        var slash = lambdaPath.IndexOf('/');
+        if (slash < 0)
+            throw new System.ArgumentException(
+                $"lambdaPath must be \"Group/Name\", got \"{lambdaPath}\"", nameof(lambdaPath));
+        var group = lambdaPath[..slash];
+        var lambdaName = lambdaPath[(slash + 1)..];
+
         var buildOption = new BundlingOptions
         {
             Image = Runtime.DOTNET_10.BundlingImage,
@@ -47,7 +57,7 @@ public abstract class BaseStack : Stack
             [
                 "/bin/sh",
                 "-c",
-                $"cd Lambda/{lambdaName} && " +
+                $"cd Lambda/{lambdaPath} && " +
                 "dotnet publish -c Release -r linux-arm64 --self-contained true && " +
                 "cp bin/Release/net10.0/linux-arm64/publish/bootstrap /asset-output/"
             ]
@@ -56,6 +66,8 @@ public abstract class BaseStack : Stack
         var assetOptions = new AssetOptions
         {
             Bundling = buildOption,
+            // gitignore-style, last match wins: drop everything under Lambda/, then
+            // re-include the group dir, drop its lambdas, re-include just this one
             Exclude =
             [
                 "**/bin/**",
@@ -64,8 +76,10 @@ public abstract class BaseStack : Stack
                 "PublishLambdas.proj",
                 "Tests/**",
                 "Lambda/*",
-                $"!Lambda/{lambdaName}",
-                $"!Lambda/{lambdaName}/**",
+                $"!Lambda/{group}",
+                $"Lambda/{group}/*",
+                $"!Lambda/{lambdaPath}",
+                $"!Lambda/{lambdaPath}/**",
                 "!Lambda/Lambda.Shared",
                 "!Lambda/Lambda.Shared/**",
                 "!Lambda/Directory.Build.props",

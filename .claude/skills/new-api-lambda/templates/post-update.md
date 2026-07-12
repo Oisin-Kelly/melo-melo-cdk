@@ -15,7 +15,7 @@ using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Domain;
 using Lambda.Shared;
-using Ports;
+using Ports.Repositories;
 
 namespace UpdatePlaylistLambda;
 

@@ -11,7 +11,7 @@ A new index touches **three code locations plus the writers**. Missing any one f
 ## 1. The three mandatory code changes
 
 1. **CDK table** — `infra/DataStack.cs`: `table.AddGlobalSecondaryIndex(...)` with the new key attributes (`GSInPK`/`GSInSK`, both STRING, projection ALL).
-2. **Runtime schema registration** — `api/Adapters/DynamoDBService.cs` constructor: add `.AddGlobalSecondaryIndex("GSIn", "GSInPK", ..., "GSInSK", ...)` to the `TableBuilder`. **This codebase never calls `DescribeTable` at runtime (AOT)** — the SDK only knows indices registered here. Forgetting this fails with `Unable to locate index [GSIn] on table [...]` and no amount of redeploying/recycling containers fixes it.
+2. **Runtime schema registration** — `api/Adapters/Services/DynamoDBService.cs` constructor: add `.AddGlobalSecondaryIndex("GSIn", "GSInPK", ..., "GSInSK", ...)` to the `TableBuilder`. **This codebase never calls `DescribeTable` at runtime (AOT)** — the SDK only knows indices registered here. Forgetting this fails with `Unable to locate index [GSIn] on table [...]` and no amount of redeploying/recycling containers fixes it.
 3. **Key attribute mapping** — `GetKeyAttributeNames` in the same file: `"GSIn" => ("GSInPK", "GSInSK")`. `QueryPaginatedAsync` builds its `QueryFilter` from this.
 
 Note GSI2 is special: it reuses `GSI1PK` as its hash key. A brand-new index should get its own attribute pair unless it deliberately shares a partition with GSI1.

@@ -32,8 +32,10 @@ docker run --rm \
     # dependably writes linux-arm64 assets; sequential because every lambda's
     # restore graph includes the shared projects (parallel restores race on
     # their project.assets.json)
-    for dir in Lambda/*/; do
-      case \"\$(basename \"\$dir\")\" in Lambda.Shared|Layers) continue;; esac
+    # Lambdas live under domain group folders (Lambda/{Group}/{Name}); Lambda.Shared
+    # and Layers stay top-level, so the two-level glob only needs a prefix guard
+    for dir in Lambda/*/*/; do
+      case \"\$dir\" in Lambda/Lambda.Shared/*|Lambda/Layers/*) continue;; esac
       dotnet restore \"\$dir\" -r linux-arm64 --verbosity quiet
     done
 
@@ -45,13 +47,13 @@ docker run --rm \
     # triggers Native AOT compilation (ILC)
     # no-restore: BuildAll already restored with this RID; parallel implicit restores
     # race each other writing shared projects' project.assets.json
-    ls -d Lambda/*/ | grep -v 'Lambda.Shared\|Layers' | xargs -P $PARALLEL -I {} \
+    ls -d Lambda/*/*/ | grep -v 'Lambda.Shared\|Layers' | xargs -P $PARALLEL -I {} \
       dotnet publish {} -c Release -r linux-arm64 --self-contained true --no-restore -v:quiet
 
     mkdir -p .build
-    for dir in Lambda/*/; do
+    for dir in Lambda/*/*/; do
+      case \"\$dir\" in Lambda/Lambda.Shared/*|Lambda/Layers/*) continue;; esac
       name=\$(basename \"\$dir\")
-      case \"\$name\" in Lambda.Shared|Layers) continue;; esac
       bin=\"\${dir}bin/Release/net10.0/linux-arm64/publish/bootstrap\"
       if [ ! -f \"\$bin\" ]; then
         echo \"ERROR: \$name produced no publish/bootstrap\" >&2

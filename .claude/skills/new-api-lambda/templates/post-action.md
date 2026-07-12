@@ -14,7 +14,7 @@ using Amazon.Lambda.Annotations.APIGateway;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Lambda.Shared;
-using Ports;
+using Ports.Repositories;
 
 namespace LikeTrackLambda;
 

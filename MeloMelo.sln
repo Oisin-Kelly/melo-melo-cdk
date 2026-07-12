@@ -9,29 +9,29 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Adapters", "api\Adapters\Ad
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "api\Domain\Domain.csproj", "{799D131F-2A83-4E02-9D61-E0E0436BF8BF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateUserProfileLambda", "api\Lambda\UpdateUserProfileLambda\UpdateUserProfileLambda.csproj", "{8F9ADB1F-4914-427B-BC38-DE791D876D90}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateUserProfileLambda", "api\Lambda\User\UpdateUserProfileLambda\UpdateUserProfileLambda.csproj", "{8F9ADB1F-4914-427B-BC38-DE791D876D90}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostConfirmationLambda", "api\Lambda\PostConfirmationLambda\PostConfirmationLambda.csproj", "{374A83B9-90F2-4C36-A5F8-98F2FCBCF59C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PostConfirmationLambda", "api\Lambda\Auth\PostConfirmationLambda\PostConfirmationLambda.csproj", "{374A83B9-90F2-4C36-A5F8-98F2FCBCF59C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lambda.Shared", "api\Lambda\Lambda.Shared\Lambda.Shared.csproj", "{44B00332-B23B-4A8D-8434-4604143E2E61}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IsFollowingUserLambda", "api\Lambda\IsFollowingUserLambda\IsFollowingUserLambda.csproj", "{64F66971-6FB6-481C-96BD-BB2E185CFB62}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IsFollowingUserLambda", "api\Lambda\User\IsFollowingUserLambda\IsFollowingUserLambda.csproj", "{64F66971-6FB6-481C-96BD-BB2E185CFB62}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserLambda", "api\Lambda\GetUserLambda\GetUserLambda.csproj", "{6FD147E0-514F-41C0-BDF5-5660507B1BFA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserLambda", "api\Lambda\User\GetUserLambda\GetUserLambda.csproj", "{6FD147E0-514F-41C0-BDF5-5660507B1BFA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserFollowingLambda", "api\Lambda\GetUserFollowingLambda\GetUserFollowingLambda.csproj", "{CDE8A1DE-3B59-4D42-AFA8-C4075AEB2EA5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserFollowingLambda", "api\Lambda\User\GetUserFollowingLambda\GetUserFollowingLambda.csproj", "{CDE8A1DE-3B59-4D42-AFA8-C4075AEB2EA5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserFollowersLambda", "api\Lambda\GetUserFollowersLambda\GetUserFollowersLambda.csproj", "{CEF8BB37-F0EF-4465-939C-F68E7653696E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUserFollowersLambda", "api\Lambda\User\GetUserFollowersLambda\GetUserFollowersLambda.csproj", "{CEF8BB37-F0EF-4465-939C-F68E7653696E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTracksSharedWithUserLambda", "api\Lambda\GetTracksSharedWithUserLambda\GetTracksSharedWithUserLambda.csproj", "{FF18DAE3-26CB-4735-8D5C-1DFCB0B65D6D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTracksSharedWithUserLambda", "api\Lambda\Track\GetTracksSharedWithUserLambda\GetTracksSharedWithUserLambda.csproj", "{FF18DAE3-26CB-4735-8D5C-1DFCB0B65D6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTracksSharedFromUserLambda", "api\Lambda\GetTracksSharedFromUserLambda\GetTracksSharedFromUserLambda.csproj", "{DB85A47A-305F-4D38-9CF8-482E1B42004F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTracksSharedFromUserLambda", "api\Lambda\Track\GetTracksSharedFromUserLambda\GetTracksSharedFromUserLambda.csproj", "{DB85A47A-305F-4D38-9CF8-482E1B42004F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackLambda", "api\Lambda\GetTrackLambda\GetTrackLambda.csproj", "{A1C90D66-31D5-462C-B7FB-C6689B3DE39D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackLambda", "api\Lambda\Track\GetTrackLambda\GetTrackLambda.csproj", "{A1C90D66-31D5-462C-B7FB-C6689B3DE39D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FollowUserLambda", "api\Lambda\FollowUserLambda\FollowUserLambda.csproj", "{D54C5289-C6C5-4426-80CA-1C19089B6C0C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FollowUserLambda", "api\Lambda\User\FollowUserLambda\FollowUserLambda.csproj", "{D54C5289-C6C5-4426-80CA-1C19089B6C0C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CheckEmailExistenceLambda", "api\Lambda\CheckEmailExistenceLambda\CheckEmailExistenceLambda.csproj", "{25E36EB3-4256-4E27-9CE6-925869565CAA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CheckEmailExistenceLambda", "api\Lambda\Auth\CheckEmailExistenceLambda\CheckEmailExistenceLambda.csproj", "{25E36EB3-4256-4E27-9CE6-925869565CAA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ports", "api\Ports\Ports.csproj", "{AA251257-0144-484F-B013-4E948C70EBF9}"
 EndProject
@@ -39,53 +39,53 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api", "api", "{D82C56D6-B2C
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lambda", "Lambda", "{87CA4567-379C-4F16-F229-F29BC9F8BBFA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetDropboxPresignedUrlLambda", "api\Lambda\GetDropboxPresignedUrlLambda\GetDropboxPresignedUrlLambda.csproj", "{671CF077-263E-452D-8946-89472075AF5A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetDropboxPresignedUrlLambda", "api\Lambda\Track\GetDropboxPresignedUrlLambda\GetDropboxPresignedUrlLambda.csproj", "{671CF077-263E-452D-8946-89472075AF5A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UploadTrackLambda", "api\Lambda\UploadTrackLambda\UploadTrackLambda.csproj", "{A2B3C4D5-E6F7-4901-A234-567890ABCDEF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UploadTrackLambda", "api\Lambda\Track\UploadTrackLambda\UploadTrackLambda.csproj", "{A2B3C4D5-E6F7-4901-A234-567890ABCDEF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProcessTrackLambda", "api\Lambda\ProcessTrackLambda\ProcessTrackLambda.csproj", "{B3C4D5E6-F789-4123-B456-7890ABCDEF01}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProcessTrackLambda", "api\Lambda\Track\ProcessTrackLambda\ProcessTrackLambda.csproj", "{B3C4D5E6-F789-4123-B456-7890ABCDEF01}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatePlaylistLambda", "api\Lambda\CreatePlaylistLambda\CreatePlaylistLambda.csproj", "{4A113709-DA9E-4843-B227-492B5CD051D2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatePlaylistLambda", "api\Lambda\Playlist\CreatePlaylistLambda\CreatePlaylistLambda.csproj", "{4A113709-DA9E-4843-B227-492B5CD051D2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetPlaylistsLambda", "api\Lambda\GetPlaylistsLambda\GetPlaylistsLambda.csproj", "{66BF98C1-795C-4B4B-AC85-8EBFF6929149}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetPlaylistsLambda", "api\Lambda\Playlist\GetPlaylistsLambda\GetPlaylistsLambda.csproj", "{66BF98C1-795C-4B4B-AC85-8EBFF6929149}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetPlaylistLambda", "api\Lambda\GetPlaylistLambda\GetPlaylistLambda.csproj", "{E07F71C0-35D9-4438-A8B3-7AF290ED24BE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetPlaylistLambda", "api\Lambda\Playlist\GetPlaylistLambda\GetPlaylistLambda.csproj", "{E07F71C0-35D9-4438-A8B3-7AF290ED24BE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdatePlaylistLambda", "api\Lambda\UpdatePlaylistLambda\UpdatePlaylistLambda.csproj", "{7CD36304-056D-4130-9066-18A0D7E59157}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdatePlaylistLambda", "api\Lambda\Playlist\UpdatePlaylistLambda\UpdatePlaylistLambda.csproj", "{7CD36304-056D-4130-9066-18A0D7E59157}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeletePlaylistLambda", "api\Lambda\DeletePlaylistLambda\DeletePlaylistLambda.csproj", "{66B74367-621C-4993-836F-9151ED544F8C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeletePlaylistLambda", "api\Lambda\Playlist\DeletePlaylistLambda\DeletePlaylistLambda.csproj", "{66B74367-621C-4993-836F-9151ED544F8C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModifyPlaylistTracksLambda", "api\Lambda\ModifyPlaylistTracksLambda\ModifyPlaylistTracksLambda.csproj", "{B61EAF1A-5213-440B-A6E9-8FBE58395BF2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModifyPlaylistTracksLambda", "api\Lambda\Playlist\ModifyPlaylistTracksLambda\ModifyPlaylistTracksLambda.csproj", "{B61EAF1A-5213-440B-A6E9-8FBE58395BF2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LikeTrackLambda", "api\Lambda\LikeTrackLambda\LikeTrackLambda.csproj", "{3A32C789-4673-48B9-81A7-AD158CFE39B2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LikeTrackLambda", "api\Lambda\Track\LikeTrackLambda\LikeTrackLambda.csproj", "{3A32C789-4673-48B9-81A7-AD158CFE39B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackLikesLambda", "api\Lambda\GetTrackLikesLambda\GetTrackLikesLambda.csproj", "{824D2595-17AE-46FC-BC4B-044187139501}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackLikesLambda", "api\Lambda\Track\GetTrackLikesLambda\GetTrackLikesLambda.csproj", "{824D2595-17AE-46FC-BC4B-044187139501}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateAlbumLambda", "api\Lambda\CreateAlbumLambda\CreateAlbumLambda.csproj", "{D62AE40E-25FF-4BEB-B5CE-81324837ECDE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateAlbumLambda", "api\Lambda\Album\CreateAlbumLambda\CreateAlbumLambda.csproj", "{D62AE40E-25FF-4BEB-B5CE-81324837ECDE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumsLambda", "api\Lambda\GetAlbumsLambda\GetAlbumsLambda.csproj", "{F32A345F-C4AB-42B8-B3D9-17E188CF37E9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumsLambda", "api\Lambda\Album\GetAlbumsLambda\GetAlbumsLambda.csproj", "{F32A345F-C4AB-42B8-B3D9-17E188CF37E9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumLambda", "api\Lambda\GetAlbumLambda\GetAlbumLambda.csproj", "{C7829888-CC8E-4844-9EF8-B5B498FBC0C3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumLambda", "api\Lambda\Album\GetAlbumLambda\GetAlbumLambda.csproj", "{C7829888-CC8E-4844-9EF8-B5B498FBC0C3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateAlbumLambda", "api\Lambda\UpdateAlbumLambda\UpdateAlbumLambda.csproj", "{7E48BC81-5C88-4A79-81E7-A2A298D606D4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateAlbumLambda", "api\Lambda\Album\UpdateAlbumLambda\UpdateAlbumLambda.csproj", "{7E48BC81-5C88-4A79-81E7-A2A298D606D4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeleteAlbumLambda", "api\Lambda\DeleteAlbumLambda\DeleteAlbumLambda.csproj", "{02C6A414-9F70-4CE1-893D-A655E7C191B2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeleteAlbumLambda", "api\Lambda\Album\DeleteAlbumLambda\DeleteAlbumLambda.csproj", "{02C6A414-9F70-4CE1-893D-A655E7C191B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModifyAlbumTracksLambda", "api\Lambda\ModifyAlbumTracksLambda\ModifyAlbumTracksLambda.csproj", "{C24D681E-AFBC-4A32-9B53-4CFB78096D60}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModifyAlbumTracksLambda", "api\Lambda\Album\ModifyAlbumTracksLambda\ModifyAlbumTracksLambda.csproj", "{C24D681E-AFBC-4A32-9B53-4CFB78096D60}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShareAlbumLambda", "api\Lambda\ShareAlbumLambda\ShareAlbumLambda.csproj", "{18F6090B-ACF6-4160-98FB-EF34A79645FB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShareAlbumLambda", "api\Lambda\Album\ShareAlbumLambda\ShareAlbumLambda.csproj", "{18F6090B-ACF6-4160-98FB-EF34A79645FB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumsSharedWithMeLambda", "api\Lambda\GetAlbumsSharedWithMeLambda\GetAlbumsSharedWithMeLambda.csproj", "{7AEA906F-73FF-4798-AF89-D300A6EC5E5E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetAlbumsSharedWithMeLambda", "api\Lambda\Album\GetAlbumsSharedWithMeLambda\GetAlbumsSharedWithMeLambda.csproj", "{7AEA906F-73FF-4798-AF89-D300A6EC5E5E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateTrackLambda", "api\Lambda\UpdateTrackLambda\UpdateTrackLambda.csproj", "{ADB36FD4-0F5B-46C1-8E65-2339DD394817}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UpdateTrackLambda", "api\Lambda\Track\UpdateTrackLambda\UpdateTrackLambda.csproj", "{ADB36FD4-0F5B-46C1-8E65-2339DD394817}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShareTrackLambda", "api\Lambda\ShareTrackLambda\ShareTrackLambda.csproj", "{88894229-3965-41E9-8EC8-247B6EF7D1B0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShareTrackLambda", "api\Lambda\Track\ShareTrackLambda\ShareTrackLambda.csproj", "{88894229-3965-41E9-8EC8-247B6EF7D1B0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUploadStatusLambda", "api\Lambda\GetUploadStatusLambda\GetUploadStatusLambda.csproj", "{3C233356-E518-4584-BEB4-9EE72C70C38E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetUploadStatusLambda", "api\Lambda\Track\GetUploadStatusLambda\GetUploadStatusLambda.csproj", "{3C233356-E518-4584-BEB4-9EE72C70C38E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackSegmentsLambda", "api\Lambda\GetTrackSegmentsLambda\GetTrackSegmentsLambda.csproj", "{C9721663-C7B0-4758-8B94-3194E04D746D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackSegmentsLambda", "api\Lambda\Track\GetTrackSegmentsLambda\GetTrackSegmentsLambda.csproj", "{C9721663-C7B0-4758-8B94-3194E04D746D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeleteTrackLambda", "api\Lambda\DeleteTrackLambda\DeleteTrackLambda.csproj", "{FB0466AD-401B-4249-976E-1AE75072AFC3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeleteTrackLambda", "api\Lambda\Track\DeleteTrackLambda\DeleteTrackLambda.csproj", "{FB0466AD-401B-4249-976E-1AE75072AFC3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

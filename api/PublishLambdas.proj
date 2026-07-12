@@ -3,7 +3,7 @@
      built exactly once and parallel scheduling is safe. Not part of the solution. -->
 <Project>
   <ItemGroup>
-    <LambdaProject Include="Lambda/*/*.csproj" Exclude="Lambda/Lambda.Shared/Lambda.Shared.csproj" />
+    <LambdaProject Include="Lambda/*/*/*.csproj" />
   </ItemGroup>
 
   <!-- Build only: the AOT native compilation (ILC) exclusively runs through the

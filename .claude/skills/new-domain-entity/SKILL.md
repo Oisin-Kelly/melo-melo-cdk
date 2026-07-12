@@ -20,8 +20,8 @@ Once you have the answers, follow the patterns in [templates.md](templates.md) a
 ## Steps
 
 1. Create domain record + DataModel in `api/Domain/{Entity}.cs`
-2. Create port interface in `api/Ports/I{Entity}Repository.cs`
-3. Create adapter implementation in `api/Adapters/{Entity}Repository.cs`
+2. Create port interface in `api/Ports/Repositories/I{Entity}Repository.cs`
+3. Create adapter implementation in `api/Adapters/Repositories/{Entity}Repository.cs`
 4. Update `docs/dynamo-access-patterns.md` with the new entity's key schema and access patterns
 5. Run `dotnet build MeloMelo.sln` to verify
 

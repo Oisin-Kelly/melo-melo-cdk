@@ -46,11 +46,11 @@ Lambdas are built automatically during `cdk deploy` via Docker (`dotnet publish 
   - `sfn-stack` — Step Functions state machine, `ProcessTrackLambda`, and audio processing layers (owns `ProcessTrackLambda` to avoid a cross-stack dependency cycle with `lambda-stack`)
   - `api-stack` — HTTP API v2 routes + Cognito authorizer
 - `api/` — Lambda code (.NET 10.0), hexagonal architecture:
-  - `Domain/` — Entities: User, Track, UserFollow, SharedTrack, Playlist, Like, Album, ProcessTrack, PaginatedResult
-  - `Ports/` — Interfaces (IUserRepository, ITrackRepository, IPlaylistRepository, ILikeRepository, IAlbumRepository, IAudioService, ITrackValidationService, IUserValidationService, etc.)
-  - `Adapters/` — AWS implementations of Ports
+  - `Domain/` — Entities: User, Track, UserFollow, SharedTrack, Playlist, Like, Album, ProcessTrack, PaginatedResult (+ the HTTP request records)
+  - `Ports/` — Interfaces, split into `Repositories/` (namespace `Ports.Repositories` — IUserRepository, ITrackRepository, …), `Services/` (`Ports.Services` — IDynamoDBService, IS3Service, IAudioService, IImageService, IUserPoolService), and `Validation/` (`Ports.Validation` — the four I*ValidationService)
+  - `Adapters/` — AWS implementations of Ports, mirroring the same split: `Repositories/` (`Adapters.Repositories`, incl. `TrackBatchLookup` + `UpdateExpressionBuilder`), `Services/` (`Adapters.Services`), `Validation/` (`Adapters.Validation`, incl. `InputSanitiser`). Namespaces match folders.
   - `Lambda/Lambda.Shared/` — Base handler with Ok/Accepted/Error response helpers
-  - `Lambda/*/` — Individual Lambda functions (each a separate executable)
+  - `Lambda/{Auth|User|Track|Playlist|Album}/*Lambda/` — Individual Lambda functions (each a separate executable), grouped by domain: `Auth/` (Cognito triggers), `User/` (profile + follows), `Track/` (tracks, upload pipeline, sharing, likes, segments, dropbox presign), `Playlist/`, `Album/`
   - `Lambda/Layers/` — Binary layer zips (ffmpeg, ffprobe — linux-arm64 static builds) for audio processing
 
 **Lambda pattern:** Each Lambda has `Function.cs` (handler with `[LambdaFunction]`/`[HttpApi]` attributes, constructor DI), `Startup.cs` (DI registration via `[LambdaStartup]`), and AOT JSON serializer context. Step Function-invoked Lambdas (`ProcessTrackLambda`) skip `[HttpApi]` and `BaseLambdaFunctionHandler`, taking a plain input record and returning a plain output record.
@@ -98,12 +98,12 @@ The zips MUST contain **linux-arm64 (aarch64) static binaries** at the path `bin
 ## Validation Pattern
 
 Input validation follows a hexagonal pattern:
-- **Port**: `ITrackValidationService`, `IUserValidationService`, `IAlbumValidationService`, `IPlaylistValidationService` in `api/Ports/`
-- **Adapter**: `TrackValidationService`, `UserValidationService`, `AlbumValidationService`, `PlaylistValidationService` in `api/Adapters/` using FluentValidation
+- **Port**: `ITrackValidationService`, `IUserValidationService`, `IAlbumValidationService`, `IPlaylistValidationService` in `api/Ports/Validation/`
+- **Adapter**: `TrackValidationService`, `UserValidationService`, `AlbumValidationService`, `PlaylistValidationService` in `api/Adapters/Validation/` using FluentValidation
 - All services sanitise inputs (trim, collapse whitespace/newlines) before validating, mutate the request in place, and throw `ArgumentException` with a user-safe message (handlers catch it → 400)
 - HTTP request records (`CreateAlbumRequest`, `UpdateTrackRequest`, …) live in `api/Domain/` alongside their entities so the Adapters-layer validators can see them
 - `IUserRepository.GetValidatedRecipientsAsync` filters a `sharedWith` list to usernames that exist in DynamoDB (it lives on the repository because it owns the `USER#`/`PROFILE` key format)
-- Shared sanitisation helpers live in `Adapters/InputSanitiser.cs` — use them instead of duplicating regexes
+- Shared sanitisation helpers live in `Adapters/Validation/InputSanitiser.cs` — use them instead of duplicating regexes
 
 ## Pagination
 

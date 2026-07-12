@@ -5,12 +5,14 @@ These files are identical across all Lambda patterns — only the namespace and 
 ## `Startup.cs`
 
 ```csharp
-using Adapters;
+using Adapters.Repositories;
+using Adapters.Services;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Ports;
+using Ports.Repositories;
+using Ports.Services;
 
 namespace {Name}Lambda;
 
@@ -113,8 +115,8 @@ IFunction {Name}
 ### `infra/LambdaStack.cs` — add in constructor:
 
 ```csharp
-var {camelName} = CreateLambdaFunction("{Name}Lambda");
-// Optional second arg: memorySize in MB (default 512), e.g. CreateLambdaFunction("{Name}Lambda", 1024)
+var {camelName} = CreateLambdaFunction("{Group}/{Name}Lambda");
+// Optional second arg: memorySize in MB (default 512), e.g. CreateLambdaFunction("{Group}/{Name}Lambda", 1024)
 
 table.GrantReadData({camelName});        // read-only
 // table.GrantReadWriteData({camelName}); // if the Lambda writes to DynamoDB

@@ -20,7 +20,7 @@ Once you have the answers, follow the patterns in the reference files below.
 
 ## Steps
 
-1. Create directory `api/Lambda/{Name}Lambda/`
+1. Create directory `api/Lambda/{Group}/{Name}Lambda/` — `{Group}` is the domain the endpoint belongs to: `Auth`, `User`, `Track`, `Playlist`, or `Album`
 2. Pick the closest `Function.cs` example from `templates/`:
    - [get-by-param.md](templates/get-by-param.md) — GET a single resource by path parameter
    - [get-for-caller.md](templates/get-for-caller.md) — GET the caller's own data (no path param, uses JWT)
@@ -35,7 +35,7 @@ Once you have the answers, follow the patterns in the reference files below.
 4. Add to `infra/ApiFunctions.cs` record
 5. Add Lambda + IAM grants in `infra/LambdaStack.cs`
 6. Add route in `infra/ApiStack.cs`
-7. Add to solution: `dotnet sln MeloMelo.sln add api/Lambda/{Name}Lambda/{Name}Lambda.csproj`
+7. Add to solution: `dotnet sln MeloMelo.sln add api/Lambda/{Group}/{Name}Lambda/{Name}Lambda.csproj`
 8. Run `dotnet build MeloMelo.sln` to verify
 
 ## Important rules

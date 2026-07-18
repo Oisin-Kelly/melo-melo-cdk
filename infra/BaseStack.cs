@@ -39,7 +39,7 @@ public abstract class BaseStack : Stack
     // bare name, so grouping never changes logical ids or prebuilt paths.
     protected Function CreateAotFunction(string lambdaPath, ITable table, IBucket dropboxBucket,
         IBucket publicReadonlyBucket, IBucket privateReadonlyBucket, int memorySize = 512,
-        Duration timeout = null, ILayerVersion[] layers = null)
+        Duration timeout = null, ILayerVersion[] layers = null, Size ephemeralStorage = null)
     {
         var slash = lambdaPath.IndexOf('/');
         if (slash < 0)
@@ -93,6 +93,7 @@ public abstract class BaseStack : Stack
             Handler = "bootstrap",
             Code = ResolveCode(lambdaName, assetOptions),
             MemorySize = memorySize,
+            EphemeralStorageSize = ephemeralStorage, // null → Lambda default 512 MB
             Timeout = timeout ?? Duration.Seconds(30),
             Environment = new Dictionary<string, string>
             {

@@ -34,9 +34,11 @@ public class StepFunctionStack : BaseStack
         });
         ffprobeLayer.ApplyRemovalPolicy(DeletionPolicy);
 
+        // 1792MB = one full vCPU — the lame encode is single-threaded and CPU-bound,
+        // so this ~1.75×es encode speed; more memory adds cores lame can't use
         var processTrackFunction = CreateAotFunction("Track/ProcessTrackLambda", table, dropboxBucket,
-            publicReadonlyBucket, privateReadonlyBucket, memorySize: 1024, timeout: Duration.Minutes(15),
-            layers: [ffmpegLayer, ffprobeLayer]);
+            publicReadonlyBucket, privateReadonlyBucket, memorySize: 1792, timeout: Duration.Minutes(15),
+            layers: [ffmpegLayer, ffprobeLayer], ephemeralStorage: Size.Gibibytes(10));
         table.GrantReadWriteData(processTrackFunction);
         dropboxBucket.GrantRead(processTrackFunction);
         privateReadonlyBucket.GrantReadWrite(processTrackFunction);
@@ -55,12 +57,17 @@ public class StepFunctionStack : BaseStack
             BackoffRate = 2,
         });
 
+        // Standard (not Express) so processing isn't hard-killed at Express's 5-minute
+        // cap — the Lambda's own 15-minute timeout is the binding limit for long audio.
+        // Type is immutable in CloudFormation, so the EXPRESS→STANDARD switch replaced
+        // the machine; the name carries a -std suffix because create-before-delete
+        // replacement can't reuse the old explicit name.
         UploadTrackStateMachine = new StateMachine(this, "UploadTrackStateMachine", new StateMachineProps
         {
-            StateMachineName = $"melo-melo-upload-track-{Env}",
+            StateMachineName = $"melo-melo-upload-track-std-{Env}",
             DefinitionBody = DefinitionBody.FromChainable(processTrackTask),
-            StateMachineType = StateMachineType.EXPRESS,
-            Timeout = Duration.Minutes(10),
+            StateMachineType = StateMachineType.STANDARD,
+            Timeout = Duration.Minutes(20),
         });
         UploadTrackStateMachine.ApplyRemovalPolicy(DeletionPolicy);
     }

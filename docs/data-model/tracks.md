@@ -24,7 +24,7 @@ GSI1 gives by-id lookup (owner unknown at query time); GSI3 gives the owner's tr
 
 Attributes: `status` (`PROCESSING` / `COMPLETE` / `FAILED`), `error`, `createdAt`, `expiresAt` (table TTL attribute — records self-expire after 24h). No GSI keys — only ever fetched point-wise by the owner.
 
-Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block).
+Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before segmenting).
 
 ### Shared Track
 

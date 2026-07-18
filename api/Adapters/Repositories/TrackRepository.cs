@@ -256,7 +256,7 @@ public sealed class TrackRepository : ITrackRepository
             .Select(id => (pk: $"USER#{ownerUsername}", sk: $"TRACK#{id}"));
 
         var found = await _dynamoDbService.BatchGetAsync<TrackDataModel>(keys);
-        
+
         return found.Select(t => t.TrackId).ToList();
     }
 

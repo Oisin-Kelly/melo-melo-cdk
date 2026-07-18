@@ -10,6 +10,9 @@ public sealed class AudioService : IAudioService
     private const string FfmpegPath = "/opt/bin/ffmpeg";
     private const string FfprobePath = "/opt/bin/ffprobe";
 
+    private const int MaxDurationHours = 24;
+    private const int MaxDurationSeconds = MaxDurationHours * 3600;
+
     private readonly IS3Service _dropboxS3Service;
     private readonly IS3Service _privateS3Service;
 
@@ -40,8 +43,13 @@ public sealed class AudioService : IAudioService
 
             Directory.CreateDirectory(outputDir);
 
-            var durationTask = GetDurationAsync(inputPath);
-            var segmentTask = RunProcessAsync(FfmpegPath, [
+            // Probe before segmenting so an over-long file is rejected without
+            // paying for the (much slower) ffmpeg re-encode
+            var durationSeconds = await GetDurationAsync(inputPath);
+            if (durationSeconds > MaxDurationSeconds)
+                throw new ArgumentException($"Audio is longer than the {MaxDurationHours} hour limit.");
+
+            await RunProcessAsync(FfmpegPath, [
                 "-i", inputPath,
                 "-f", "segment",
                 "-segment_time", "20",
@@ -49,9 +57,6 @@ public sealed class AudioService : IAudioService
                 "-b:a", "192k",
                 $"{outputDir}/segment_%d.mp3"
             ]);
-
-            await Task.WhenAll(durationTask, segmentTask);
-            var durationSeconds = await durationTask;
 
             var segments = Directory.GetFiles(outputDir, "segment_*.mp3")
                 .OrderBy(ExtractSegmentIndex)

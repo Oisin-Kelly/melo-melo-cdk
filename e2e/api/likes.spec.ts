@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/users';
+import { PERSISTENT_TRACK_PREFIX } from '../fixtures/upload';
 
 // Uses a track of userA's that is already shared with userB (created by upload.spec's
 // pipeline test on an earlier run). Skips gracefully when none exists yet.
@@ -6,7 +7,7 @@ import { test, expect } from '../fixtures/users';
 // parallel share tracks with B and delete them in cleanup, so an arbitrary
 // sharedItems[0] can vanish mid-test (like → 404).
 const pickPersistentSharedTrack = (items: { track: { id: string; name: string } }[]) =>
-  items.find((s) => s.track.name.startsWith('E2E upload '))?.track.id;
+  items.find((s) => s.track.name.startsWith(PERSISTENT_TRACK_PREFIX))?.track.id;
 
 test.describe('Track likes', () => {
   test('like → owner sees liker → idempotent → unlike', async ({

@@ -1,6 +1,7 @@
 import { APIRequestContext } from '@playwright/test';
 import { test, expect } from '../fixtures/users';
 import { findAudioFixture } from '../fixtures/audio';
+import { pickPersistentTrack } from '../fixtures/upload';
 
 async function uploadUnsharedTrack(
   apiContext: APIRequestContext,
@@ -109,13 +110,15 @@ test.describe('DELETE /tracks/{trackId}', () => {
   });
 
   test('non-owner cannot delete a track', async ({ apiContext, apiContextB }) => {
-    const tracksRes = await apiContext.get('/tracks');
-    const tracks = (await tracksRes.json()).items;
-    test.skip(tracks.length === 0, 'no uploaded tracks available — run the upload spec first');
+    // Pinned to a persistent pipeline track — the "still there" 200 would flake
+    // if tracks[0] belonged to a parallel spec that deletes it mid-test
+    const tracksRes = await apiContext.get('/tracks?limit=100');
+    const trackId = pickPersistentTrack((await tracksRes.json()).items);
+    test.skip(!trackId, 'no persistent uploaded track — run the upload spec first');
 
-    expect((await apiContextB.delete(`/tracks/${tracks[0].id}`)).status()).toBe(404);
+    expect((await apiContextB.delete(`/tracks/${trackId}`)).status()).toBe(404);
     // Still there for the owner
-    expect((await apiContext.get(`/tracks/${tracks[0].id}`)).status()).toBe(200);
+    expect((await apiContext.get(`/tracks/${trackId}`)).status()).toBe(200);
   });
 
   test('returns 404 for a nonexistent track', async ({ apiContext }) => {

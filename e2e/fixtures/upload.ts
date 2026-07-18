@@ -2,6 +2,16 @@ import { APIRequestContext, expect } from '@playwright/test';
 import { findAudioFixture } from './audio';
 import { putToDropbox } from './dropbox';
 
+// upload.spec's pipeline tracks use this title prefix and are never deleted.
+// Specs needing a pre-existing track must pin to one of these — an arbitrary
+// pick (tracks[0] / sharedItems[0]) races with parallel specs whose cleanup
+// deletes their own tracks mid-test.
+export const PERSISTENT_TRACK_PREFIX = 'E2E upload ';
+
+// Owned-track rows ({id, name}) from GET /tracks?limit=100
+export const pickPersistentTrack = (items: { id: string; name: string }[]) =>
+  items.find((t) => t.name.startsWith(PERSISTENT_TRACK_PREFIX))?.id;
+
 // Uploads a track through the full pipeline (presign → PUT → upload → poll)
 // and resolves with the trackId once processing is COMPLETE. Callers should
 // skip their test when findAudioFixture() returns null.

@@ -41,12 +41,17 @@ async function uploadUnsharedTrack(
 
 test.describe('PUT /tracks/{trackId}', () => {
   test('owner updates name, genre and description', async ({ apiContext }) => {
-    const tracksRes = await apiContext.get('/tracks');
-    const tracks = (await tracksRes.json()).items;
-    test.skip(tracks.length === 0, 'no uploaded tracks available — run the upload spec first');
+    test.skip(!findAudioFixture(), 'no audio fixture in e2e/fixtures/assets');
+    test.setTimeout(180_000);
 
-    const trackId = tracks[0].id;
-    const newName = `E2E renamed ${Date.now()}`;
+    // Own upload: renaming a shared persistent track would erode the
+    // "E2E upload" pool other specs pin to, and an arbitrary tracks[0] can be
+    // deleted mid-test by a parallel spec's cleanup
+    const runId = Date.now();
+    const trackId = await uploadUnsharedTrack(apiContext, runId);
+    expect(trackId, 'track should be processed').not.toBeNull();
+
+    const newName = `E2E renamed ${runId}`;
 
     const update = await apiContext.put(`/tracks/${trackId}`, {
       data: { name: newName, genre: 'Ambient', description: 'updated by e2e' },
@@ -60,6 +65,8 @@ test.describe('PUT /tracks/{trackId}', () => {
 
     const fetched = await apiContext.get(`/tracks/${trackId}`);
     expect((await fetched.json()).name).toBe(newName);
+
+    await apiContext.delete(`/tracks/${trackId}`);
   });
 
   test('returns 400 when name is missing', async ({ apiContext }) => {

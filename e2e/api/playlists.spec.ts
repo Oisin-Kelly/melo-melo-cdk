@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures/auth';
 import { putToDropbox, readImageFixture } from '../fixtures/dropbox';
+import { pickPersistentTrack } from '../fixtures/upload';
 
 test.describe('GET /playlists', () => {
   test('always includes the built-in likes playlist', async ({ apiContext }) => {
@@ -139,12 +140,11 @@ test.describe('Playlist track editing', () => {
   });
 
   test('adds and removes an owned track', async ({ apiContext }) => {
-    // Uses an existing uploaded track if one exists; skips otherwise
-    const tracksRes = await apiContext.get('/tracks');
-    const tracks = (await tracksRes.json()).items;
-    test.skip(tracks.length === 0, 'no uploaded tracks available to add');
-
-    const trackId = tracks[0].id;
+    // Pinned to a persistent pipeline track — an arbitrary tracks[0] can be
+    // deleted mid-test by a parallel spec's cleanup (entry turns DELETED)
+    const tracksRes = await apiContext.get('/tracks?limit=100');
+    const trackId = pickPersistentTrack((await tracksRes.json()).items);
+    test.skip(!trackId, 'no persistent uploaded track — run the upload spec first');
     const create = await apiContext.post('/playlists', {
       data: { name: `E2E membership ${Date.now()}` },
     });

@@ -22,7 +22,7 @@ async function uploadUnsharedTrack(
   });
 
   const upload = await apiContext.post('/tracks/upload', {
-    data: { trackTitle, audioKey },
+    data: { name: trackTitle, audioKey },
   });
   if (upload.status() !== 202) return null;
   const { trackId } = await upload.json();

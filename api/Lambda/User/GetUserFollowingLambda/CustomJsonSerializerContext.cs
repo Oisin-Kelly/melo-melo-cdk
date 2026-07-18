@@ -6,7 +6,7 @@ namespace GetUserFollowingLambda;
 
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyRequest))]
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyResponse))]
-[JsonSerializable(typeof(PaginatedResult<User>))]
+[JsonSerializable(typeof(PaginatedResult<UserSummary>))]
 public partial class CustomJsonSerializerContext : JsonSerializerContext
 {
 }

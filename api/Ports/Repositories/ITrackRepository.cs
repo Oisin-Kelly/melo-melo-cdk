@@ -6,7 +6,7 @@ namespace Ports.Repositories;
 public interface ITrackRepository
 {
     public Task<Track?> GetTrackAsync(string trackId);
-    public Task<PaginatedResult<Track>> GetTracksByUsername(string username, int pageSize, string? cursor);
+    public Task<PaginatedResult<TrackSummary>> GetTracksByUsername(string username, int pageSize, string? cursor);
     public Task CreateTrackAsync(string trackId, ProcessTrackInput input, AudioProcessingResult audio,
         ImageProcessingResult? image);
     public Task<List<string>> GetOwnedTrackIdsAsync(string ownerUsername, IReadOnlyList<string> trackIds);

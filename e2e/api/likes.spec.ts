@@ -2,6 +2,11 @@ import { test, expect } from '../fixtures/users';
 
 // Uses a track of userA's that is already shared with userB (created by upload.spec's
 // pipeline test on an earlier run). Skips gracefully when none exists yet.
+// Pinned to upload.spec's persistent "E2E upload …" tracks — other specs running in
+// parallel share tracks with B and delete them in cleanup, so an arbitrary
+// sharedItems[0] can vanish mid-test (like → 404).
+const pickPersistentSharedTrack = (items: { track: { id: string; name: string } }[]) =>
+  items.find((s) => s.track.name.startsWith('E2E upload '))?.track.id;
 
 test.describe('Track likes', () => {
   test('like → owner sees liker → idempotent → unlike', async ({
@@ -12,11 +17,9 @@ test.describe('Track likes', () => {
     userB,
     userC,
   }) => {
-    const shared = await apiContextB.get('/tracks/shared');
-    const sharedItems = (await shared.json()).items;
-    test.skip(sharedItems.length === 0, 'no shared tracks yet — run the upload spec first');
-
-    const trackId = sharedItems[0].track.id;
+    const shared = await apiContextB.get('/tracks/shared?limit=100');
+    const trackId = pickPersistentSharedTrack((await shared.json()).items);
+    test.skip(!trackId, 'no persistent shared track yet — run the upload spec first');
 
     // Liking requires access — A shares the track with C too (idempotent if already shared)
     const grantC = await apiContext.post(`/tracks/${trackId}/share`, {
@@ -51,7 +54,7 @@ test.describe('Track likes', () => {
     expect(likesPlaylist.status()).toBe(200);
     const likesPlaylistBody = await likesPlaylist.json();
     expect(likesPlaylistBody.playlist.type).toBe('LIKES');
-    expect(likesPlaylistBody.tracks.items.map((t: { id: string }) => t.id)).toContain(trackId);
+    expect(likesPlaylistBody.tracks.items.map((e: { trackId: string }) => e.trackId)).toContain(trackId);
 
     // Double-like is idempotent — count unchanged
     await apiContextB.post(`/tracks/${trackId}/like`, { data: { newValue: true } });
@@ -80,11 +83,11 @@ test.describe('Track likes', () => {
   });
 
   test('non-owner cannot view track likes', async ({ apiContextB }) => {
-    const shared = await apiContextB.get('/tracks/shared');
-    const sharedItems = (await shared.json()).items;
-    test.skip(sharedItems.length === 0, 'no shared tracks yet — run the upload spec first');
+    const shared = await apiContextB.get('/tracks/shared?limit=100');
+    const trackId = pickPersistentSharedTrack((await shared.json()).items);
+    test.skip(!trackId, 'no persistent shared track yet — run the upload spec first');
 
-    const res = await apiContextB.get(`/tracks/${sharedItems[0].track.id}/likes`);
+    const res = await apiContextB.get(`/tracks/${trackId}/likes`);
     expect(res.status()).toBe(404);
   });
 

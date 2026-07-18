@@ -3,6 +3,7 @@ using System.Text;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
+using Amazon.DynamoDBv2.Model;
 using Ports.Services;
 
 namespace Adapters.Services;
@@ -10,11 +11,13 @@ namespace Adapters.Services;
 // ReSharper disable once InconsistentNaming
 public sealed class DynamoDBService : IDynamoDBService
 {
+    private readonly IAmazonDynamoDB _client;
     private readonly DynamoDBContext _dbContext;
     private readonly string _tableName;
 
     public DynamoDBService(IAmazonDynamoDB dynamoDbClient, string tableName)
     {
+        _client = dynamoDbClient;
         _dbContext = new DynamoDBContextBuilder()
             .WithDynamoDBClient(() => dynamoDbClient)
             .Build();
@@ -110,6 +113,37 @@ public sealed class DynamoDBService : IDynamoDBService
 
         var results = await search.GetNextSetAsync();
         return (results, EncodeCursor(search.PaginationToken));
+    }
+
+    public async Task<int> CountAsync(string hashKey, string rangeKeyPrefix, string? indexName)
+    {
+        var (pkAttr, skAttr) = GetKeyAttributeNames(indexName);
+
+        var request = new QueryRequest
+        {
+            TableName = _tableName,
+            IndexName = indexName,
+            Select = Select.COUNT,
+            KeyConditionExpression = "#pk = :pk AND begins_with(#sk, :sk)",
+            ExpressionAttributeNames = new Dictionary<string, string> { ["#pk"] = pkAttr, ["#sk"] = skAttr },
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"] = new(hashKey),
+                [":sk"] = new(rangeKeyPrefix),
+            },
+        };
+
+        var count = 0;
+        Dictionary<string, AttributeValue>? lastKey = null;
+        do
+        {
+            request.ExclusiveStartKey = lastKey;
+            var response = await _client.QueryAsync(request);
+            count += response.Count.GetValueOrDefault();
+            lastKey = response.LastEvaluatedKey is { Count: > 0 } ? response.LastEvaluatedKey : null;
+        } while (lastKey != null);
+
+        return count;
     }
 
     private static string? EncodeCursor(string? paginationToken)

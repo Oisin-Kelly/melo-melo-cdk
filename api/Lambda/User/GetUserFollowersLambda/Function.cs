@@ -25,7 +25,9 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string username)
     {
-        var requestorUsername = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (requestorUsername, authError) = GetCallerUsername(request);
+
+        if (authError is not null) return authError;
         if (string.IsNullOrWhiteSpace(username))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
 
@@ -46,7 +48,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             return Ok(
                 JsonSerializer.Serialize(
                     result,
-                    CustomJsonSerializerContext.Default.PaginatedResultUser
+                    CustomJsonSerializerContext.Default.PaginatedResultUserSummary
                 )
             );
         }

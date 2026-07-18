@@ -8,7 +8,7 @@ namespace GetAlbumLambda;
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyRequest))]
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyResponse))]
 [JsonSerializable(typeof(AlbumDetailResponse))]
-[JsonSerializable(typeof(PaginatedResult<Track>))]
+[JsonSerializable(typeof(PaginatedResult<TrackSummary>))]
 public partial class CustomJsonSerializerContext : JsonSerializerContext
 {
 }

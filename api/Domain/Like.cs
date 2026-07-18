@@ -6,7 +6,7 @@ namespace Domain;
 public record TrackLiker
 {
     [JsonPropertyName("user")]
-    public required User User { get; set; }
+    public required UserSummary User { get; set; }
 
     [JsonPropertyName("likedAt")]
     public required long LikedAt { get; set; }
@@ -28,6 +28,9 @@ public record LikeDataModel
 
     [DynamoDBProperty("trackOwnerUsername")]
     public required string TrackOwnerUsername { get; set; }
+
+    [DynamoDBProperty("duration")]
+    public int Duration { get; set; }
 
     [DynamoDBProperty("likedAt")]
     public required long LikedAt { get; set; }

@@ -84,39 +84,58 @@ test.describe('Likes playlist immutability', () => {
     expect(res.status()).toBe(400);
   });
 
-  test('cannot have tracks added via the playlist endpoint', async ({ apiContext }) => {
-    const res = await apiContext.post('/playlists/likes/tracks', {
-      data: { add: ['some-track-id'] },
+  test('rejects all three track-editing endpoints', async ({ apiContext }) => {
+    const add = await apiContext.post('/playlists/likes/tracks/some-track-id');
+    expect(add.status()).toBe(400);
+
+    const remove = await apiContext.delete('/playlists/likes/tracks/some-track-id');
+    expect(remove.status()).toBe(400);
+
+    const reorder = await apiContext.put('/playlists/likes/tracks', {
+      data: { trackIds: [] },
     });
-    expect(res.status()).toBe(400);
+    expect(reorder.status()).toBe(400);
   });
 });
 
-test.describe('POST /playlists/{playlistId}/tracks', () => {
-  test('returns 400 when adding a nonexistent track', async ({ apiContext }) => {
+test.describe('Playlist track editing', () => {
+  test('add returns 400 for a nonexistent track', async ({ apiContext }) => {
     const create = await apiContext.post('/playlists', {
       data: { name: `E2E membership 400 ${Date.now()}` },
     });
     const playlist = await create.json();
 
-    const res = await apiContext.post(`/playlists/${playlist.id}/tracks`, {
-      data: { add: ['track-that-does-not-exist'] },
-    });
+    const res = await apiContext.post(
+      `/playlists/${playlist.id}/tracks/track-that-does-not-exist`
+    );
     expect(res.status()).toBe(400);
 
     await apiContext.delete(`/playlists/${playlist.id}`);
   });
 
-  test('returns 400 when both add and remove are empty', async ({ apiContext }) => {
+  test('remove of a non-member is an idempotent no-op', async ({ apiContext }) => {
     const create = await apiContext.post('/playlists', {
-      data: { name: `E2E membership empty ${Date.now()}` },
+      data: { name: `E2E membership idem ${Date.now()}` },
     });
     const playlist = await create.json();
 
-    const res = await apiContext.post(`/playlists/${playlist.id}/tracks`, { data: {} });
-    expect(res.status()).toBe(400);
+    const res = await apiContext.delete(
+      `/playlists/${playlist.id}/tracks/track-that-does-not-exist`
+    );
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toMatchObject({ removed: false });
 
     await apiContext.delete(`/playlists/${playlist.id}`);
+  });
+
+  test('endpoints 404 for a nonexistent playlist', async ({ apiContext }) => {
+    const add = await apiContext.post('/playlists/does-not-exist-xyz/tracks/some-track');
+    expect(add.status()).toBe(404);
+
+    const put = await apiContext.put('/playlists/does-not-exist-xyz/tracks', {
+      data: { trackIds: [] },
+    });
+    expect(put.status()).toBe(404);
   });
 
   test('adds and removes an owned track', async ({ apiContext }) => {
@@ -132,26 +151,26 @@ test.describe('POST /playlists/{playlistId}/tracks', () => {
     const playlist = await create.json();
 
     // Add
-    const add = await apiContext.post(`/playlists/${playlist.id}/tracks`, {
-      data: { add: [trackId] },
-    });
+    const add = await apiContext.post(`/playlists/${playlist.id}/tracks/${trackId}`);
     expect(add.status()).toBe(200);
-    expect((await add.json()).added).toBe(1);
+    expect(await add.json()).toMatchObject({ trackId, added: true });
 
-    // Visible in detail
+    // Visible in detail (entries wrap the track under .track)
     const detail = await apiContext.get(`/playlists/${playlist.id}`);
     const detailBody = await detail.json();
-    expect(detailBody.tracks.items.map((t: { id: string }) => t.id)).toContain(trackId);
+    expect(detailBody.tracks.items.map((e: { trackId: string }) => e.trackId)).toContain(trackId);
+    const entry = detailBody.tracks.items.find((e: { trackId: string }) => e.trackId === trackId);
+    expect(entry.unavailable).toBe(false);
+    expect(entry.track.id).toBe(trackId);
 
     // Remove
-    const remove = await apiContext.post(`/playlists/${playlist.id}/tracks`, {
-      data: { remove: [trackId] },
-    });
+    const remove = await apiContext.delete(`/playlists/${playlist.id}/tracks/${trackId}`);
     expect(remove.status()).toBe(200);
+    expect(await remove.json()).toMatchObject({ trackId, removed: true });
 
     const afterRemove = await apiContext.get(`/playlists/${playlist.id}`);
     const afterBody = await afterRemove.json();
-    expect(afterBody.tracks.items.map((t: { id: string }) => t.id)).not.toContain(trackId);
+    expect(afterBody.tracks.items.map((e: { trackId: string }) => e.trackId)).not.toContain(trackId);
 
     await apiContext.delete(`/playlists/${playlist.id}`);
   });
@@ -201,5 +220,28 @@ test.describe('Playlist cover images', () => {
     expect((await clear.json()).imageUrl ?? null).toBeNull();
 
     await apiContext.delete(`/playlists/${playlist.id}`);
+  });
+});
+
+test.describe('GET /playlists?limit=', () => {
+  test('limit caps the page size and returns a cursor', async ({ apiContext }) => {
+    // Likes always exists; one custom playlist guarantees at least 2
+    const create = await apiContext.post('/playlists', {
+      data: { name: `E2E limit ${Date.now()}` },
+    });
+    expect(create.status()).toBe(201);
+    const created = await create.json();
+
+    const res = await apiContext.get('/playlists?limit=1');
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.nextCursor).toBeTruthy();
+
+    // Unparseable limit falls back to the default page size (no error)
+    const fallback = await apiContext.get('/playlists?limit=banana');
+    expect(fallback.status()).toBe(200);
+
+    await apiContext.delete(`/playlists/${created.id}`);
   });
 });

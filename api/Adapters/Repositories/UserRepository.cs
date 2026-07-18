@@ -8,6 +8,9 @@ namespace Adapters.Repositories;
 
 public sealed class UserRepository : IUserRepository
 {
+    public const string SearchIndexPk = "USERS";
+    public static string SearchIndexSk(string username) => $"USERNAME#{username.ToLowerInvariant()}";
+
     private readonly IDynamoDBService _dynamoDbService;
 
     public UserRepository(IDynamoDBService dynamoDbService)
@@ -48,6 +51,27 @@ public sealed class UserRepository : IUserRepository
 
         await _dynamoDbService.ExecuteTransactWriteAsync(updateTransaction);
         return await GetUserByUsername(user.Username);
+    }
+
+    public async Task<(long? LastSeenAt, long? ActivitySeenAt)> GetSeenMarkersAsync(string username)
+    {
+        var markers = await _dynamoDbService.GetFromDynamoAsync<SeenMarkersDataModel>($"USER#{username}", "PROFILE");
+        return (markers?.LastSeenAt, markers?.ActivitySeenAt);
+    }
+
+    public Task MarkSeenAsync(string username)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var tx = _dynamoDbService.CreateTransactionPart<UserDataModel>();
+        tx.AddSaveItem(
+            $"USER#{username}", "PROFILE",
+            new Expression
+            {
+                ExpressionStatement = "SET #a = :v",
+                ExpressionAttributeNames = new Dictionary<string, string> { { "#a", "lastSeenAt" } },
+                ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> { { ":v", now } },
+            });
+        return _dynamoDbService.ExecuteTransactWriteAsync(tx);
     }
 
     private void HandleImageUpdate(UpdateExpressionBuilder builder, User user, bool clearImage)
@@ -144,7 +168,27 @@ public sealed class UserRepository : IUserRepository
         };
     }
 
-    public async Task<PaginatedResult<User>> GetUserFollowers(string username, int pageSize, string? cursor)
+    public async Task<PaginatedResult<UserSummary>> SearchUsersAsync(string prefix, int pageSize, string? cursor)
+    {
+        // GSI3 projects ALL, so matches come back as full profiles — no hydration step.
+        var (profiles, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserDataModel>(
+            hashKey: SearchIndexPk,
+            rangeKey: SearchIndexSk(prefix),
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: "GSI3",
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: true
+        );
+
+        return new PaginatedResult<UserSummary>
+        {
+            Items = profiles.Select(UserSummary.From).ToList(),
+            NextCursor = nextToken,
+        };
+    }
+
+    public async Task<PaginatedResult<UserSummary>> GetUserFollowers(string username, int pageSize, string? cursor)
     {
         var (followRecords, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserFollowDataModel>(
             hashKey: $"FOLLOW#{username}",
@@ -157,16 +201,20 @@ public sealed class UserRepository : IUserRepository
         );
 
         if (followRecords.Count == 0)
-            return new PaginatedResult<User> { Items = [], NextCursor = null };
+            return new PaginatedResult<UserSummary> { Items = [], NextCursor = null };
 
         // SK format: USER#{followerUsername}#{timestamp} — extract username at index 1
         var keys = followRecords.Select(f => ($"USER#{f.Sk.Split('#')[1]}", "PROFILE"));
         var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
 
-        return new PaginatedResult<User> { Items = profiles.ToList<User>(), NextCursor = nextToken };
+        return new PaginatedResult<UserSummary>
+        {
+            Items = profiles.Select(UserSummary.From).ToList(),
+            NextCursor = nextToken,
+        };
     }
 
-    public async Task<PaginatedResult<User>> GetUserFollowings(string username, int pageSize, string? cursor)
+    public async Task<PaginatedResult<UserSummary>> GetUserFollowings(string username, int pageSize, string? cursor)
     {
         var (followingRecords, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserFollowDataModel>(
             hashKey: $"FOLLOWING#{username}",
@@ -179,13 +227,17 @@ public sealed class UserRepository : IUserRepository
         );
 
         if (followingRecords.Count == 0)
-            return new PaginatedResult<User> { Items = [], NextCursor = null };
+            return new PaginatedResult<UserSummary> { Items = [], NextCursor = null };
 
         // GSI1SK format: DATE#{timestamp}#TARGET#{usernameToFollow}
         var keys = followingRecords.Select(f => ($"USER#{f.Gsi1Sk!.Split("#TARGET#")[1]}", "PROFILE"));
         var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
 
-        return new PaginatedResult<User> { Items = profiles.ToList<User>(), NextCursor = nextToken };
+        return new PaginatedResult<UserSummary>
+        {
+            Items = profiles.Select(UserSummary.From).ToList(),
+            NextCursor = nextToken,
+        };
     }
 
     public async Task<List<string>> GetValidatedRecipientsAsync(List<string> usernames, string senderUsername)

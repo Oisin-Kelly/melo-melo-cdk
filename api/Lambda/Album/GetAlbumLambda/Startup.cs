@@ -27,6 +27,7 @@ public class Startup
         });
 
         builder.Services.AddTransient<IAlbumRepository, AlbumRepository>();
+        builder.Services.AddTransient<IAlbumLikeRepository, AlbumLikeRepository>();
 
         return builder;
     }

@@ -59,7 +59,11 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         var normalisedTrackId = trackId.ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+        var existingShares = await GetDirectShareItemsAsync(normalisedTrackId);
+
         var batch = _dynamoDbService.CreateBatchWritePart<SharedTrackDataModel>();
+        var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
+        var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
 
         foreach (var recipient in addRecipients)
         {
@@ -74,19 +78,57 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
                 SharedAt = now,
                 Caption = caption,
             });
+            feedBatch.AddPutItem(
+                FeedItems.Build(recipient, FeedItemType.Track, normalisedTrackId, ownerUsername, now, caption));
+            activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, ownerUsername,
+                FeedItemType.Track, normalisedTrackId, now));
         }
 
-        if (removeRecipients.Count > 0)
+        var toRemove = existingShares
+            .Where(s => removeRecipients.Contains(s.Sk.Replace("SHARED#", ""), StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var share in toRemove)
         {
-            var existingShares = await GetDirectShareItemsAsync(normalisedTrackId);
-            var toRemove = existingShares
-                .Where(s => removeRecipients.Contains(s.Sk.Replace("SHARED#", ""), StringComparer.OrdinalIgnoreCase));
-
-            foreach (var share in toRemove)
-                batch.AddDeleteItem(share);
+            batch.AddDeleteItem(share);
+            var (pk, sk) = FeedItems.Key(share.Sk.Replace("SHARED#", ""), FeedItemType.Track, normalisedTrackId);
+            feedBatch.AddDeleteKey(pk, sk);
         }
+        var removedCount = toRemove.Count;
 
-        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch, feedBatch, activityBatch);
+
+        var shareDelta = addRecipients.Count - removedCount;
+        if (shareDelta != 0)
+        {
+            var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
+            tx.AddSaveItem($"USER#{ownerUsername}", $"TRACK#{normalisedTrackId}",
+                CounterExpressions.Add(("shareCount", shareDelta)));
+            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+        }
+    }
+
+    public async Task<List<Recipient>> GetTrackRecipientDetailsAsync(string trackId)
+    {
+        var shares = await GetDirectShareItemsAsync(trackId);
+        if (shares.Count == 0)
+            return [];
+
+        var keys = shares
+            .Select(s => s.Sk.Replace("SHARED#", ""))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
+        var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(keys))
+            .ToDictionary(p => p.Username, StringComparer.OrdinalIgnoreCase);
+
+        return shares
+            .Where(s => profiles.ContainsKey(s.Sk.Replace("SHARED#", "")))
+            .Select(s => new Recipient
+            {
+                User = UserSummary.From(profiles[s.Sk.Replace("SHARED#", "")]),
+                SharedAt = s.SharedAt,
+            })
+            .OrderByDescending(r => r.SharedAt)
+            .ToList();
     }
 
     private async Task<List<SharedTrackDataModel>> GetDirectShareItemsAsync(string trackId)
@@ -117,7 +159,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         if (sharedItems.Count == 0)
             return new PaginatedResult<SharedTrack> { Items = [], NextCursor = null };
 
-        var items = await GetSharedTracksFromSharedTrackItems(sharedItems);
+        var items = await GetSharedTracksFromSharedTrackItems(sharedItems, userId);
         return new PaginatedResult<SharedTrack> { Items = items, NextCursor = nextToken };
     }
 
@@ -136,79 +178,37 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         if (sharedItems.Count == 0)
             return new PaginatedResult<SharedTrack> { Items = [], NextCursor = null };
 
-        var items = await GetSharedTracksFromSharedTrackItems(sharedItems);
+        var items = await GetSharedTracksFromSharedTrackItems(sharedItems, receiverUserId);
         return new PaginatedResult<SharedTrack> { Items = items, NextCursor = nextToken };
     }
 
-    private async Task<List<SharedTrack>> GetSharedTracksFromSharedTrackItems(List<SharedTrackDataModel> sharedItems)
+    public Task<int> CountTracksSharedFromUser(string senderUserId, string receiverUserId)
     {
-        var tasks = new List<Task>
-        {
-            GetBatchTracksAsync(sharedItems),
-            GetBatchUniqueOwnersAsync(sharedItems)
-        };
-        await Task.WhenAll(tasks);
+        return _dynamoDbService.CountAsync(
+            hashKey: $"SHARED#{receiverUserId}",
+            rangeKeyPrefix: $"SENDER#{senderUserId}#",
+            indexName: "GSI2");
+    }
 
-        var tracks = ((Task<List<TrackDataModel>>)tasks[0]).Result.ToDictionary(t => t.Sk);
-        var owners = ((Task<List<UserDataModel>>)tasks[1]).Result.ToDictionary(u => u.Pk);
+    private async Task<List<SharedTrack>> GetSharedTracksFromSharedTrackItems(
+        List<SharedTrackDataModel> sharedItems, string viewerUsername)
+    {
+        var trackRefs = sharedItems
+            .Where(item => !string.IsNullOrEmpty(item.TrackOwnerUsername))
+            .Select(item => (TrackId: item.Pk.Replace("TRACK#", ""), item.TrackOwnerUsername))
+            .ToList();
+
+        var tracksById = await TrackBatchLookup.GetTrackSummariesAsync(_dynamoDbService, trackRefs, viewerUsername);
 
         return sharedItems
-            .Select(share => JoinOnOwnerAndTrack(tracks, owners, share))
+            .Select(share =>
+            {
+                var track = tracksById.GetValueOrDefault(share.Pk.Replace("TRACK#", ""));
+                return track is null
+                    ? null
+                    : new SharedTrack { SharedAt = share.SharedAt, Caption = share.Caption, Track = track };
+            })
             .OfType<SharedTrack>()
             .ToList();
-    }
-
-    private Task<List<TrackDataModel>> GetBatchTracksAsync(List<SharedTrackDataModel> sharedItems)
-    {
-        var trackKeys = sharedItems
-            .Where(item => !string.IsNullOrEmpty(item.TrackOwnerUsername))
-            .Select(item => (pk: $"USER#{item.TrackOwnerUsername}", sk: item.Pk));
-
-        return _dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
-    }
-
-    private Task<List<UserDataModel>> GetBatchUniqueOwnersAsync(List<SharedTrackDataModel> sharedItems)
-    {
-        var userKeys = sharedItems
-            .Select(item => item.TrackOwnerUsername)
-            .Where(owner => !string.IsNullOrEmpty(owner))
-            .Distinct()
-            .Select(owner => (pk: $"USER#{owner}", sk: "PROFILE"));
-
-        return _dynamoDbService.BatchGetAsync<UserDataModel>(userKeys);
-    }
-
-    private static SharedTrack? JoinOnOwnerAndTrack(Dictionary<string, TrackDataModel> tracks,
-        Dictionary<string, UserDataModel> owners, SharedTrackDataModel shareDetails)
-    {
-        if (tracks.TryGetValue(shareDetails.Pk, out var track) &&
-            owners.TryGetValue(track.Pk, out var owner))
-        {
-            return new SharedTrack
-            {
-                SharedAt = shareDetails.SharedAt,
-                Caption = shareDetails.Caption,
-                Track = MapToTrack(track, owner)
-            };
-        }
-
-        return null;
-    }
-
-    private static Track MapToTrack(TrackDataModel trackDto, UserDataModel ownerDto)
-    {
-        return new Track
-        {
-            Id = trackDto.TrackId,
-            TrackName = trackDto.TrackName,
-            Genre = trackDto.Genre,
-            Description = trackDto.Description,
-            ImageUrl = trackDto.ImageUrl,
-            ImageBgColor = trackDto.ImageBgColor,
-            Owner = ownerDto,
-            CreatedAt = trackDto.CreatedAt,
-            Duration = trackDto.Duration,
-            Segments = trackDto.Segments
-        };
     }
 }

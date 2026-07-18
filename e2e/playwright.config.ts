@@ -1,15 +1,25 @@
 import { defineConfig } from '@playwright/test';
 import 'dotenv/config';
 
+const MUTATING_SPEC = '**/sharing-permissions.spec.ts';
+
 export default defineConfig({
   timeout: 30_000,
-  retries: 0,
+  retries: 1,
   reporter: 'list',
-  workers: 1,
+  workers: 4,
   projects: [
     {
       name: 'api',
       testDir: './api',
+      testIgnore: MUTATING_SPEC,
+      use: {},
+    },
+    {
+      name: 'api-mutating',
+      testDir: './api',
+      testMatch: MUTATING_SPEC,
+      dependencies: ['api'],
       use: {},
     },
     {

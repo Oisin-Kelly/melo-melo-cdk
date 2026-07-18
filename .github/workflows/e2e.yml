@@ -75,9 +75,10 @@ jobs:
         working-directory: e2e
         run: npm ci
 
+      # api-mutating depends on api, so it runs strictly after the parallel api project
       - name: Run API e2e tests
         working-directory: e2e
-        run: npx playwright test --project=api
+        run: npx playwright test --project=api --project=api-mutating
 
       - name: Destroy test stacks
         if: always() && steps.deploy.outcome != 'skipped'

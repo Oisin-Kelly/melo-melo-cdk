@@ -14,7 +14,7 @@ namespace GetAlbumLambda;
 public record AlbumDetailResponse
 {
     [JsonPropertyName("album")] public required Album Album { get; set; }
-    [JsonPropertyName("tracks")] public required PaginatedResult<Track> Tracks { get; set; }
+    [JsonPropertyName("tracks")] public required PaginatedResult<TrackSummary> Tracks { get; set; }
 }
 
 public sealed class Function : BaseLambdaFunctionHandler
@@ -22,10 +22,12 @@ public sealed class Function : BaseLambdaFunctionHandler
     private const int PageSize = 10;
 
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumLikeRepository _albumLikeRepository;
 
-    public Function(IAlbumRepository albumRepository)
+    public Function(IAlbumRepository albumRepository, IAlbumLikeRepository albumLikeRepository)
     {
         _albumRepository = albumRepository;
+        _albumLikeRepository = albumLikeRepository;
     }
 
     [LambdaFunction]
@@ -35,7 +37,8 @@ public sealed class Function : BaseLambdaFunctionHandler
         ILambdaContext context,
         string albumId)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
@@ -52,7 +55,15 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (!isOwner && !await _albumRepository.IsAlbumSharedWithUserAsync(album.Id, username))
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
-            var tracks = await _albumRepository.GetAlbumTracksAsync(album.Id, PageSize, cursor);
+            album.LikedByMe = await _albumLikeRepository.IsAlbumLikedByUserAsync(album.Id, username);
+            if (!isOwner)
+            {
+                // share/like counts are visible to the owner only
+                album.ShareCount = null;
+                album.LikeCount = null;
+            }
+
+            var tracks = await _albumRepository.GetAlbumTracksAsync(album.Id, username, PageSize, cursor);
 
             var response = new AlbumDetailResponse { Album = album, Tracks = tracks };
             return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.AlbumDetailResponse));

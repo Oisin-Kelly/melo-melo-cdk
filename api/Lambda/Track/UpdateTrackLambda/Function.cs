@@ -34,7 +34,9 @@ public sealed class Function : BaseLambdaFunctionHandler
         string trackId,
         [FromBody] UpdateTrackRequest updateRequest)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+
+        if (authError is not null) return authError;
 
         try
         {

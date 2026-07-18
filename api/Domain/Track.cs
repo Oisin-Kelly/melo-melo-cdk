@@ -24,7 +24,7 @@ namespace Domain
         [JsonPropertyName("id")]
         public required string Id { get; set; }
         
-        [JsonPropertyName("trackName")]
+        [JsonPropertyName("name")]
         public required string TrackName { get; set; }
         
         [JsonPropertyName("description")]
@@ -49,7 +49,7 @@ namespace Domain
         public required int Segments { get; set; }
         
         [JsonPropertyName("owner")]
-        public required User Owner { get; set; }
+        public required UserSummary Owner { get; set; }
         
         // ---------------------------------------------
 
@@ -60,6 +60,11 @@ namespace Domain
         [JsonPropertyName("likedByMe")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? LikedByMe { get; set; }
+
+        // Direct-share recipient count (grants excluded) — owner-only, like likeCount
+        [JsonPropertyName("shareCount")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? ShareCount { get; set; }
     }
 
     public record TrackDataModel
@@ -109,6 +114,9 @@ namespace Domain
 
         [DynamoDBProperty("likeCount")]
         public int LikeCount { get; set; }
+
+        [DynamoDBProperty("shareCount")]
+        public int ShareCount { get; set; }
 
         [DynamoDBIgnore]
         public string OwnerUsername => Pk.Replace("USER#", "");

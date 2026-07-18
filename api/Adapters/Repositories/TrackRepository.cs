@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports.Repositories;
@@ -36,9 +37,10 @@ public sealed class TrackRepository : ITrackRepository
             ImageBgColor = trackDto.ImageBgColor,
             Segments = trackDto.Segments,
             TrackName = trackDto.TrackName,
-            Owner = owner,
+            Owner = UserSummary.From(owner),
             Id = trackDto.TrackId,
             LikeCount = trackDto.LikeCount,
+            ShareCount = trackDto.ShareCount,
         };
     }
 
@@ -56,7 +58,7 @@ public sealed class TrackRepository : ITrackRepository
         return tracks.FirstOrDefault();
     }
 
-    public async Task<PaginatedResult<Track>> GetTracksByUsername(string username, int pageSize, string? cursor)
+    public async Task<PaginatedResult<TrackSummary>> GetTracksByUsername(string username, int pageSize, string? cursor)
     {
         var (trackDtos, nextToken) = await _dynamoDbService.QueryPaginatedAsync<TrackDataModel>(
             hashKey: $"USER#{username}",
@@ -69,29 +71,22 @@ public sealed class TrackRepository : ITrackRepository
         );
 
         if (trackDtos.Count == 0)
-            return new PaginatedResult<Track> { Items = [], NextCursor = null };
+            return new PaginatedResult<TrackSummary> { Items = [], NextCursor = null };
 
-        var owner = await _userRepository.GetUserByUsername(username);
+        var ownerTask = _userRepository.GetUserByUsername(username);
+        var likedTask = TrackBatchLookup.GetLikedTrackIdsAsync(
+            _dynamoDbService, username, trackDtos.Select(t => t.TrackId).ToList());
+        await Task.WhenAll(ownerTask, likedTask);
+
+        var owner = ownerTask.Result;
         if (owner is null)
-            return new PaginatedResult<Track> { Items = [], NextCursor = null };
+            return new PaginatedResult<TrackSummary> { Items = [], NextCursor = null };
 
         var tracks = trackDtos
-            .Select(t => new Track
-            {
-                Id = t.TrackId,
-                TrackName = t.TrackName,
-                Genre = t.Genre,
-                Description = t.Description,
-                ImageUrl = t.ImageUrl,
-                ImageBgColor = t.ImageBgColor,
-                Owner = owner,
-                CreatedAt = t.CreatedAt,
-                Duration = t.Duration,
-                Segments = t.Segments
-            })
+            .Select(t => TrackSummary.From(t, owner, likedTask.Result.Contains(t.TrackId)))
             .ToList();
 
-        return new PaginatedResult<Track> { Items = tracks, NextCursor = nextToken };
+        return new PaginatedResult<TrackSummary> { Items = tracks, NextCursor = nextToken };
     }
 
     public Task CreateTrackAsync(string trackId, ProcessTrackInput input, AudioProcessingResult audio,
@@ -108,7 +103,7 @@ public sealed class TrackRepository : ITrackRepository
             Gsi1Sk = "INFO",
             Gsi3Pk = $"USER#{input.Username}",
             Gsi3Sk = $"DATE#{now}",
-            TrackName = input.TrackTitle!,
+            TrackName = input.Name!,
             Description = input.Description,
             Genre = input.Genre,
             ImageUrl = image?.ImageUrl,
@@ -116,6 +111,7 @@ public sealed class TrackRepository : ITrackRepository
             CreatedAt = now,
             Duration = audio.DurationSeconds,
             Segments = audio.Segments,
+            ShareCount = input.SharedWith.Count,
         });
 
         if (input.SharedWith.Count == 0)
@@ -137,7 +133,25 @@ public sealed class TrackRepository : ITrackRepository
             });
         }
 
-        return _dynamoDbService.ExecuteTransactWriteAsync(trackTx, sharedTx);
+        return WriteTrackAndFeedAsync(trackTx, sharedTx, trackId, input, now);
+    }
+
+    private async Task WriteTrackAndFeedAsync(ITransactWrite trackTx, ITransactWrite sharedTx,
+        string trackId, ProcessTrackInput input, long now)
+    {
+        await _dynamoDbService.ExecuteTransactWriteAsync(trackTx, sharedTx);
+
+        var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
+        var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
+        foreach (var recipient in input.SharedWith)
+        {
+            feedBatch.AddPutItem(FeedItems.Build(recipient, FeedItemType.Track, trackId, input.Username, now,
+                input.Caption));
+            activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, input.Username,
+                FeedItemType.Track, trackId, now));
+        }
+
+        await _dynamoDbService.ExecuteBatchWriteAsync(feedBatch, activityBatch);
     }
 
     public async Task<Track?> UpdateTrackAsync(string ownerUsername, string trackId, string name, string? genre,
@@ -182,7 +196,7 @@ public sealed class TrackRepository : ITrackRepository
             Description = item.Description,
             ImageUrl = item.ImageUrl,
             ImageBgColor = item.ImageBgColor,
-            Owner = owner,
+            Owner = UserSummary.From(owner),
             CreatedAt = item.CreatedAt,
             Duration = item.Duration,
             Segments = item.Segments,
@@ -203,8 +217,15 @@ public sealed class TrackRepository : ITrackRepository
             "LIKE#",
             QueryOperator.BeginsWith);
 
+        // Direct-share recipients (SK SHARED#{user}, not SHARED#{user}#ALBUM#…) each
+        // have a feed item to remove; album grants never created feed items
+        var feedKeys = accessRecords
+            .Where(r => !r.Sk.Contains("#ALBUM#"))
+            .Select(r => FeedItems.Key(r.Sk.Replace("SHARED#", ""), FeedItemType.Track, normalisedId));
+
         var keys = accessRecords.Select(r => (r.Pk, r.Sk))
             .Concat(likes.Select(l => (l.Pk, l.Sk)))
+            .Concat(feedKeys)
             .Append(($"USER#{ownerUsername}", $"UPLOAD#{normalisedId}"))
             .ToList();
 

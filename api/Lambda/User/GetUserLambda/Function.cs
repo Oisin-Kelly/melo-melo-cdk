@@ -12,10 +12,12 @@ namespace GetUserLambda;
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IUserRepository _userRepository;
+    private readonly ISharedTrackRepository _sharedTrackRepository;
 
-    public Function(IUserRepository userRepository)
+    public Function(IUserRepository userRepository, ISharedTrackRepository sharedTrackRepository)
     {
         _userRepository = userRepository;
+        _sharedTrackRepository = sharedTrackRepository;
     }
 
     [LambdaFunction]
@@ -26,12 +28,27 @@ public sealed class Function : BaseLambdaFunctionHandler
         if (string.IsNullOrWhiteSpace(username))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
 
+        var (requestorUsername, authError) = GetCallerUsername(request);
+
+
+        if (authError is not null) return authError;
+
         try
         {
             var user = await _userRepository.GetUserByUsername(username);
 
             if (user == null)
                 return Error(HttpStatusCode.NotFound, $"no user found by username {username}", "Not Found");
+
+            if (string.Equals(username, requestorUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                (user.LastSeenAt, user.ActivitySeenAt) = await _userRepository.GetSeenMarkersAsync(username);
+            }
+            else
+            {
+                user.SharedWithYouCount =
+                    await _sharedTrackRepository.CountTracksSharedFromUser(username, requestorUsername);
+            }
 
             return Ok(
                 JsonSerializer.Serialize(

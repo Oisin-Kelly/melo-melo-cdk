@@ -12,7 +12,7 @@ internal class TrackValidator : AbstractValidator<ProcessTrackInput>
 {
     public TrackValidator()
     {
-        RuleFor(x => x.TrackTitle)
+        RuleFor(x => x.Name)
             .NotEmpty()
             .MaximumLength(100);
         RuleFor(x => x.AudioKey)
@@ -72,7 +72,7 @@ public sealed class TrackValidationService : ITrackValidationService
 
     public Task<ProcessTrackInput> ValidateAsync(ProcessTrackInput input)
     {
-        input.TrackTitle = InputSanitiser.SingleLine(input.TrackTitle);
+        input.Name = InputSanitiser.SingleLine(input.Name);
         input.Description = InputSanitiser.MultiLine(input.Description);
         input.Genre = InputSanitiser.SingleLine(input.Genre);
         input.Caption = InputSanitiser.MultiLine(input.Caption);

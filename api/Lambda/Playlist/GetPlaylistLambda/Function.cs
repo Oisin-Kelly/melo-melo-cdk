@@ -14,7 +14,7 @@ namespace GetPlaylistLambda;
 public record PlaylistDetailResponse
 {
     [JsonPropertyName("playlist")] public required Playlist Playlist { get; set; }
-    [JsonPropertyName("tracks")] public required PaginatedResult<Track> Tracks { get; set; }
+    [JsonPropertyName("tracks")] public required PaginatedResult<PlaylistTrackEntry> Tracks { get; set; }
 }
 
 public sealed class Function : BaseLambdaFunctionHandler
@@ -40,7 +40,8 @@ public sealed class Function : BaseLambdaFunctionHandler
         ILambdaContext context,
         string playlistId)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
@@ -51,11 +52,24 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (playlist is null)
                 return Error(HttpStatusCode.NotFound, $"no playlist found by id {playlistId}", "Not Found");
 
-            var page = playlist.Type == PlaylistType.Likes
-                ? await _likeRepository.GetLikedTracksAsync(username, PageSize, cursor)
-                : await _playlistRepository.GetPlaylistTracksAsync(playlist.Id, PageSize, cursor);
-
-            var tracks = await FilterToAccessibleTracksAsync(page, username);
+            PaginatedResult<PlaylistTrackEntry> tracks;
+            if (playlist.Type == PlaylistType.Likes)
+            {
+                // Likes membership is the like record (no denormalized name), so a track
+                // that's since been deleted or had access revoked is simply dropped
+                var liked = await _likeRepository.GetLikedTracksAsync(username, PageSize, cursor);
+                var accessible = await FilterToAccessibleAsync(liked.Items, username);
+                tracks = new PaginatedResult<PlaylistTrackEntry>
+                {
+                    Items = accessible.Select(ToAvailableEntry).ToList(),
+                    NextCursor = liked.NextCursor,
+                };
+            }
+            else
+            {
+                var page = await _playlistRepository.GetPlaylistTracksAsync(playlist.Id, username, PageSize, cursor);
+                tracks = await MarkRevokedEntriesAsync(page, username);
+            }
 
             var response = new PlaylistDetailResponse { Playlist = playlist, Tracks = tracks };
             return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.PlaylistDetailResponse));
@@ -67,19 +81,50 @@ public sealed class Function : BaseLambdaFunctionHandler
         }
     }
 
-    // Tracks the caller has since lost access to stay in the playlist record but are dropped from reads
-    private async Task<PaginatedResult<Track>> FilterToAccessibleTracksAsync(PaginatedResult<Track> page,
-        string username)
+    // An available entry whose track the owner has since lost access to becomes a
+    // REVOKED placeholder (kept in the playlist, removable) rather than being dropped
+    private async Task<PaginatedResult<PlaylistTrackEntry>> MarkRevokedEntriesAsync(
+        PaginatedResult<PlaylistTrackEntry> page, string username)
     {
-        var accessChecks = page.Items
-            .Select(async track => track.Owner.Username == username ||
-                                   await _sharedTrackRepository.IsTrackAccessibleToUser(track.Id, username)
-                ? track
-                : null)
-            .ToList();
+        var checks = page.Items.Select(async entry =>
+        {
+            if (entry.Unavailable || entry.Track is null)
+                return entry; // already a DELETED placeholder
 
-        var accessibleTracks = (await Task.WhenAll(accessChecks)).OfType<Track>().ToList();
+            var hasAccess = entry.Track.Owner.Username == username ||
+                            await _sharedTrackRepository.IsTrackAccessibleToUser(entry.TrackId, username);
+            if (hasAccess)
+                return entry;
 
-        return new PaginatedResult<Track> { Items = accessibleTracks, NextCursor = page.NextCursor };
+            entry.Unavailable = true;
+            entry.Reason = PlaylistTrackReason.Revoked;
+            entry.Track = null;
+            return entry;
+        });
+
+        var items = (await Task.WhenAll(checks)).ToList();
+        return new PaginatedResult<PlaylistTrackEntry> { Items = items, NextCursor = page.NextCursor };
     }
+
+    // Drops liked tracks the caller can no longer access (owner/direct/album-grant)
+    private async Task<List<TrackSummary>> FilterToAccessibleAsync(IReadOnlyList<TrackSummary> tracks, string username)
+    {
+        var checks = tracks.Select(async track =>
+            track.Owner.Username == username ||
+            await _sharedTrackRepository.IsTrackAccessibleToUser(track.Id, username)
+                ? track
+                : null);
+
+        return (await Task.WhenAll(checks)).OfType<TrackSummary>().ToList();
+    }
+
+    private static PlaylistTrackEntry ToAvailableEntry(TrackSummary track) => new()
+    {
+        TrackId = track.Id,
+        Name = track.Name,
+        Duration = track.Duration,
+        AddedAt = track.CreatedAt,
+        Unavailable = false,
+        Track = track,
+    };
 }

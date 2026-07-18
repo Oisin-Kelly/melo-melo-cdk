@@ -33,7 +33,7 @@ A new GSI only contains items that have the key attributes. Existing items are i
 
 ## 5. Documentation
 
-Update the index list and the affected item-type table + access-pattern entries in `docs/dynamo-access-patterns.md`, and the GSI descriptions in `CLAUDE.md`.
+Update the shared index/GSI header in [docs/data-model/README.md](../../../docs/data-model/README.md), the affected item-type table + access-pattern entries in the relevant domain file(s) under `docs/data-model/` (users/tracks/playlists/albums/feed/activity), and the GSI descriptions in `CLAUDE.md`.
 
 ## Remember about GSI semantics
 

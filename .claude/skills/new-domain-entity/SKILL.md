@@ -22,7 +22,7 @@ Once you have the answers, follow the patterns in [templates.md](templates.md) a
 1. Create domain record + DataModel in `api/Domain/{Entity}.cs`
 2. Create port interface in `api/Ports/Repositories/I{Entity}Repository.cs`
 3. Create adapter implementation in `api/Adapters/Repositories/{Entity}Repository.cs`
-4. Update `docs/dynamo-access-patterns.md` with the new entity's key schema and access patterns
+4. Document the new entity's key schema + access patterns in the matching domain file under `docs/data-model/` (users/tracks/playlists/albums/feed/activity — see [docs/data-model/README.md](../../../docs/data-model/README.md)); a genuinely new domain gets a new file added to the README index. Cross-cutting rules (counters, access, fan-out) live in the README.
 5. Run `dotnet build MeloMelo.sln` to verify
 
 ## After creating the entity

@@ -58,6 +58,13 @@ public class ApiStack : BaseStack
 
         HttpApi.AddRoutes(new AddRoutesOptions
         {
+            Path = "/users/search",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.SearchUsers),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
             Path = "/users/{username}/shared",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTracksSharedFromUser),
@@ -206,8 +213,22 @@ public class ApiStack : BaseStack
         HttpApi.AddRoutes(new AddRoutesOptions
         {
             Path = "/playlists/{playlistId}/tracks",
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.SetPlaylistTracks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}/tracks/{trackId}",
             Methods = [HttpMethod.POST],
-            Integration = CreateIntegration(functions.ModifyPlaylistTracks),
+            Integration = CreateIntegration(functions.AddPlaylistTrack),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/playlists/{playlistId}/tracks/{trackId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.RemovePlaylistTrack),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -222,6 +243,13 @@ public class ApiStack : BaseStack
             Path = "/tracks/{trackId}/likes",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTrackLikes),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/recipients",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetTrackRecipients),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -269,8 +297,8 @@ public class ApiStack : BaseStack
         HttpApi.AddRoutes(new AddRoutesOptions
         {
             Path = "/albums/{albumId}/tracks",
-            Methods = [HttpMethod.POST],
-            Integration = CreateIntegration(functions.ModifyAlbumTracks),
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.SetAlbumTracks),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -278,6 +306,76 @@ public class ApiStack : BaseStack
             Path = "/albums/{albumId}/share",
             Methods = [HttpMethod.POST],
             Integration = CreateIntegration(functions.ShareAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}/recipients",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbumRecipients),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/liked",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetLikedAlbums),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}/like",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.LikeAlbum),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/{albumId}/likes",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbumLikes),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/feed",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetFeed),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/me/progress",
+            Methods = [HttpMethod.PUT],
+            Integration = CreateIntegration(functions.UpdateProgress),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/me/progress",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetProgress),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/me/seen",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.MarkSeen),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/activity",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetActivity),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/me/activity-seen",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.MarkActivitySeen),
         });
     }
 }

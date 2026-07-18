@@ -28,7 +28,8 @@ public sealed class Function : BaseLambdaFunctionHandler
         ILambdaContext context,
         string playlistId)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         try
         {

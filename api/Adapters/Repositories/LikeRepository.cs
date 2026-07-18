@@ -15,7 +15,7 @@ public sealed class LikeRepository : ILikeRepository
         _dynamoDbService = dynamoDbService;
     }
 
-    public async Task LikeTrackAsync(string trackId, string username, string trackOwnerUsername)
+    public async Task LikeTrackAsync(string trackId, string username, string trackOwnerUsername, int duration)
     {
         var normalisedTrackId = trackId.ToLowerInvariant();
 
@@ -34,12 +34,27 @@ public sealed class LikeRepository : ILikeRepository
             Gsi1Pk = $"LIKES#{username}",
             Gsi1Sk = $"DATE#{now}",
             TrackOwnerUsername = trackOwnerUsername,
+            Duration = duration,
             LikedAt = now,
         });
 
         var counterTx = CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1);
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx);
+        var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
+        playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
+            CounterExpressions.Add(("trackCount", 1), ("totalDurationSeconds", duration)));
+
+        // Notify the track owner — but never echo a self-like
+        if (!string.Equals(username, trackOwnerUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
+            activityTx.AddSaveItem(ActivityItems.Build(trackOwnerUsername, ActivityType.TrackLiked, username,
+                FeedItemType.Track, normalisedTrackId, now));
+            await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx, activityTx);
+            return;
+        }
+
+        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
     }
 
     public async Task UnlikeTrackAsync(string trackId, string username, string trackOwnerUsername)
@@ -55,7 +70,11 @@ public sealed class LikeRepository : ILikeRepository
 
         var counterTx = CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, -1);
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx);
+        var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
+        playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
+            CounterExpressions.Add(("trackCount", -1), ("totalDurationSeconds", -(long)existing.Duration)));
+
+        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
     }
 
     public async Task<bool> IsTrackLikedByUserAsync(string trackId, string username)
@@ -63,7 +82,7 @@ public sealed class LikeRepository : ILikeRepository
         return await GetLikeAsync(trackId.ToLowerInvariant(), username) is not null;
     }
 
-    public async Task<PaginatedResult<Track>> GetLikedTracksAsync(string username, int pageSize, string? cursor)
+    public async Task<PaginatedResult<TrackSummary>> GetLikedTracksAsync(string username, int pageSize, string? cursor)
     {
         var (likes, nextToken) = await _dynamoDbService.QueryPaginatedAsync<LikeDataModel>(
             hashKey: $"LIKES#{username}",
@@ -76,20 +95,21 @@ public sealed class LikeRepository : ILikeRepository
         );
 
         if (likes.Count == 0)
-            return new PaginatedResult<Track> { Items = [], NextCursor = null };
+            return new PaginatedResult<TrackSummary> { Items = [], NextCursor = null };
 
         var trackRefs = likes
             .Select(l => (l.TrackId, l.TrackOwnerUsername))
             .ToList();
 
-        var tracksById = await TrackBatchLookup.GetTracksAsync(_dynamoDbService, trackRefs);
+        var tracksById = await TrackBatchLookup.GetTrackSummariesAsync(
+            _dynamoDbService, trackRefs, username, allLiked: true);
 
         var tracks = likes
             .Select(l => tracksById.GetValueOrDefault(l.TrackId))
-            .OfType<Track>()
+            .OfType<TrackSummary>()
             .ToList();
 
-        return new PaginatedResult<Track> { Items = tracks, NextCursor = nextToken };
+        return new PaginatedResult<TrackSummary> { Items = tracks, NextCursor = nextToken };
     }
 
     public async Task<PaginatedResult<TrackLiker>> GetTrackLikersAsync(string trackId, int pageSize, string? cursor)
@@ -109,13 +129,16 @@ public sealed class LikeRepository : ILikeRepository
         if (likes.Count == 0)
             return new PaginatedResult<TrackLiker> { Items = [], NextCursor = null };
 
-        var profileKeys = likes.Select(l => (pk: $"USER#{l.LikerUsername}", sk: "PROFILE"));
+        var profileKeys = likes
+            .Select(l => l.LikerUsername)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
         var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(profileKeys))
             .ToDictionary(u => u.Username);
 
         var likers = likes
             .Where(l => profiles.ContainsKey(l.LikerUsername))
-            .Select(l => new TrackLiker { User = profiles[l.LikerUsername], LikedAt = l.LikedAt })
+            .Select(l => new TrackLiker { User = UserSummary.From(profiles[l.LikerUsername]), LikedAt = l.LikedAt })
             .ToList();
 
         return new PaginatedResult<TrackLiker> { Items = likers, NextCursor = nextToken };

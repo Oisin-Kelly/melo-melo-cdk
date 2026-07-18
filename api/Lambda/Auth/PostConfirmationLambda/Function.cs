@@ -61,6 +61,8 @@ public sealed class Function
             Sk = "PROFILE",
             Gsi1Pk = $"EMAIL#{email.ToLower()}",
             Gsi1Sk = "PROFILE",
+            Gsi3Pk = UserRepository.SearchIndexPk,
+            Gsi3Sk = UserRepository.SearchIndexSk(username),
             Username = username,
             DisplayName = username,
             Bio = "Hey! I'm using MeloMelo!",

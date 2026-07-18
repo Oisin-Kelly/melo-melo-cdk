@@ -20,13 +20,33 @@ public record Album
     [JsonPropertyName("imageBgColor")]
     public string? ImageBgColor { get; set; }
 
+    [JsonPropertyName("trackCount")]
+    public int TrackCount { get; set; }
+
+    [JsonPropertyName("totalDurationSeconds")]
+    public int TotalDurationSeconds { get; set; }
+
+    // Recipient count — owner-only, like likeCount on tracks
+    [JsonPropertyName("shareCount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ShareCount { get; set; }
+
+    // likeCount owner-only; likedByMe visible to any authorized viewer
+    [JsonPropertyName("likeCount")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LikeCount { get; set; }
+
+    [JsonPropertyName("likedByMe")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LikedByMe { get; set; }
+
     [JsonPropertyName("createdAt")]
     public required long CreatedAt { get; set; }
 
     // Populated on the shared-with-me feed; omitted on the owner's own album list
     [JsonPropertyName("owner")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public User? Owner { get; set; }
+    public UserSummary? Owner { get; set; }
 
     // For access checks only — never serialized
     [JsonIgnore]
@@ -36,7 +56,7 @@ public record Album
 public record SharedAlbum
 {
     [JsonPropertyName("album")]
-    public required Album Album { get; set; }
+    public required AlbumSummary Album { get; set; }
 
     [JsonPropertyName("sharedAt")]
     public required long SharedAt { get; set; }
@@ -56,6 +76,11 @@ public record UpdateAlbumRequest
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
     [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
+}
+
+public record SetAlbumTracksRequest
+{
+    [JsonPropertyName("trackIds")] public List<string> TrackIds { get; set; } = [];
 }
 
 public record AlbumDataModel
@@ -92,6 +117,18 @@ public record AlbumDataModel
     [DynamoDBProperty("imageBgColor")]
     public string? ImageBgColor { get; set; }
 
+    [DynamoDBProperty("trackCount")]
+    public int TrackCount { get; set; }
+
+    [DynamoDBProperty("totalDurationSeconds")]
+    public int TotalDurationSeconds { get; set; }
+
+    [DynamoDBProperty("shareCount")]
+    public int ShareCount { get; set; }
+
+    [DynamoDBProperty("likeCount")]
+    public int LikeCount { get; set; }
+
     [DynamoDBProperty("createdAt")]
     public required long CreatedAt { get; set; }
 
@@ -118,6 +155,11 @@ public record AlbumTrackDataModel
 
     [DynamoDBProperty("trackOwnerUsername")]
     public required string TrackOwnerUsername { get; set; }
+
+    // Denormalized at add time so removals can decrement the album's
+    // totalDurationSeconds without refetching the track
+    [DynamoDBProperty("duration")]
+    public int Duration { get; set; }
 
     [DynamoDBProperty("addedAt")]
     public required long AddedAt { get; set; }
@@ -154,6 +196,40 @@ public record AlbumShareDataModel
 
     [DynamoDBIgnore]
     public string Recipient => Sk.Replace("SHARED#", "");
+}
+
+public record AlbumLiker
+{
+    [JsonPropertyName("user")] public required UserSummary User { get; set; }
+
+    [JsonPropertyName("likedAt")] public required long LikedAt { get; set; }
+}
+
+// Album like, mirroring the track like: PK=ALBUM#{id}/SK=LIKE#{user}, GSI1 gives the
+// user's liked-albums feed (ALBUMLIKES#{user}). likeCount lives on the album meta.
+public record AlbumLikeDataModel
+{
+    [DynamoDBHashKey("PK")] public required string Pk { get; set; }
+
+    [DynamoDBRangeKey("SK")] public required string Sk { get; set; }
+
+    [DynamoDBGlobalSecondaryIndexHashKey("GSI1", AttributeName = "GSI1PK")]
+    public required string Gsi1Pk { get; set; }
+
+    [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
+    public string? Gsi1Sk { get; set; }
+
+    [DynamoDBProperty("albumOwnerUsername")]
+    public required string AlbumOwnerUsername { get; set; }
+
+    [DynamoDBProperty("likedAt")]
+    public required long LikedAt { get; set; }
+
+    [DynamoDBIgnore]
+    public string AlbumId => Pk.Replace("ALBUM#", "");
+
+    [DynamoDBIgnore]
+    public string LikerUsername => Sk.Replace("LIKE#", "");
 }
 
 // Deliberately carries NO GSI attributes: grants must never appear in the direct-share feeds

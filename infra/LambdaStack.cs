@@ -48,6 +48,9 @@ public class LambdaStack : BaseStack
         var followUser = CreateLambdaFunction("User/FollowUserLambda");
         table.GrantReadWriteData(followUser);
 
+        var searchUsers = CreateLambdaFunction("User/SearchUsersLambda");
+        table.GrantReadData(searchUsers);
+
         var getUserFollowers = CreateLambdaFunction("User/GetUserFollowersLambda");
         table.GrantReadData(getUserFollowers);
 
@@ -74,6 +77,9 @@ public class LambdaStack : BaseStack
 
         var shareTrack = CreateLambdaFunction("Track/ShareTrackLambda");
         table.GrantReadWriteData(shareTrack);
+
+        var getTrackRecipients = CreateLambdaFunction("Track/GetTrackRecipientsLambda");
+        table.GrantReadData(getTrackRecipients);
 
         var getTrackSegments = CreateLambdaFunction("Track/GetTrackSegmentsLambda");
         table.GrantReadData(getTrackSegments);
@@ -114,8 +120,14 @@ public class LambdaStack : BaseStack
         table.GrantReadWriteData(deletePlaylist);
         publicReadonlyBucket.GrantReadWrite(deletePlaylist); // deletes cover image
 
-        var modifyPlaylistTracks = CreateLambdaFunction("Playlist/ModifyPlaylistTracksLambda");
-        table.GrantReadWriteData(modifyPlaylistTracks);
+        var addPlaylistTrack = CreateLambdaFunction("Playlist/AddPlaylistTrackLambda");
+        table.GrantReadWriteData(addPlaylistTrack);
+
+        var removePlaylistTrack = CreateLambdaFunction("Playlist/RemovePlaylistTrackLambda");
+        table.GrantReadWriteData(removePlaylistTrack);
+
+        var setPlaylistTracks = CreateLambdaFunction("Playlist/SetPlaylistTracksLambda");
+        table.GrantReadWriteData(setPlaylistTracks);
 
         // Likes
         var likeTrack = CreateLambdaFunction("Track/LikeTrackLambda");
@@ -145,14 +157,47 @@ public class LambdaStack : BaseStack
         table.GrantReadWriteData(deleteAlbum);
         publicReadonlyBucket.GrantReadWrite(deleteAlbum); // deletes cover image
 
-        var modifyAlbumTracks = CreateLambdaFunction("Album/ModifyAlbumTracksLambda");
-        table.GrantReadWriteData(modifyAlbumTracks);
+        var setAlbumTracks = CreateLambdaFunction("Album/SetAlbumTracksLambda");
+        table.GrantReadWriteData(setAlbumTracks);
 
         var shareAlbum = CreateLambdaFunction("Album/ShareAlbumLambda");
         table.GrantReadWriteData(shareAlbum);
 
+        var getAlbumRecipients = CreateLambdaFunction("Album/GetAlbumRecipientsLambda");
+        table.GrantReadData(getAlbumRecipients);
+
+        var likeAlbum = CreateLambdaFunction("Album/LikeAlbumLambda");
+        table.GrantReadWriteData(likeAlbum);
+
+        var getAlbumLikes = CreateLambdaFunction("Album/GetAlbumLikesLambda");
+        table.GrantReadData(getAlbumLikes);
+
+        var getLikedAlbums = CreateLambdaFunction("Album/GetLikedAlbumsLambda");
+        table.GrantReadData(getLikedAlbums);
+
         var getAlbumsSharedWithMe = CreateLambdaFunction("Album/GetAlbumsSharedWithMeLambda");
         table.GrantReadData(getAlbumsSharedWithMe);
+
+        // Feed
+        var getFeed = CreateLambdaFunction("Feed/GetFeedLambda");
+        table.GrantReadData(getFeed);
+
+        // Resume progress + last-visit marker
+        var updateProgress = CreateLambdaFunction("User/UpdateProgressLambda");
+        table.GrantReadWriteData(updateProgress);
+
+        var getProgress = CreateLambdaFunction("User/GetProgressLambda");
+        table.GrantReadData(getProgress);
+
+        var markSeen = CreateLambdaFunction("User/MarkSeenLambda");
+        table.GrantReadWriteData(markSeen);
+
+        // Activity feed
+        var getActivity = CreateLambdaFunction("Activity/GetActivityLambda");
+        table.GrantReadData(getActivity);
+
+        var markActivitySeen = CreateLambdaFunction("Activity/MarkActivitySeenLambda");
+        table.GrantReadWriteData(markActivitySeen);
 
         // S3
         var getDropboxPresignedUrl = CreateLambdaFunction("Track/GetDropboxPresignedUrlLambda");
@@ -160,6 +205,7 @@ public class LambdaStack : BaseStack
 
         ApiFunctions = new ApiFunctions(
             GetUser: getUser,
+            SearchUsers: searchUsers,
             GetTrack: getTrack,
             GetTracksSharedWithUser: getTracksSharedWithUser,
             GetTracksSharedFromUser: getTracksSharedFromUser,
@@ -174,6 +220,7 @@ public class LambdaStack : BaseStack
             GetUploadStatus: getUploadStatus,
             UpdateTrack: updateTrack,
             ShareTrack: shareTrack,
+            GetTrackRecipients: getTrackRecipients,
             GetTrackSegments: getTrackSegments,
             DeleteTrack: deleteTrack,
             CreatePlaylist: createPlaylist,
@@ -181,7 +228,9 @@ public class LambdaStack : BaseStack
             GetPlaylist: getPlaylist,
             UpdatePlaylist: updatePlaylist,
             DeletePlaylist: deletePlaylist,
-            ModifyPlaylistTracks: modifyPlaylistTracks,
+            AddPlaylistTrack: addPlaylistTrack,
+            RemovePlaylistTrack: removePlaylistTrack,
+            SetPlaylistTracks: setPlaylistTracks,
             LikeTrack: likeTrack,
             GetTrackLikes: getTrackLikes,
             CreateAlbum: createAlbum,
@@ -189,9 +238,19 @@ public class LambdaStack : BaseStack
             GetAlbum: getAlbum,
             UpdateAlbum: updateAlbum,
             DeleteAlbum: deleteAlbum,
-            ModifyAlbumTracks: modifyAlbumTracks,
+            SetAlbumTracks: setAlbumTracks,
             ShareAlbum: shareAlbum,
-            GetAlbumsSharedWithMe: getAlbumsSharedWithMe
+            GetAlbumRecipients: getAlbumRecipients,
+            LikeAlbum: likeAlbum,
+            GetAlbumLikes: getAlbumLikes,
+            GetLikedAlbums: getLikedAlbums,
+            GetAlbumsSharedWithMe: getAlbumsSharedWithMe,
+            GetFeed: getFeed,
+            UpdateProgress: updateProgress,
+            GetProgress: getProgress,
+            MarkSeen: markSeen,
+            GetActivity: getActivity,
+            MarkActivitySeen: markActivitySeen
         );
     }
 

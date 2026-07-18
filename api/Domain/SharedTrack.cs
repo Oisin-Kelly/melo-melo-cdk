@@ -6,13 +6,14 @@ namespace Domain
     public record SharedTrack
     {
         [JsonPropertyName("caption")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Caption { get; set; }
-        
+
         [JsonPropertyName("sharedAt")]
         public required long SharedAt { get; set; }
-        
+
         [JsonPropertyName("track")]
-        public required Track Track { get; set; }
+        public required TrackSummary Track { get; set; }
     }
 
     public record SharedTrackDataModel
@@ -35,7 +36,7 @@ namespace Domain
         public string? Gsi2Sk { get; set; }
 
         [DynamoDBProperty("trackOwnerUsername")]
-        public string? TrackOwnerUsername { get; set; }
+        public required string TrackOwnerUsername { get; set; }
 
         [DynamoDBProperty("caption")]
         public string? Caption { get; set; }

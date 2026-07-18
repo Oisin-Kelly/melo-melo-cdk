@@ -28,7 +28,8 @@ public class Startup
         });
 
         builder.Services.AddTransient<IUserRepository, UserRepository>();
-    
+        builder.Services.AddTransient<ISharedTrackRepository, SharedTrackRepository>();
+
         return builder;
     }
 }

@@ -18,7 +18,8 @@ public interface IDynamoDBService
         QueryOperator queryOperator = QueryOperator.Equal,
         string? indexName = null);
 
-    public Task<(List<T> Items, string? NextToken)> QueryPaginatedAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+    public Task<(List<T> Items, string? NextToken)> QueryPaginatedAsync<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         string hashKey,
         string? rangeKey,
         QueryOperator queryOperator,
@@ -26,6 +27,8 @@ public interface IDynamoDBService
         int pageSize,
         string? paginationToken,
         bool scanIndexForward = false);
+
+    public Task<int> CountAsync(string hashKey, string rangeKeyPrefix, string? indexName);
 
     public Task<List<T>> BatchGetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
         IEnumerable<(string pk, string sk)> keys);

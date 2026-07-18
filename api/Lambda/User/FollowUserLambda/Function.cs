@@ -34,7 +34,9 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string username, [FromBody] FollowUserRequest followUserRequest)
     {
-        var requestorUsername = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (requestorUsername, authError) = GetCallerUsername(request);
+
+        if (authError is not null) return authError;
         if (followUserRequest.NewValue == null)
             return Error(HttpStatusCode.BadRequest,
                 "The 'newValue' property is required and must be a boolean (true/false).",

@@ -11,8 +11,6 @@ namespace GetPlaylistsLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private const int PageSize = 10;
-
     private readonly IPlaylistRepository _playlistRepository;
 
     public Function(IPlaylistRepository playlistRepository)
@@ -26,14 +24,16 @@ public sealed class Function : BaseLambdaFunctionHandler
         APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
+        var limit = ParseLimit(request.QueryStringParameters);
 
         try
         {
-            var result = await _playlistRepository.GetPlaylistsAsync(username, PageSize, cursor);
+            var result = await _playlistRepository.GetPlaylistsAsync(username, limit, cursor);
             return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultPlaylist));
         }
         catch (Exception ex)

@@ -28,7 +28,8 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string trackId)
     {
-        var requestorUsername = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (requestorUsername, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
         if (string.IsNullOrWhiteSpace(trackId))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'trackId' is missing", "Bad Request");
 
@@ -46,7 +47,11 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             track.LikedByMe = await _likeRepository.IsTrackLikedByUserAsync(trackId, requestorUsername);
             if (!isOwner)
-                track.LikeCount = null; // like counts are visible to the owner only
+            {
+                // like and share counts are visible to the owner only
+                track.LikeCount = null;
+                track.ShareCount = null;
+            }
 
             return Ok(
                 JsonSerializer.Serialize(

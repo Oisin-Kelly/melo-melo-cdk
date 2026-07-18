@@ -25,7 +25,8 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string username)
     {
-        var requestorUsername = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (requestorUsername, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);

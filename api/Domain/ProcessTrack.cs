@@ -5,7 +5,7 @@ namespace Domain;
 
 public record UploadTrackRequest
 {
-    [JsonPropertyName("trackTitle")] public string? TrackTitle { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("audioKey")] public string? AudioKey { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("genre")] public string? Genre { get; set; }

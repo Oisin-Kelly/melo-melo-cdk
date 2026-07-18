@@ -47,6 +47,13 @@ public class StepFunctionStack : BaseStack
             LambdaFunction = processTrackFunction,
             OutputPath = "$.Payload",
         });
+        processTrackTask.AddRetry(new RetryProps
+        {
+            Errors = ["Lambda.TooManyRequestsException"],
+            Interval = Duration.Seconds(2),
+            MaxAttempts = 6,
+            BackoffRate = 2,
+        });
 
         UploadTrackStateMachine = new StateMachine(this, "UploadTrackStateMachine", new StateMachineProps
         {

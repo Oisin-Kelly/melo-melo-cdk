@@ -39,7 +39,9 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string trackId, [FromBody] LikeTrackRequest likeRequest)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+
+        if (authError is not null) return authError;
 
         if (likeRequest.NewValue == null)
             return Error(HttpStatusCode.BadRequest,
@@ -62,7 +64,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 if (!hasAccess)
                     return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
-                await _likeRepository.LikeTrackAsync(trackId, username, track.Owner.Username);
+                await _likeRepository.LikeTrackAsync(trackId, username, track.Owner.Username, track.Duration);
             }
             else
             {

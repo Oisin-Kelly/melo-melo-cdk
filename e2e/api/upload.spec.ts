@@ -6,7 +6,7 @@ import { findAudioFixture } from '../fixtures/audio';
 import { putToDropbox } from '../fixtures/dropbox';
 
 test.describe('POST /tracks/upload — validation', () => {
-  test('returns 400 when trackTitle is missing', async ({ apiContext }) => {
+  test('returns 400 when name is missing', async ({ apiContext }) => {
     const res = await apiContext.post('/tracks/upload', {
       data: { audioKey: 'test/some-key.mp3' },
     });
@@ -15,14 +15,14 @@ test.describe('POST /tracks/upload — validation', () => {
 
   test('returns 400 when audioKey is missing', async ({ apiContext }) => {
     const res = await apiContext.post('/tracks/upload', {
-      data: { trackTitle: 'Missing audio key' },
+      data: { name: 'Missing audio key' },
     });
     expect(res.status()).toBe(400);
   });
 
-  test('returns 400 when trackTitle exceeds 100 characters', async ({ apiContext }) => {
+  test('returns 400 when name exceeds 100 characters', async ({ apiContext }) => {
     const res = await apiContext.post('/tracks/upload', {
-      data: { trackTitle: 'x'.repeat(101), audioKey: 'test/some-key.mp3' },
+      data: { name: 'x'.repeat(101), audioKey: 'test/some-key.mp3' },
     });
     expect(res.status()).toBe(400);
   });
@@ -30,7 +30,7 @@ test.describe('POST /tracks/upload — validation', () => {
   test('returns 400 when sharedWith exceeds 50 recipients', async ({ apiContext }) => {
     const res = await apiContext.post('/tracks/upload', {
       data: {
-        trackTitle: 'Too many recipients',
+        name: 'Too many recipients',
         audioKey: 'test/some-key.mp3',
         sharedWith: Array.from({ length: 51 }, (_, i) => `user${i}`),
       },
@@ -40,11 +40,10 @@ test.describe('POST /tracks/upload — validation', () => {
 
   test('returns 400 when no file was uploaded at audioKey', async ({ apiContext }) => {
     const res = await apiContext.post('/tracks/upload', {
-      data: { trackTitle: 'Ghost file', audioKey: `e2e/nothing-here-${Date.now()}.mp3` },
+      data: { name: 'Ghost file', audioKey: `e2e/nothing-here-${Date.now()}.mp3` },
     });
     expect(res.status()).toBe(400);
-    // ErrorResponse serializes PascalCase (no JsonPropertyName attributes)
-    expect((await res.json()).Message).toContain('No uploaded audio found');
+    expect((await res.json()).message).toContain('No uploaded audio found');
   });
 });
 
@@ -95,7 +94,7 @@ test.describe('POST /tracks/upload — full pipeline', () => {
     // Kick off the upload pipeline, sharing with userB and userC
     const upload = await apiContext.post('/tracks/upload', {
       data: {
-        trackTitle,
+        name: trackTitle,
         audioKey,
         genre: 'e2e',
         description: 'Uploaded by the e2e suite',
@@ -116,7 +115,7 @@ test.describe('POST /tracks/upload — full pipeline', () => {
     const track = await apiContext.get(`/tracks/${trackId}`);
     expect(track.status()).toBe(200);
     const trackBody = await track.json();
-    expect(trackBody.trackName).toBe(trackTitle);
+    expect(trackBody.name).toBe(trackTitle);
     expect(trackBody.segments).toBeGreaterThanOrEqual(1);
     expect(trackBody.duration).toBeGreaterThan(0);
 
@@ -127,7 +126,7 @@ test.describe('POST /tracks/upload — full pipeline', () => {
       expect(shared.status()).toBe(200);
       const sharedBody = await shared.json();
       const sharedNames = sharedBody.items.map(
-        (s: { track: { trackName: string } }) => s.track.trackName
+        (s: { track: { name: string } }) => s.track.name
       );
       expect(sharedNames).toContain(trackTitle);
     }
@@ -160,7 +159,7 @@ test.describe('POST /tracks/upload — processing failures', () => {
     await putToDropbox(apiContext, audioKey, image, 'image/jpeg');
 
     const upload = await apiContext.post('/tracks/upload', {
-      data: { trackTitle: `E2E image upload ${runId}`, audioKey },
+      data: { name: `E2E image upload ${runId}`, audioKey },
     });
     expect(upload.status()).toBe(202);
     const { trackId } = await upload.json();
@@ -187,7 +186,7 @@ test.describe('POST /tracks/upload — processing failures', () => {
     await putToDropbox(apiContext, audioKey, corrupted, 'audio/wav');
 
     const upload = await apiContext.post('/tracks/upload', {
-      data: { trackTitle: `E2E corrupted upload ${runId}`, audioKey },
+      data: { name: `E2E corrupted upload ${runId}`, audioKey },
     });
     expect(upload.status()).toBe(202);
     const { trackId } = await upload.json();

@@ -1,5 +1,6 @@
 using Domain;
 using FluentValidation;
+using Ports.Repositories;
 using Ports.Validation;
 
 namespace Adapters.Validation;
@@ -37,6 +38,13 @@ public sealed class AlbumValidationService : IAlbumValidationService
     private static readonly CreateAlbumValidator CreateValidator = new();
     private static readonly UpdateAlbumValidator UpdateValidator = new();
 
+    private readonly ITrackRepository _trackRepository;
+
+    public AlbumValidationService(ITrackRepository trackRepository)
+    {
+        _trackRepository = trackRepository;
+    }
+
     public CreateAlbumRequest ValidateCreate(CreateAlbumRequest request)
     {
         request.Name = InputSanitiser.SingleLine(request.Name);
@@ -56,6 +64,24 @@ public sealed class AlbumValidationService : IAlbumValidationService
         request.Description = InputSanitiser.MultiLine(request.Description);
 
         ThrowIfInvalid(UpdateValidator.Validate(request));
+        return request;
+    }
+
+    public async Task<SetAlbumTracksRequest> ValidateSetTracksAsync(string ownerUsername,
+        SetAlbumTracksRequest request)
+    {
+        request.TrackIds = request.TrackIds.Select(id => id.ToLowerInvariant()).Distinct().ToList();
+
+        if (request.TrackIds.Count > MaxTracksPerAlbum)
+            throw new ArgumentException($"albums can hold at most {MaxTracksPerAlbum} tracks");
+
+        // Albums may only contain the owner's own tracks
+        var ownedIds = await _trackRepository.GetOwnedTrackIdsAsync(ownerUsername, request.TrackIds);
+        var notOwned = request.TrackIds.Except(ownedIds, StringComparer.OrdinalIgnoreCase).ToList();
+        if (notOwned.Count > 0)
+            throw new ArgumentException(
+                $"albums may only contain your own tracks; not yours or not found: {string.Join(", ", notOwned)}");
+
         return request;
     }
 

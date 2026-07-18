@@ -74,9 +74,39 @@ namespace Domain
         [DynamoDBProperty("createdAt")]
         public required long CreatedAt { get; set; }
 
+        // how many tracks this profile's user has shared with the viewer. Never persisted; null on the viewer's own profile.
+        [JsonPropertyName("sharedWithYouCount")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [DynamoDBIgnore]
+        public int? SharedWithYouCount { get; set; }
+
+
+        [JsonPropertyName("lastSeenAt")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [DynamoDBIgnore]
+        public long? LastSeenAt { get; set; }
+
+        [JsonPropertyName("activitySeenAt")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [DynamoDBIgnore]
+        public long? ActivitySeenAt { get; set; }
+
         public User()
         {
         }
+    }
+
+    // Projection of just the private seen markers off the PROFILE item, read only for
+    // the owner's own profile so they never ride along on embedded User objects.
+    public record SeenMarkersDataModel
+    {
+        [DynamoDBHashKey("PK")] public required string Pk { get; set; }
+
+        [DynamoDBRangeKey("SK")] public required string Sk { get; set; }
+
+        [DynamoDBProperty("lastSeenAt")] public long? LastSeenAt { get; set; }
+
+        [DynamoDBProperty("activitySeenAt")] public long? ActivitySeenAt { get; set; }
     }
 
     public record UserDataModel : User
@@ -90,6 +120,13 @@ namespace Domain
 
         [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
         public string? Gsi1Sk { get; set; }
+
+        // GSI3 holds the username search index: USERS / USERNAME#{lowercased username}
+        [DynamoDBGlobalSecondaryIndexHashKey("GSI3", AttributeName = "GSI3PK")]
+        public string? Gsi3Pk { get; set; }
+
+        [DynamoDBGlobalSecondaryIndexRangeKey("GSI3", AttributeName = "GSI3SK")]
+        public string? Gsi3Sk { get; set; }
 
         public UserDataModel()
         {

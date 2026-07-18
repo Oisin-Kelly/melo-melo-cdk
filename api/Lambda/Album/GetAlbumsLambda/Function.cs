@@ -11,8 +11,6 @@ namespace GetAlbumsLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private const int PageSize = 10;
-
     private readonly IAlbumRepository _albumRepository;
 
     public Function(IAlbumRepository albumRepository)
@@ -26,15 +24,17 @@ public sealed class Function : BaseLambdaFunctionHandler
         APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context)
     {
-        var username = request.RequestContext.Authorizer.Jwt.Claims["cognito:username"];
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
+        var limit = ParseLimit(request.QueryStringParameters);
 
         try
         {
-            var result = await _albumRepository.GetAlbumsAsync(username, PageSize, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultAlbum));
+            var result = await _albumRepository.GetAlbumsAsync(username, limit, cursor);
+            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultAlbumSummary));
         }
         catch (Exception ex)
         {

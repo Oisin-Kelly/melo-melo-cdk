@@ -46,6 +46,10 @@ public class Startup
         builder.Services.AddTransient<IImageService, ImageService>();
 
         builder.Services.AddTransient<IAlbumRepository, AlbumRepository>();
+        // AlbumValidationService needs the track repo (and it the user repo) for the
+        // owned-tracks rule, even though update only uses the sync validators
+        builder.Services.AddTransient<IUserRepository, UserRepository>();
+        builder.Services.AddTransient<ITrackRepository, TrackRepository>();
         builder.Services.AddTransient<IAlbumValidationService, AlbumValidationService>();
 
         return builder;

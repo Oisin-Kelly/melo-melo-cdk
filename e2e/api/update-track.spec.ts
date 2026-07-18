@@ -22,7 +22,7 @@ async function uploadUnsharedTrack(
   });
 
   const upload = await apiContext.post('/tracks/upload', {
-    data: { trackTitle, audioKey }, // no sharedWith — deliberately unshared
+    data: { name: trackTitle, audioKey }, // no sharedWith — deliberately unshared
   });
   if (upload.status() !== 202) return null;
   const { trackId } = await upload.json();
@@ -54,12 +54,12 @@ test.describe('PUT /tracks/{trackId}', () => {
     expect(update.status()).toBe(200);
 
     const body = await update.json();
-    expect(body.trackName).toBe(newName);
+    expect(body.name).toBe(newName);
     expect(body.genre).toBe('Ambient');
     expect(body.description).toBe('updated by e2e');
 
     const fetched = await apiContext.get(`/tracks/${trackId}`);
-    expect((await fetched.json()).trackName).toBe(newName);
+    expect((await fetched.json()).name).toBe(newName);
   });
 
   test('returns 400 when name is missing', async ({ apiContext }) => {

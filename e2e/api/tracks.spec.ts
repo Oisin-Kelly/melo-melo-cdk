@@ -22,6 +22,15 @@ test.describe('GET /tracks', () => {
     const body = await res.json();
     expect(Array.isArray(body.items)).toBe(true);
     expect('nextCursor' in body).toBe(true);
+
+    // Rows are TrackSummary: name + likedByMe present, owner slim, no owner-only counts
+    for (const item of body.items) {
+      expect(typeof item.name).toBe('string');
+      expect(typeof item.likedByMe).toBe('boolean');
+      expect(item.owner.incomingShares).toBeUndefined();
+      expect(item.shareCount).toBeUndefined();
+      expect(item.likeCount).toBeUndefined();
+    }
   });
 
   test('items array has at most 10 entries', async ({ apiContext }) => {

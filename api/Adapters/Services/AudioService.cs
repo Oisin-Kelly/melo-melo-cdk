@@ -25,71 +25,73 @@ public sealed class AudioService : IAudioService
         _privateS3Service = privateS3Service;
     }
 
+    private static string AudioKey(string trackId) => $"processed/{trackId}/audio.m4a";
+    private static string OriginalKey(string trackId) => $"processed/{trackId}/original";
+
     public async Task<AudioProcessingResult> ProcessAudioAsync(string audioKey, string trackId)
     {
         var inputPath = $"/tmp/{trackId}.audio";
-        var outputDir = $"/tmp/{trackId}";
+        var outputPath = $"/tmp/{trackId}.m4a";
 
         try
         {
+            string? sourceContentType;
             using (var response = await _dropboxS3Service.GetObjectResponseAsync(audioKey))
             {
                 if (!response.Headers.ContentType?.StartsWith("audio/") ?? true)
                     throw new ArgumentException($"Object '{audioKey}' is not an audio file.");
 
+                sourceContentType = response.Headers.ContentType;
+
                 await using var fileStream = File.Create(inputPath);
                 await response.ResponseStream.CopyToAsync(fileStream);
             }
 
-            Directory.CreateDirectory(outputDir);
-
-            // Probe before segmenting so an over-long file is rejected without
+            // Probe before encoding so an over-long file is rejected without
             // paying for the (much slower) ffmpeg re-encode
             var durationSeconds = await GetDurationAsync(inputPath);
             if (durationSeconds > MaxDurationSeconds)
                 throw new ArgumentException($"Audio is longer than the {MaxDurationHours} hour limit.");
 
+            // -vn drops any stray video stream; +faststart moves the seek index to
+            // the front so the player can seek anywhere via HTTP range requests
+            // without downloading the whole file (critical for long tracks).
             await RunProcessAsync(FfmpegPath, [
                 "-i", inputPath,
-                "-f", "segment",
-                "-segment_time", "20",
-                "-codec:a", "libmp3lame",
+                "-vn",
+                "-c:a", "aac",
                 "-b:a", "192k",
-                $"{outputDir}/segment_%d.mp3"
+                "-movflags", "+faststart",
+                outputPath
             ]);
 
-            var segments = Directory.GetFiles(outputDir, "segment_*.mp3")
-                .OrderBy(ExtractSegmentIndex)
-                .ToList();
+            await using (var fileStream = File.OpenRead(outputPath))
+                await _privateS3Service.PutObjectAsync(fileStream, AudioKey(trackId));
 
-            await Task.WhenAll(segments.Select(async (segmentPath, i) =>
-            {
-                await using var fileStream = File.OpenRead(segmentPath);
-                await _privateS3Service.PutObjectAsync(fileStream, $"processed/{trackId}/segment_{i}.mp3");
-            }));
+            // Archived after a successful encode (not before the duration check) so a rejected
+            // over-long upload never leaves an orphaned original behind.
+            await using (var originalStream = File.OpenRead(inputPath))
+                await _privateS3Service.PutObjectAsync(originalStream, OriginalKey(trackId), sourceContentType);
 
-            return new AudioProcessingResult(segments.Count, durationSeconds);
+            return new AudioProcessingResult(durationSeconds);
         }
         finally
         {
             if (File.Exists(inputPath)) File.Delete(inputPath);
-            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
+            if (File.Exists(outputPath)) File.Delete(outputPath);
         }
     }
 
-    public Task DeleteSegmentsAsync(string trackId, int segments)
+    public Task DeleteAudioAsync(string trackId)
     {
-        return Task.WhenAll(Enumerable.Range(0, segments)
-            .Select(i => _privateS3Service.DeleteObjectAsync($"processed/{trackId}/segment_{i}.mp3")));
+        return Task.WhenAll(
+            _privateS3Service.DeleteObjectAsync(AudioKey(trackId)),
+            _privateS3Service.DeleteObjectAsync(OriginalKey(trackId)));
     }
 
-    public async Task<List<string>> GetSegmentUrlsAsync(string trackId, int segments, TimeSpan expiry)
+    public Task<string> GetStreamUrlAsync(string trackId, TimeSpan expiry)
     {
-        var urls = await Task.WhenAll(Enumerable.Range(0, segments)
-            .Select(i => _privateS3Service.GetPresignedGetUrlAsync(
-                $"processed/{trackId}/segment_{i}.mp3", expiry)));
-
-        return urls.ToList();
+        return _privateS3Service.GetPresignedGetUrlAsync(AudioKey(trackId), expiry);
     }
 
     private static async Task<int> GetDurationAsync(string inputPath)
@@ -125,11 +127,5 @@ public sealed class AudioService : IAudioService
             throw new Exception($"{executable} failed (exit {process.ExitCode}): {await stderr}");
 
         return await stdout;
-    }
-
-    private static int ExtractSegmentIndex(string path)
-    {
-        var name = Path.GetFileNameWithoutExtension(path);
-        return int.TryParse(name.Split('_').Last(), out var i) ? i : 0;
     }
 }

@@ -60,6 +60,17 @@ public record SharedAlbum
 
     [JsonPropertyName("sharedAt")]
     public required long SharedAt { get; set; }
+
+    [JsonPropertyName("caption")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Caption { get; set; }
+}
+
+public record ShareAlbumRequest
+{
+    [JsonPropertyName("add")] public List<string> Add { get; set; } = [];
+    [JsonPropertyName("remove")] public List<string> Remove { get; set; } = [];
+    [JsonPropertyName("caption")] public string? Caption { get; set; }
 }
 
 public record CreateAlbumRequest
@@ -187,6 +198,9 @@ public record AlbumShareDataModel
 
     [DynamoDBProperty("albumOwnerUsername")]
     public required string AlbumOwnerUsername { get; set; }
+
+    [DynamoDBProperty("caption")]
+    public string? Caption { get; set; }
 
     [DynamoDBProperty("sharedAt")]
     public required long SharedAt { get; set; }

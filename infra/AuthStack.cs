@@ -38,6 +38,15 @@ public class AuthStack : BaseStack
                 EmailSubject = "Verify your MeloMelo account",
                 EmailStyle = VerificationEmailStyle.CODE
             },
+            Email = Env == "prod"
+                ? UserPoolEmail.WithSES(new UserPoolSESOptions()
+                {
+                    FromEmail = "noreply@melomelo.app",
+                    FromName = "MeloMelo",
+                    SesRegion = "eu-west-1",
+                    SesVerifiedDomain = "melomelo.app",
+                })
+                : UserPoolEmail.WithCognito(),
             LambdaTriggers = new UserPoolTriggers()
             {
                 PostConfirmation = postConfirmationFunction,

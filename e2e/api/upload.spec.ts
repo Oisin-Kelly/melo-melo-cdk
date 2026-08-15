@@ -116,7 +116,6 @@ test.describe('POST /tracks/upload — full pipeline', () => {
     expect(track.status()).toBe(200);
     const trackBody = await track.json();
     expect(trackBody.name).toBe(trackTitle);
-    expect(trackBody.segments).toBeGreaterThanOrEqual(1);
     expect(trackBody.duration).toBeGreaterThan(0);
 
     // Track + SharedTrack are written in one transaction, so both recipients
@@ -131,19 +130,19 @@ test.describe('POST /tracks/upload — full pipeline', () => {
       expect(sharedNames).toContain(trackTitle);
     }
 
-    // Owner and recipients can fetch presigned segment URLs, and the audio is
+    // Owner and recipients can fetch a presigned stream URL, and the audio is
     // actually downloadable from S3
     for (const ctx of [apiContext, apiContextB]) {
-      const segments = await ctx.get(`/tracks/${trackId}/segments`);
-      expect(segments.status()).toBe(200);
-      const segmentsBody = await segments.json();
-      expect(segmentsBody.urls.length).toBe(trackBody.segments);
-      expect(segmentsBody.duration).toBe(trackBody.duration);
-      expect(segmentsBody.expiresAt).toBeGreaterThan(Date.now());
+      const stream = await ctx.get(`/tracks/${trackId}/stream`);
+      expect(stream.status()).toBe(200);
+      const streamBody = await stream.json();
+      expect(typeof streamBody.url).toBe('string');
+      expect(streamBody.duration).toBe(trackBody.duration);
+      expect(streamBody.expiresAt).toBeGreaterThan(Date.now());
 
-      const audio = await fetch(segmentsBody.urls[0]);
+      const audio = await fetch(streamBody.url);
       expect(audio.status).toBe(200);
-      expect(audio.headers.get('content-type')).toBe('audio/mpeg');
+      expect(audio.headers.get('content-type')).toBe('audio/mp4');
     }
   });
 });

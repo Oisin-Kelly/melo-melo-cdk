@@ -1,5 +1,7 @@
 import { test, expect } from '../fixtures/users';
 
+type Activity = { type: string; actor: { username: string }; targetType: string; targetId: string };
+
 test.describe('Follow lifecycle', () => {
   test('follow-status is false before following', async ({ apiContext, user, userB }) => {
     const res = await apiContext.get(`/users/${userB.username}/follow-status`);
@@ -56,6 +58,42 @@ test.describe('Follow lifecycle', () => {
     expect(
       (await (await apiContext.get(`/users/${userC.username}/follow-status`)).json()).followStatus
     ).toBe(false);
+  });
+
+  // Uses the B→A direction (untouched by the A→B/A→C tests above) so it never races on the
+  // shared follow graph. Follow writes a USER_FOLLOWED activity for the followed user; unfollow
+  // deletes it; a re-follow is idempotent (no duplicate row / no double count).
+  test('follow writes USER_FOLLOWED activity, unfollow removes it, re-follow is idempotent', async ({
+    apiContext,
+    apiContextB,
+    user,
+    userB,
+  }) => {
+    // Clean slate: ensure B is not already following A (also clears any leftover activity item)
+    await apiContextB.post(`/users/${user.username}/follow-user`, { data: { newValue: false } });
+
+    // A's activity rows that represent "B started following you"
+    const followRows = async () =>
+      ((await (await apiContext.get('/activity')).json()).items as Activity[]).filter(
+        (a) => a.type === 'USER_FOLLOWED' && a.actor.username === userB.username
+      );
+
+    try {
+      // B follows A → exactly one USER_FOLLOWED row reaches A, targeting the follower (USER)
+      expect((await apiContextB.post(`/users/${user.username}/follow-user`, { data: { newValue: true } })).status()).toBe(200);
+      await expect.poll(async () => (await followRows()).length, { timeout: 15_000 }).toBe(1);
+      expect((await followRows())[0].targetType).toBe('USER');
+
+      // Re-follow without an intervening unfollow is idempotent → still exactly one row (guard holds)
+      expect((await apiContextB.post(`/users/${user.username}/follow-user`, { data: { newValue: true } })).status()).toBe(200);
+      await expect.poll(async () => (await followRows()).length, { timeout: 15_000 }).toBe(1);
+
+      // Unfollow → the activity row is deleted
+      expect((await apiContextB.post(`/users/${user.username}/follow-user`, { data: { newValue: false } })).status()).toBe(200);
+      await expect.poll(async () => (await followRows()).length, { timeout: 15_000 }).toBe(0);
+    } finally {
+      await apiContextB.post(`/users/${user.username}/follow-user`, { data: { newValue: false } });
+    }
   });
 
   test('returns 400 when newValue is missing', async ({ apiContext, userB }) => {

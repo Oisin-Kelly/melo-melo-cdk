@@ -85,7 +85,7 @@ test.describe('DELETE /tracks/{trackId}', () => {
     for (const ctx of [apiContext, apiContextB, apiContextC]) {
       expect((await ctx.get(`/tracks/${trackId}`)).status()).toBe(404);
     }
-    expect((await apiContext.get(`/tracks/${trackId}/segments`)).status()).toBe(404);
+    expect((await apiContext.get(`/tracks/${trackId}/stream`)).status()).toBe(404);
     expect((await apiContext.get(`/tracks/${trackId}/likes`)).status()).toBe(404);
     expect((await apiContext.get(`/tracks/uploads/${trackId}`)).status()).toBe(404);
 

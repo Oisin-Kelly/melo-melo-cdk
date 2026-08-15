@@ -26,7 +26,7 @@ public sealed class S3Service : IS3Service
         return await _s3Client.GetObjectAsync(request);
     }
 
-    public async Task<string> PutObjectAsync(Stream stream, string objectName)
+    public async Task<string> PutObjectAsync(Stream stream, string objectName, string? contentType = null)
     {
         if (stream.CanSeek)
             stream.Position = 0;
@@ -36,7 +36,7 @@ public sealed class S3Service : IS3Service
             BucketName = _bucketName,
             Key = objectName,
             InputStream = stream,
-            ContentType = GetContentType(objectName)
+            ContentType = contentType ?? GetContentType(objectName)
         };
 
         await _s3Client.PutObjectAsync(request);
@@ -106,6 +106,7 @@ public sealed class S3Service : IS3Service
             ".txt" => "text/plain",
             ".mp3" => "audio/mpeg",
             ".wav" => "audio/wav",
+            ".m4a" => "audio/mp4",
             ".mp4" => "video/mp4",
             _ => "application/octet-stream"
         };

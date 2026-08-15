@@ -34,6 +34,20 @@ public sealed class ActivityRepository : IActivityRepository
         string TargetOwner(ActivityItemDataModel a) =>
             a.Type is ActivityType.TrackLiked or ActivityType.AlbumLiked ? username : a.ActorUsername;
 
+        // Liveness key: the exact SHARED#/LIKE# record that produced this activity. If it's gone
+        // (unshared, unliked, removed, revoked), the activity is stale and must not show — this is
+        // what makes GET /activity a live snapshot of current relationships rather than an event
+        // log. NOT general access (e.g. album grants) — the direct record that caused this row.
+        // Follow has no liveness key: it's already eager-deleted on unfollow.
+        (string pk, string sk)? RelKey(ActivityItemDataModel a) => a.Type switch
+        {
+            ActivityType.TrackShared => ($"TRACK#{a.TargetId}", $"SHARED#{username}"),
+            ActivityType.AlbumShared => ($"ALBUM#{a.TargetId}", $"SHARED#{username}"),
+            ActivityType.TrackLiked => ($"TRACK#{a.TargetId}", $"LIKE#{a.ActorUsername}"),
+            ActivityType.AlbumLiked => ($"ALBUM#{a.TargetId}", $"LIKE#{a.ActorUsername}"),
+            _ => null,
+        };
+
         // Keys must be de-duplicated: a user can have several activities about the same
         // target (e.g. a track re-shared after an unshare, or re-liked), and BatchGetItem
         // rejects duplicate keys in one request.
@@ -45,24 +59,40 @@ public sealed class ActivityRepository : IActivityRepository
         var albumKeys = items.Where(a => a.TargetType == FeedItemType.Album)
             .Select(a => (pk: $"USER#{TargetOwner(a)}", sk: $"ALBUM#{a.TargetId}"))
             .Distinct();
+        var relKeys = items.Select(RelKey).Where(k => k.HasValue).Select(k => k!.Value).Distinct();
 
         var actorsTask = _dynamoDbService.BatchGetAsync<UserDataModel>(actorKeys);
         var tracksTask = _dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
         var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(albumKeys);
-        await Task.WhenAll(actorsTask, tracksTask, albumsTask);
+        var liveTask = _dynamoDbService.BatchGetAsync<KeyProbeDataModel>(relKeys);
+        await Task.WhenAll(actorsTask, tracksTask, albumsTask, liveTask);
 
         var actors = actorsTask.Result.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
         var trackNames = tracksTask.Result.ToDictionary(t => t.TrackId, t => t.TrackName, StringComparer.OrdinalIgnoreCase);
         var albumNames = albumsTask.Result.ToDictionary(a => a.AlbumId, a => a.Name, StringComparer.OrdinalIgnoreCase);
+        var liveRel = liveTask.Result.Select(p => (p.Pk, p.Sk)).ToHashSet();
 
         string? TargetName(ActivityItemDataModel a) => a.TargetType == FeedItemType.Track
             ? trackNames.GetValueOrDefault(a.TargetId)
             : albumNames.GetValueOrDefault(a.TargetId);
 
-        // Drop entries whose actor or target no longer resolves (deleted track/album) —
-        // same stance as the feed, instead of surfacing "Unknown track" placeholders
+        // Keep a row only if: the actor resolves, and — for share/like — its underlying
+        // relationship record still exists (liveness) and its target still resolves.
+        // Follow rows skip target/liveness (USER target, no name; eager-deleted on unfollow).
+        bool Keep(ActivityItemDataModel a)
+        {
+            if (!actors.ContainsKey(a.ActorUsername))
+                return false;
+            if (a.Type == ActivityType.UserFollowed)
+                return true;
+            if (TargetName(a) is null)
+                return false;
+            var rk = RelKey(a);
+            return rk is null || liveRel.Contains((rk.Value.pk, rk.Value.sk));
+        }
+
         var entries = items
-            .Where(a => actors.ContainsKey(a.ActorUsername) && TargetName(a) is not null)
+            .Where(Keep)
             .Select(a => new ActivityEntry
             {
                 Type = a.Type,

@@ -35,7 +35,6 @@ public sealed class TrackRepository : ITrackRepository
             Genre = trackDto.Genre,
             ImageUrl = trackDto.ImageUrl,
             ImageBgColor = trackDto.ImageBgColor,
-            Segments = trackDto.Segments,
             TrackName = trackDto.TrackName,
             Owner = UserSummary.From(owner),
             Id = trackDto.TrackId,
@@ -110,7 +109,6 @@ public sealed class TrackRepository : ITrackRepository
             ImageBgColor = image?.ImageHex,
             CreatedAt = now,
             Duration = audio.DurationSeconds,
-            Segments = audio.Segments,
             ShareCount = input.SharedWith.Count,
         });
 
@@ -199,7 +197,6 @@ public sealed class TrackRepository : ITrackRepository
             Owner = UserSummary.From(owner),
             CreatedAt = item.CreatedAt,
             Duration = item.Duration,
-            Segments = item.Segments,
         };
     }
 

@@ -12,6 +12,7 @@ public interface ISharedTrackRepository
     public Task<List<Recipient>> GetTrackRecipientDetailsAsync(string trackId);
     public Task ShareTrackAsync(string trackId, string ownerUsername, IReadOnlyList<string> addRecipients,
         IReadOnlyList<string> removeRecipients, string? caption);
+    public Task RemoveTrackFromLibraryAsync(string trackId, string username);
     public Task<PaginatedResult<SharedTrack>> GetTracksSharedWithUser(string userId, int pageSize, string? cursor);
     public Task<PaginatedResult<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId, int pageSize, string? cursor);
 

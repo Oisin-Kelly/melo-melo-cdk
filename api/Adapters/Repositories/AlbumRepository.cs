@@ -361,14 +361,25 @@ public sealed class AlbumRepository : IAlbumRepository
     }
 
     public async Task ShareAlbumAsync(string albumId, string ownerUsername, IReadOnlyList<string> addRecipients,
-        IReadOnlyList<string> removeRecipients)
+        IReadOnlyList<string> removeRecipients, string? caption)
     {
         var normalisedId = albumId.ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var trackIds = await GetAlbumTrackIdsAsync(normalisedId);
+        var existingByRecipient = (await GetSharesAsync(normalisedId))
+            .ToDictionary(s => s.Recipient, s => s, StringComparer.OrdinalIgnoreCase);
 
-        // Unshares: revoke grants first, then remove the share + feed records
+        // A recipient in both add and remove is contradictory — let remove win.
+        var removeSet = new HashSet<string>(removeRecipients, StringComparer.OrdinalIgnoreCase);
+        var adds = addRecipients.Where(r => !removeSet.Contains(r)).ToList();
+
+        // Grants + counter only for genuinely-new recipients; every add is (re)written below
+        // (a re-share overwrites the record with the current caption + a fresh timestamp).
+        var newRecipients = adds
+            .Where(r => !existingByRecipient.ContainsKey(r))
+            .ToList();
+
         if (removeRecipients.Count > 0)
         {
             await DeleteGrantsAsync(trackIds, removeRecipients, normalisedId);
@@ -385,15 +396,15 @@ public sealed class AlbumRepository : IAlbumRepository
             await _dynamoDbService.ExecuteBatchWriteAsync(removeBatch, feedBatch);
         }
 
-        // Shares: write grants first, then the share records (the share is the authoritative marker)
-        if (addRecipients.Count > 0)
-        {
-            await WriteGrantsAsync(trackIds, addRecipients, normalisedId, ownerUsername, now);
+        if (newRecipients.Count > 0)
+            await WriteGrantsAsync(trackIds, newRecipients, normalisedId, ownerUsername, now);
 
+        if (adds.Count > 0)
+        {
             var addBatch = _dynamoDbService.CreateBatchWritePart<AlbumShareDataModel>();
             var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
             var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
-            foreach (var recipient in addRecipients)
+            foreach (var recipient in adds)
             {
                 addBatch.AddPutItem(new AlbumShareDataModel
                 {
@@ -402,10 +413,11 @@ public sealed class AlbumRepository : IAlbumRepository
                     Gsi1Pk = $"ALBUMSHARED#{recipient}",
                     Gsi1Sk = $"DATE#{now}",
                     AlbumOwnerUsername = ownerUsername,
+                    Caption = caption,
                     SharedAt = now,
                 });
                 feedBatch.AddPutItem(
-                    FeedItems.Build(recipient, FeedItemType.Album, normalisedId, ownerUsername, now));
+                    FeedItems.Build(recipient, FeedItemType.Album, normalisedId, ownerUsername, now, caption));
                 activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.AlbumShared, ownerUsername,
                     FeedItemType.Album, normalisedId, now));
             }
@@ -413,10 +425,39 @@ public sealed class AlbumRepository : IAlbumRepository
             await _dynamoDbService.ExecuteBatchWriteAsync(addBatch, feedBatch, activityBatch);
         }
 
-        // Callers pre-filter adds to new recipients and removes to current ones
-        var shareDelta = addRecipients.Count - removeRecipients.Count;
+        var shareDelta = newRecipients.Count - removeRecipients.Count;
         if (shareDelta != 0)
             await UpdateAlbumCountersAsync(ownerUsername, normalisedId, ("shareCount", shareDelta));
+    }
+
+    // Recipient-side "remove from my library": revokes only the caller's own access to this
+    // album (share record + this-recipient track grants + feed item) and decrements the owner's
+    // shareCount. It never touches direct SHARED#{user} track records, so a track that was also
+    // shared directly stays accessible. Idempotent — a no-op if the caller has no album share.
+    public async Task RemoveAlbumFromLibraryAsync(string albumId, string username)
+    {
+        var normalisedId = albumId.ToLowerInvariant();
+
+        var share = await _dynamoDbService.GetFromDynamoAsync<AlbumShareDataModel>(
+            $"ALBUM#{normalisedId}", $"SHARED#{username}");
+        if (share is null) return;
+
+        // Revoke grants first, then the share + feed records (retryable order: a dangling
+        // grant just leaves stale access, a dangling share record leaks a phantom library entry).
+        var trackIds = await GetAlbumTrackIdsAsync(normalisedId);
+        await DeleteGrantsAsync(trackIds, [username], normalisedId);
+
+        var shareBatch = _dynamoDbService.CreateBatchWritePart<AlbumShareDataModel>();
+        var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
+        shareBatch.AddDeleteKey($"ALBUM#{normalisedId}", $"SHARED#{username}");
+        var (fpk, fsk) = FeedItems.Key(username, FeedItemType.Album, normalisedId);
+        feedBatch.AddDeleteKey(fpk, fsk);
+        await _dynamoDbService.ExecuteBatchWriteAsync(shareBatch, feedBatch);
+
+        // shareCount tracks the number of album-share records, so a self-removal decrements it
+        // (kept in sync with the re-share upsert, which counts a missing record as new).
+        if (!string.IsNullOrEmpty(share.AlbumOwnerUsername))
+            await UpdateAlbumCountersAsync(share.AlbumOwnerUsername, normalisedId, ("shareCount", -1));
     }
 
     public async Task<List<Recipient>> GetAlbumRecipientDetailsAsync(string albumId)
@@ -477,6 +518,7 @@ public sealed class AlbumRepository : IAlbumRepository
                 Album = AlbumSummary.From(albums[s.AlbumId], owners[s.AlbumOwnerUsername],
                     likedAlbumIdsTask.Result.Contains(s.AlbumId)),
                 SharedAt = s.SharedAt,
+                Caption = s.Caption,
             })
             .ToList();
 

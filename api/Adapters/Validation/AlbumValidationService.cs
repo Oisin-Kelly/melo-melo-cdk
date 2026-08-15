@@ -31,12 +31,25 @@ internal class UpdateAlbumValidator : AbstractValidator<UpdateAlbumRequest>
     }
 }
 
+internal class ShareAlbumValidator : AbstractValidator<ShareAlbumRequest>
+{
+    public ShareAlbumValidator()
+    {
+        RuleFor(x => x)
+            .Must(x => x.Add.Count > 0 || x.Remove.Count > 0)
+            .WithMessage("provide at least one user in add or remove");
+        RuleFor(x => x.Caption)
+            .MaximumLength(300).WithMessage("caption must be at most 300 characters");
+    }
+}
+
 public sealed class AlbumValidationService : IAlbumValidationService
 {
     public const int MaxTracksPerAlbum = 50;
 
     private static readonly CreateAlbumValidator CreateValidator = new();
     private static readonly UpdateAlbumValidator UpdateValidator = new();
+    private static readonly ShareAlbumValidator ShareValidator = new();
 
     private readonly ITrackRepository _trackRepository;
 
@@ -64,6 +77,14 @@ public sealed class AlbumValidationService : IAlbumValidationService
         request.Description = InputSanitiser.MultiLine(request.Description);
 
         ThrowIfInvalid(UpdateValidator.Validate(request));
+        return request;
+    }
+
+    public ShareAlbumRequest ValidateShare(ShareAlbumRequest request)
+    {
+        request.Caption = InputSanitiser.MultiLine(request.Caption);
+
+        ThrowIfInvalid(ShareValidator.Validate(request));
         return request;
     }
 

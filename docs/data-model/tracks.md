@@ -10,7 +10,7 @@ Part of the [data model](README.md). Covers tracks, the upload-status record, di
 |----|-----|--------|--------|--------|--------|
 | `USER#{ownerUsername}` | `TRACK#{trackId}` | `TRACK#{trackId}` | `INFO` | `USER#{ownerUsername}` | `DATE#{createdAt}` |
 
-Attributes: `trackName`, `description`, `genre`, `imageUrl`, `imageBgColor`, `createdAt`, `duration`, `segments`, `likeCount`, `shareCount` (direct-share recipient count; grants excluded — both counts owner-only in responses)
+Attributes: `trackName`, `description`, `genre`, `imageUrl`, `imageBgColor`, `createdAt`, `duration`, `likeCount`, `shareCount` (direct-share recipient count; grants excluded — both counts owner-only in responses)
 
 Derived: `OwnerUsername` from `PK.Replace("USER#", "")`, `TrackId` from `SK.Replace("TRACK#", "")`
 
@@ -24,7 +24,7 @@ GSI1 gives by-id lookup (owner unknown at query time); GSI3 gives the owner's tr
 
 Attributes: `status` (`PROCESSING` / `COMPLETE` / `FAILED`), `error`, `createdAt`, `expiresAt` (table TTL attribute — records self-expire after 24h). No GSI keys — only ever fetched point-wise by the owner.
 
-Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before segmenting).
+Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before encoding).
 
 ### Shared Track
 
@@ -86,15 +86,21 @@ Owner-only (404 otherwise)
 Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct recipients.
 1. Track fetch → owner check
 2. `Query(PK=TRACK#{id}, SK begins_with SHARED#)` **excluding `#ALBUM#` grant records** → current direct recipients
-3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users, and recipients whose `incomingShares` setting blocks the sender — `FOLLOWING` checks `Query(PK=FOLLOW#{sender}, begins_with USER#{recipient}#)` per candidate)
-4. **BatchWrite**: put SharedTrack items for adds (`GSI1SK=DATE#{now}`, `GSI2SK=SENDER#{owner}#DATE#{now}`), delete direct-share items for removes — album grant records are never touched, so album-derived access survives. The same batch writes feed items and activity items (see [feed.md](feed.md) and [activity.md](activity.md))
+3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users, and recipients whose `incomingShares` setting blocks the sender — `FOLLOWING` checks `Query(PK=FOLLOW#{sender}, begins_with USER#{recipient}#)` per candidate). The Lambda passes the **full** validated add list (no pre-dedup); `ShareTrackAsync` classifies each against the current direct shares (upsert)
+4. **BatchWrite** (upsert per recipient — every recipient in `add` is written): **new** recipient → put SharedTrack item (`GSI1SK=DATE#{now}`, `GSI2SK=SENDER#{owner}#DATE#{now}`, `caption`) + feed + activity, `shareCount +1`; **existing** recipient → overwrite the item with fresh `DATE#{now}` + the request's caption (resurfaces the feed & shared-with lists) + new activity, no count change. No same-caption short-circuit; re-sharing without a caption overwrites the stored caption to null. A user in both `add` and `remove` → remove wins. Removes delete direct-share items — album grant records are never touched, so album-derived access survives. Feed/activity writes share the batch (see [feed.md](feed.md) and [activity.md](activity.md))
+
+#### `DELETE /tracks/shared/{trackId}` — RemoveSharedTrackLambda
+Recipient-side "remove from my library" — the mirror of a single-recipient unshare, callable by anyone (drops the caller's own share; no owner check). `RemoveTrackFromLibraryAsync`:
+1. `GetItem(PK=TRACK#{id}, SK=SHARED#{requestor})` → **idempotency guard**: no-op 200 if absent
+2. **BatchWrite** delete the direct-share item + its feed item (`FEED#{requestor}` / `TRACK#{id}`); the album grant records (`SHARED#{requestor}#ALBUM#{id}`) are **never touched**, so a track that is also in a shared album stays accessible via that album ([access rule](README.md#track-access-rule) = direct OR album grant)
+3. Decrement the owner's `shareCount` by 1 (kept equal to the live direct-share record count, so the re-share upsert stays consistent). The `TRACK_SHARED` activity item is left to age out via TTL, same as owner-side unshare.
 
 #### `GET /tracks/{trackId}/recipients` — GetTrackRecipientsLambda
 Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered to direct shares (drops `#ALBUM#` grant SKs) → BatchGet profiles → `{items:[{user, sharedAt}]}` newest-first. Bounded, no pagination.
 
-#### `GET /tracks/{trackId}/segments` — GetTrackSegmentsLambda
+#### `GET /tracks/{trackId}/stream` — GetTrackSegmentsLambda
 1. Track fetch (GSI1 by-id) → **access check** (owner OR `IsTrackAccessibleToUser`) — 404 otherwise
-2. Presign one GET URL per segment (`processed/{trackId}/segment_{i}.mp3`, private bucket, 1h expiry) → `{urls, expiresAt, duration}`
+2. Presign one GET URL for the processed audio (`processed/{trackId}/audio.m4a`, private bucket, 6h expiry) → `{url, expiresAt, duration}`. The client range-requests this single URL; `+faststart` on the file makes seeking work without a full download.
 
 #### `GET /tracks/uploads/{trackId}` — GetUploadStatusLambda
 1. `GetItem(PK=USER#{requestor}, SK=UPLOAD#{trackId})` → `{trackId, status, error?, createdAt}` (404 if absent/expired)
@@ -103,7 +109,7 @@ Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered
 Owner-only (404 otherwise). Ordered so any mid-delete crash is retryable (track stays fetchable until the last step):
 1. Track fetch → owner check
 2. For each of the owner's albums: `GetItem(ALBUM#{albumId}, TRACK#{trackId})` → if a member, `RemoveTracksAsync` (revokes that album's per-recipient grants, then the membership)
-3. Delete S3 objects: `processed/{trackId}/segment_{i}.mp3` (private bucket) + cover (public bucket)
+3. Delete S3 objects: `processed/{trackId}/audio.m4a` (private bucket) + cover (public bucket)
 4. `Query(PK=TRACK#{trackId}, SK begins_with SHARED#)` + `begins_with LIKE#` → batch-delete direct shares (and their feed items), leftover grants, likes, and the `UPLOAD#{trackId}` status record
 5. Delete the Track item (`USER#{owner}`, `TRACK#{trackId}`) last
 

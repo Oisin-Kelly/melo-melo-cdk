@@ -59,24 +59,24 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Strips self, duplicates, and unknown usernames
             var validatedAdds = await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username);
-            var addRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
 
             var removeRecipients = shareRequest.Remove
                 .Where(u => currentRecipients.Contains(u, StringComparer.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var totalAfter = currentRecipients.Count + addRecipients.Count - removeRecipients.Count;
+            var newRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
+            var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
             if (totalAfter > MaxRecipientsPerTrack)
                 return Error(HttpStatusCode.BadRequest,
                     $"tracks can be shared with at most {MaxRecipientsPerTrack} users", "Bad Request");
 
-            await _sharedTrackRepository.ShareTrackAsync(track.Id, username, addRecipients, removeRecipients,
+            await _sharedTrackRepository.ShareTrackAsync(track.Id, username, validatedAdds, removeRecipients,
                 shareRequest.Caption);
 
             var sharedWith = currentRecipients
                 .Except(removeRecipients, StringComparer.OrdinalIgnoreCase)
-                .Union(addRecipients, StringComparer.OrdinalIgnoreCase)
+                .Union(validatedAdds, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(u => u)
                 .ToList();
 

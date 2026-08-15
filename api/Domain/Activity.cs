@@ -9,6 +9,12 @@ public static class ActivityType
     public const string AlbumLiked = "ALBUM_LIKED";        // someone liked your album
     public const string TrackShared = "TRACK_SHARED";      // someone shared a track with you
     public const string AlbumShared = "ALBUM_SHARED";      // someone shared an album with you
+    public const string UserFollowed = "USER_FOLLOWED";    // someone started following you
+}
+
+public static class ActivityTargetType
+{
+    public const string User = "USER";
 }
 
 // One row of GET /activity, hydrated with the actor's profile and the target's name.
@@ -66,4 +72,24 @@ public static class ActivityItems
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(90).ToUnixTimeSeconds(),
         };
     }
+
+    // Follow activity is the one deletable-by-design activity (removed on unfollow), so
+    // its SK is deterministic — DATE#{followTs}#FOLLOW#{follower} — reconstructable from
+    // the follow record's CreatedAt without a random shortId. The follower suffix keeps it
+    // unique within the recipient partition (one active follow per follower).
+    public static string FollowSk(string followerUsername, long followTimestamp) =>
+        $"DATE#{followTimestamp}#FOLLOW#{followerUsername}";
+
+    public static ActivityItemDataModel BuildFollow(string recipient, string followerUsername, long now) =>
+        new()
+        {
+            Pk = $"ACTIVITY#{recipient}",
+            Sk = FollowSk(followerUsername, now),
+            Type = ActivityType.UserFollowed,
+            ActorUsername = followerUsername,
+            TargetType = ActivityTargetType.User,
+            TargetId = followerUsername,
+            CreatedAt = now,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(90).ToUnixTimeSeconds(),
+        };
 }

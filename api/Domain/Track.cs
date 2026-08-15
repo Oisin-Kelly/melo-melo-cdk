@@ -44,10 +44,7 @@ namespace Domain
         
         [JsonPropertyName("duration")]
         public required int Duration { get; set; }
-        
-        [JsonPropertyName("segments")]
-        public required int Segments { get; set; }
-        
+
         [JsonPropertyName("owner")]
         public required UserSummary Owner { get; set; }
         
@@ -108,9 +105,6 @@ namespace Domain
 
         [DynamoDBProperty("duration")]
         public required int Duration { get; set; }
-
-        [DynamoDBProperty("segments")]
-        public required int Segments { get; set; }
 
         [DynamoDBProperty("likeCount")]
         public int LikeCount { get; set; }

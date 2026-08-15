@@ -32,7 +32,8 @@ public interface IAlbumRepository
     /// Recipients with hydrated profiles, newest share first (≤50 by the share limit)
     public Task<List<Recipient>> GetAlbumRecipientDetailsAsync(string albumId);
     public Task ShareAlbumAsync(string albumId, string ownerUsername, IReadOnlyList<string> addRecipients,
-        IReadOnlyList<string> removeRecipients);
+        IReadOnlyList<string> removeRecipients, string? caption);
+    public Task RemoveAlbumFromLibraryAsync(string albumId, string username);
     public Task<PaginatedResult<SharedAlbum>> GetAlbumsSharedWithUserAsync(string username, int pageSize,
         string? cursor);
 }

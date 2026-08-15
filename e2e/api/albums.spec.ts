@@ -132,19 +132,23 @@ test.describe('Album sharing grants track access', () => {
     const album = await create.json();
 
     const share = await apiContext.post(`/albums/${album.id}/share`, {
-      data: { add: [userB.username, userC.username] },
+      data: { add: [userB.username, userC.username], caption: 'album caption by e2e' },
     });
     expect(share.status()).toBe(200);
     const sharedWith = (await share.json()).sharedWith;
     expect(sharedWith).toContain(userB.username);
     expect(sharedWith).toContain(userC.username);
 
-    // Both see the album in their shared feed, with the track, and can access the track
+    // Both see the album in their shared feed, with the caption and track, and can access the track
     for (const ctx of [apiContextB, apiContextC]) {
       const sharedAlbums = await ctx.get('/albums/shared');
       expect(sharedAlbums.status()).toBe(200);
       const sharedAlbumsBody = await sharedAlbums.json();
-      expect(sharedAlbumsBody.items.map((s: { album: { id: string } }) => s.album.id)).toContain(album.id);
+      const sharedItem = sharedAlbumsBody.items.find(
+        (s: { album: { id: string } }) => s.album.id === album.id,
+      );
+      expect(sharedItem, 'album should appear in recipient shared feed').toBeTruthy();
+      expect(sharedItem.caption).toBe('album caption by e2e');
 
       const albumDetail = await ctx.get(`/albums/${album.id}`);
       expect(albumDetail.status()).toBe(200);

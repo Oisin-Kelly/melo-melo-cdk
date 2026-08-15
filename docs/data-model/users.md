@@ -76,18 +76,20 @@ Request body: `{newValue: true|false}`
 
 **Follow** (`newValue: true`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. **TransactWrite** (3 parts, atomic):
+2. **TransactWrite** (3 parts, atomic; **4 parts** when not a self-follow):
    - `Save` follow record: `PK=FOLLOW#{username}, SK=USER#{requestor}#{epochMs}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}`
    - `Update` target user: `ADD followerCount :1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :1` on `PK=USER#{requestor}, SK=PROFILE`
+   - `Save` `USER_FOLLOWED` activity for the followed user (skipped on a self-follow): `PK=ACTIVITY#{username}, SK=DATE#{epochMs}#FOLLOW#{requestor}` — deterministic SK (same `epochMs` stored as the follow record's `createdAt`) so unfollow can delete it. See [activity.md](activity.md).
 
 **Unfollow** (`newValue: false`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → find exact follow record SK (timestamp unknown at unfollow time)
-3. **TransactWrite** (3 parts, atomic):
+2. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → find exact follow record SK + `createdAt` (timestamp unknown at unfollow time); no-op if absent
+3. **TransactWrite** (3 parts, atomic; **4 parts** when the follow record has a `createdAt` and isn't a self-follow):
    - `Delete` follow record using exact PK+SK from step 2
    - `Update` target user: `ADD followerCount :-1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :-1` on `PK=USER#{requestor}, SK=PROFILE`
+   - `DeleteKey` the `USER_FOLLOWED` activity: `PK=ACTIVITY#{username}, SK=DATE#{createdAt}#FOLLOW#{requestor}` — reconstructed from the follow record's `createdAt` (pre-existing records lacking it skip cleanly; a keyed delete of a missing item is a harmless no-op)
 
 #### `GET /users/{username}/followers` — GetUserFollowersLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followersPrivate` flag

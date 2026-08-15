@@ -92,6 +92,16 @@ public sealed class UserRepository : IUserRepository
 
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
+        // Idempotency: the follow record SK carries a timestamp, so a second follow without an
+        // intervening unfollow would write a duplicate row, double-count both profiles, and emit
+        // a second activity item. No-op if the relationship already exists (mirrors UnfollowUser's
+        // read-then-act guard — a rapid double-tap still races, but the common case is clean).
+        var existing = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
+            hashKey: $"FOLLOW#{usernameToFollow}",
+            rangeKey: $"USER#{followerUsername}#",
+            queryOperator: QueryOperator.BeginsWith);
+        if (existing.Count > 0) return;
+
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var followRecord = new UserFollowDataModel
@@ -108,6 +118,17 @@ public sealed class UserRepository : IUserRepository
 
         var userProfileTx = CreateCounterUpdate(usernameToFollow, "followerCount", 1);
         var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", 1);
+
+        // Notify the followed user (recipient-perspective activity), skipping self-follows
+        // (mirrors the like feed's no-self-echo). The activity SK is deterministic on the
+        // follow timestamp so unfollow can delete it — see ActivityItems.BuildFollow.
+        if (!string.Equals(followerUsername, usernameToFollow, StringComparison.OrdinalIgnoreCase))
+        {
+            var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
+            activityTx.AddSaveItem(ActivityItems.BuildFollow(usernameToFollow, followerUsername, timestamp));
+            await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx, activityTx);
+            return;
+        }
 
         await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
     }
@@ -147,6 +168,19 @@ public sealed class UserRepository : IUserRepository
 
         var userProfileTx = CreateCounterUpdate(usernameToUnfollow, "followerCount", -1);
         var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", -1);
+
+        // Remove the follow activity written at FollowUser time. The SK is reconstructed from
+        // the follow record's CreatedAt; older records without it (or self-follows, which never
+        // wrote one) simply skip — a keyed delete of a missing item would be a harmless no-op anyway.
+        if (existingRecord.CreatedAt is { } followTimestamp
+            && !string.Equals(followerUsername, usernameToUnfollow, StringComparison.OrdinalIgnoreCase))
+        {
+            var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
+            activityTx.AddDeleteKey($"ACTIVITY#{usernameToUnfollow}",
+                ActivityItems.FollowSk(followerUsername, followTimestamp));
+            await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx, activityTx);
+            return;
+        }
 
         await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
     }

@@ -88,8 +88,11 @@ public class LambdaStack : BaseStack
 
         var deleteTrack = CreateLambdaFunction("Track/DeleteTrackLambda");
         table.GrantReadWriteData(deleteTrack);
-        privateReadonlyBucket.GrantReadWrite(deleteTrack); // deletes audio segments
+        privateReadonlyBucket.GrantReadWrite(deleteTrack); // deletes the processed audio file
         publicReadonlyBucket.GrantReadWrite(deleteTrack); // deletes cover image
+
+        var removeSharedTrack = CreateLambdaFunction("Track/RemoveSharedTrackLambda");
+        table.GrantReadWriteData(removeSharedTrack); // recipient removes a shared track from their library
 
         // Track upload pipeline
         UploadTrackFunction = CreateLambdaFunction("Track/UploadTrackLambda");
@@ -163,6 +166,9 @@ public class LambdaStack : BaseStack
         var shareAlbum = CreateLambdaFunction("Album/ShareAlbumLambda");
         table.GrantReadWriteData(shareAlbum);
 
+        var removeSharedAlbum = CreateLambdaFunction("Album/RemoveSharedAlbumLambda");
+        table.GrantReadWriteData(removeSharedAlbum); // recipient removes a shared album from their library
+
         var getAlbumRecipients = CreateLambdaFunction("Album/GetAlbumRecipientsLambda");
         table.GrantReadData(getAlbumRecipients);
 
@@ -223,6 +229,7 @@ public class LambdaStack : BaseStack
             GetTrackRecipients: getTrackRecipients,
             GetTrackSegments: getTrackSegments,
             DeleteTrack: deleteTrack,
+            RemoveSharedTrack: removeSharedTrack,
             CreatePlaylist: createPlaylist,
             GetPlaylists: getPlaylists,
             GetPlaylist: getPlaylist,
@@ -240,6 +247,7 @@ public class LambdaStack : BaseStack
             DeleteAlbum: deleteAlbum,
             SetAlbumTracks: setAlbumTracks,
             ShareAlbum: shareAlbum,
+            RemoveSharedAlbum: removeSharedAlbum,
             GetAlbumRecipients: getAlbumRecipients,
             LikeAlbum: likeAlbum,
             GetAlbumLikes: getAlbumLikes,

@@ -4,8 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Adapters.Repositories;
 using Adapters.Services;
+using Adapters.Validation;
 using Ports.Repositories;
 using Ports.Services;
+using Ports.Validation;
 
 namespace ShareAlbumLambda;
 
@@ -28,6 +30,8 @@ public class Startup
 
         builder.Services.AddTransient<IAlbumRepository, AlbumRepository>();
         builder.Services.AddTransient<IUserRepository, UserRepository>();
+        builder.Services.AddTransient<ITrackRepository, TrackRepository>();
+        builder.Services.AddTransient<IAlbumValidationService, AlbumValidationService>();
 
         return builder;
     }

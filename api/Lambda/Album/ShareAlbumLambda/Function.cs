@@ -5,16 +5,12 @@ using Amazon.Lambda.Annotations;
 using Amazon.Lambda.Annotations.APIGateway;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
+using Domain;
 using Lambda.Shared;
 using Ports.Repositories;
+using Ports.Validation;
 
 namespace ShareAlbumLambda;
-
-public record ShareAlbumRequest
-{
-    [JsonPropertyName("add")] public List<string> Add { get; set; } = [];
-    [JsonPropertyName("remove")] public List<string> Remove { get; set; } = [];
-}
 
 public record ShareAlbumResponse
 {
@@ -27,11 +23,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 
     private readonly IAlbumRepository _albumRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IAlbumValidationService _albumValidationService;
 
-    public Function(IAlbumRepository albumRepository, IUserRepository userRepository)
+    public Function(IAlbumRepository albumRepository, IUserRepository userRepository,
+        IAlbumValidationService albumValidationService)
     {
         _albumRepository = albumRepository;
         _userRepository = userRepository;
+        _albumValidationService = albumValidationService;
     }
 
     [LambdaFunction]
@@ -47,8 +46,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
         try
         {
-            if (shareRequest.Add.Count == 0 && shareRequest.Remove.Count == 0)
-                return Error(HttpStatusCode.BadRequest, "provide at least one user in add or remove", "Bad Request");
+            shareRequest = _albumValidationService.ValidateShare(shareRequest);
 
             var album = await _albumRepository.GetAlbumByIdAsync(albumId);
             if (album is null || album.OwnerUsername != username)
@@ -58,28 +56,33 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Strips self, duplicates, and unknown usernames
             var validatedAdds = await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username);
-            var addRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
 
             var removeRecipients = shareRequest.Remove
                 .Where(u => currentRecipients.Contains(u, StringComparer.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var totalAfter = currentRecipients.Count + addRecipients.Count - removeRecipients.Count;
+            var newRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
+            var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
             if (totalAfter > MaxRecipientsPerAlbum)
                 return Error(HttpStatusCode.BadRequest,
                     $"albums can be shared with at most {MaxRecipientsPerAlbum} users", "Bad Request");
 
-            await _albumRepository.ShareAlbumAsync(album.Id, username, addRecipients, removeRecipients);
+            await _albumRepository.ShareAlbumAsync(album.Id, username, validatedAdds, removeRecipients,
+                shareRequest.Caption);
 
             var sharedWith = currentRecipients
                 .Except(removeRecipients, StringComparer.OrdinalIgnoreCase)
-                .Union(addRecipients, StringComparer.OrdinalIgnoreCase)
+                .Union(validatedAdds, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(u => u)
                 .ToList();
 
             var response = new ShareAlbumResponse { SharedWith = sharedWith };
             return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.ShareAlbumResponse));
+        }
+        catch (ArgumentException ex)
+        {
+            return Error(HttpStatusCode.BadRequest, ex.Message, "Bad Request");
         }
         catch (Exception ex)
         {

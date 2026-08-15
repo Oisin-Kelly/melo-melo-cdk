@@ -11,18 +11,16 @@ using Ports.Services;
 
 namespace GetTrackSegmentsLambda;
 
-public record TrackSegmentsResponse
+public record TrackStreamResponse
 {
-    [JsonPropertyName("urls")] public required List<string> Urls { get; set; }
+    [JsonPropertyName("url")] public required string Url { get; set; }
     [JsonPropertyName("expiresAt")] public required long ExpiresAt { get; set; }
     [JsonPropertyName("duration")] public required int Duration { get; set; }
 }
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    // Short-lived on purpose: presigned URLs leak into logs and browser history,
-    // and re-fetching them is one cheap call
-    private static readonly TimeSpan UrlExpiry = TimeSpan.FromHours(1);
+    private static readonly TimeSpan UrlExpiry = TimeSpan.FromHours(6);
 
     private readonly ITrackRepository _trackRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
@@ -37,7 +35,7 @@ public sealed class Function : BaseLambdaFunctionHandler
     }
 
     [LambdaFunction]
-    [HttpApi(LambdaHttpMethod.Get, "/tracks/{trackId}/segments")]
+    [HttpApi(LambdaHttpMethod.Get, "/tracks/{trackId}/stream")]
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(
         APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context,
@@ -58,15 +56,15 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (!hasAccess)
                 return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
-            var urls = await _audioService.GetSegmentUrlsAsync(track.Id, track.Segments, UrlExpiry);
+            var url = await _audioService.GetStreamUrlAsync(track.Id, UrlExpiry);
 
-            var response = new TrackSegmentsResponse
+            var response = new TrackStreamResponse
             {
-                Urls = urls,
+                Url = url,
                 ExpiresAt = DateTimeOffset.UtcNow.Add(UrlExpiry).ToUnixTimeMilliseconds(),
                 Duration = track.Duration,
             };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.TrackSegmentsResponse));
+            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.TrackStreamResponse));
         }
         catch (Exception ex)
         {

@@ -44,7 +44,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             // Direct shares, remaining album grants, likes, upload status, then the Track item
 
             await _albumRepository.RemoveTrackFromAllAlbumsAsync(username, track.Id);
-            await _audioService.DeleteSegmentsAsync(track.Id, track.Segments);
+            await _audioService.DeleteAudioAsync(track.Id);
 
             if (track.ImageUrl is not null)
                 await _imageService.DeleteImageAsync($"tracks/{track.Id}/cover_400x400.jpg");

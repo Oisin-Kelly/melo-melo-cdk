@@ -6,7 +6,7 @@ namespace GetTrackSegmentsLambda;
 
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyRequest))]
 [JsonSerializable(typeof(APIGatewayHttpApiV2ProxyResponse))]
-[JsonSerializable(typeof(TrackSegmentsResponse))]
+[JsonSerializable(typeof(TrackStreamResponse))]
 public partial class CustomJsonSerializerContext : JsonSerializerContext
 {
 }

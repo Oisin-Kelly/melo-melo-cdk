@@ -7,9 +7,9 @@ test.describe('GET /tracks/{trackId}', () => {
   });
 });
 
-test.describe('GET /tracks/{trackId}/segments', () => {
+test.describe('GET /tracks/{trackId}/stream', () => {
   test('returns 404 for a nonexistent track', async ({ apiContext }) => {
-    const res = await apiContext.get('/tracks/nonexistent-track-id/segments');
+    const res = await apiContext.get('/tracks/nonexistent-track-id/stream');
     expect(res.status()).toBe(404);
   });
 });

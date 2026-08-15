@@ -24,6 +24,10 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context)
     {
+        // sanity check, APIGateway already enforces congito authoriser
+        var (_, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
+
         var query = request.QueryStringParameters ?? new Dictionary<string, string>();
 
         query.TryGetValue("q", out var q);

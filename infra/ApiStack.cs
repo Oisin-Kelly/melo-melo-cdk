@@ -135,7 +135,7 @@ public class ApiStack : BaseStack
 
         HttpApi.AddRoutes(new AddRoutesOptions
         {
-            Path = "/tracks/{trackId}/segments",
+            Path = "/tracks/{trackId}/stream",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTrackSegments),
         });
@@ -145,6 +145,13 @@ public class ApiStack : BaseStack
             Path = "/tracks/shared",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTracksSharedWithUser),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/shared/{trackId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.RemoveSharedTrack),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -271,6 +278,13 @@ public class ApiStack : BaseStack
             Path = "/albums/shared",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetAlbumsSharedWithMe),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/albums/shared/{albumId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.RemoveSharedAlbum),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions

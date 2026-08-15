@@ -113,9 +113,9 @@ test.describe('POST /tracks/{trackId}/share', () => {
     const trackId = await uploadUnsharedTrack(apiContext, runId);
     expect(trackId, 'unshared track should be processed').not.toBeNull();
 
-    // Sanity: neither B nor C can access it yet (metadata or audio segments)
+    // Sanity: neither B nor C can access it yet (metadata or audio stream)
     expect((await apiContextB.get(`/tracks/${trackId}`)).status()).toBe(404);
-    expect((await apiContextB.get(`/tracks/${trackId}/segments`)).status()).toBe(404);
+    expect((await apiContextB.get(`/tracks/${trackId}/stream`)).status()).toBe(404);
     expect((await apiContextC.get(`/tracks/${trackId}`)).status()).toBe(404);
 
     // Share with B and C in one call
@@ -127,18 +127,41 @@ test.describe('POST /tracks/{trackId}/share', () => {
     expect(sharedWith).toContain(userB.username);
     expect(sharedWith).toContain(userC.username);
 
-    // Both now have access (metadata and audio segments)
+    // Both now have access (metadata and audio stream)
     expect((await apiContextB.get(`/tracks/${trackId}`)).status()).toBe(200);
-    expect((await apiContextB.get(`/tracks/${trackId}/segments`)).status()).toBe(200);
+    expect((await apiContextB.get(`/tracks/${trackId}/stream`)).status()).toBe(200);
     expect((await apiContextC.get(`/tracks/${trackId}`)).status()).toBe(200);
 
-    // Re-adding is idempotent
+    // Re-adding is an upsert (one entry, never a duplicate) — a no-caption re-share
+    // overwrites and so clears B's prior caption
     const reshare = await apiContext.post(`/tracks/${trackId}/share`, {
       data: { add: [userB.username] },
     });
     expect(reshare.status()).toBe(200);
     const resharedWith = (await reshare.json()).sharedWith;
     expect(resharedWith.filter((u: string) => u === userB.username)).toHaveLength(1);
+
+    const bAfterNoCaption = (await (await apiContextB.get('/tracks/shared?limit=100')).json()).items.find(
+      (s: { track: { id: string } }) => s.track.id === trackId,
+    );
+    expect(bAfterNoCaption, 'track still shared with B').toBeTruthy();
+    expect(bAfterNoCaption.caption).toBeUndefined();
+
+    // Re-share to B with a NEW caption → caption upserts for B (one entry, updated caption)
+    const recaption = await apiContext.post(`/tracks/${trackId}/share`, {
+      data: { add: [userB.username], caption: 'updated caption by e2e' },
+    });
+    expect(recaption.status()).toBe(200);
+
+    const bShared = await apiContextB.get('/tracks/shared?limit=100');
+    const bItems = (await bShared.json()).items.filter(
+      (s: { track: { id: string } }) => s.track.id === trackId,
+    );
+    expect(bItems, 'track appears exactly once in B shared list').toHaveLength(1);
+    expect(bItems[0].caption).toBe('updated caption by e2e');
+
+    // shareCount counts recipients, not share calls — re-shares to B never inflated it
+    expect((await (await apiContext.get(`/tracks/${trackId}`)).json()).shareCount).toBe(2);
 
     // Unsharing B revokes only B — C's access must survive
     const unshare = await apiContext.post(`/tracks/${trackId}/share`, {

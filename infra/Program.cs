@@ -23,6 +23,13 @@ namespace MeloMeloCdk
 
             var api = new ApiStack(app, $"api-stack-{env}", lambda.ApiFunctions, auth.UserPool, auth.UserPoolClient);
 
+            // web-stack bundles web/dist as an asset, so it can only exist when the frontend
+            // has been built — backend-only deploys and CI never build it and must still synth.
+            if (System.IO.Directory.Exists("web/dist"))
+                _ = new WebStack(app, $"web-stack-{env}");
+            else
+                System.Console.Error.WriteLine("web-stack skipped — web/dist missing; run scripts/deploy-web.sh to build and deploy the frontend");
+
             app.Synth();
         }
     }

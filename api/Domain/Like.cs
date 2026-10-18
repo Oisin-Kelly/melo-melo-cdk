@@ -12,6 +12,10 @@ public record TrackLiker
     public required long LikedAt { get; set; }
 }
 
+// A liked-track row: the summary plus when the viewer liked it. Not serialized as-is —
+// GetPlaylistLambda maps it to a PlaylistTrackEntry with addedAt = likedAt.
+public record LikedTrack(TrackSummary Track, long LikedAt);
+
 public record LikeDataModel
 {
     [DynamoDBHashKey("PK")]

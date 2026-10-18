@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports.Repositories;
@@ -112,12 +113,8 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
 
         var shareDelta = newCount - removedCount;
         if (shareDelta != 0)
-        {
-            var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
-            tx.AddSaveItem($"USER#{ownerUsername}", $"TRACK#{normalisedTrackId}",
-                CounterExpressions.Add(("shareCount", shareDelta)));
-            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
-        }
+            await _dynamoDbService.ExecuteTransactWriteAsync(
+                CreateShareCountUpdate(ownerUsername, normalisedTrackId, shareDelta));
     }
 
     // Recipient-side "remove from my library": drops only the direct share of this track with
@@ -132,22 +129,30 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
             $"TRACK#{normalisedTrackId}", $"SHARED#{username}");
         if (share is null) return;
 
-        var batch = _dynamoDbService.CreateBatchWritePart<SharedTrackDataModel>();
-        var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-        batch.AddDeleteKey($"TRACK#{normalisedTrackId}", $"SHARED#{username}");
+        // One transaction, guarded on the share still existing, so a concurrent double-remove
+        // decrements shareCount once
+        var shareTx = _dynamoDbService.CreateTransactionPart<SharedTrackDataModel>();
+        shareTx.AddDeleteKey($"TRACK#{normalisedTrackId}", $"SHARED#{username}", ConditionExpressions.ItemExists());
+        var feedTx = _dynamoDbService.CreateTransactionPart<FeedItemDataModel>();
         var (fpk, fsk) = FeedItems.Key(username, FeedItemType.Track, normalisedTrackId);
-        feedBatch.AddDeleteKey(fpk, fsk);
-        await _dynamoDbService.ExecuteBatchWriteAsync(batch, feedBatch);
+        feedTx.AddDeleteKey(fpk, fsk);
+
+        var parts = new List<ITransactWrite> { shareTx, feedTx };
 
         // shareCount tracks the number of direct-share records, so a self-removal must decrement
         // it (kept in sync with the re-share upsert, which counts a missing record as new).
         if (!string.IsNullOrEmpty(share.TrackOwnerUsername))
-        {
-            var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
-            tx.AddSaveItem($"USER#{share.TrackOwnerUsername}", $"TRACK#{normalisedTrackId}",
-                CounterExpressions.Add(("shareCount", -1)));
-            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
-        }
+            parts.Add(CreateShareCountUpdate(share.TrackOwnerUsername, normalisedTrackId, -1));
+
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
+    }
+
+    private ITransactWrite CreateShareCountUpdate(string ownerUsername, string normalisedTrackId, int delta)
+    {
+        var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
+        tx.AddSaveItem($"USER#{ownerUsername}", $"TRACK#{normalisedTrackId}",
+            CounterExpressions.Add(("shareCount", delta)));
+        return tx;
     }
 
     public async Task<List<Recipient>> GetTrackRecipientDetailsAsync(string trackId)

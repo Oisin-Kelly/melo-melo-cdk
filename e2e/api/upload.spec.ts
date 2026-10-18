@@ -38,12 +38,22 @@ test.describe('POST /tracks/upload — validation', () => {
     expect(res.status()).toBe(400);
   });
 
-  test('returns 400 when no file was uploaded at audioKey', async ({ apiContext }) => {
+  test('returns 400 when no file was uploaded at audioKey', async ({ apiContext, user }) => {
     const res = await apiContext.post('/tracks/upload', {
-      data: { name: 'Ghost file', audioKey: `e2e/nothing-here-${Date.now()}.mp3` },
+      data: { name: 'Ghost file', audioKey: `${user.username}/e2e/nothing-here-${Date.now()}.mp3` },
     });
     expect(res.status()).toBe(400);
     expect((await res.json()).message).toContain('No uploaded audio found');
+  });
+
+  test("returns 400 for another user's staged file", async ({ apiContextB }) => {
+    // Staged keys live under the uploader's prefix; using one from outside your own
+    // prefix is refused before the file is even looked up
+    const res = await apiContextB.post('/tracks/upload', {
+      data: { name: 'Not mine', audioKey: `someone-else/e2e/${Date.now()}.mp3` },
+    });
+    expect(res.status()).toBe(400);
+    expect((await res.json()).message).toContain('only use files you uploaded');
   });
 });
 
@@ -87,9 +97,7 @@ test.describe('POST /tracks/upload — full pipeline', () => {
 
     const runId = Date.now();
     const trackTitle = `E2E upload ${runId}`;
-    const audioKey = `e2e/${user.username}/${runId}${fixture!.extension}`;
-
-    await putToDropbox(apiContext, audioKey, fixture!.buffer, fixture!.contentType);
+    const audioKey = await putToDropbox(apiContext, `e2e/${runId}${fixture!.extension}`, fixture!.buffer, fixture!.contentType);
 
     // Kick off the upload pipeline, sharing with userB and userC
     const upload = await apiContext.post('/tracks/upload', {
@@ -152,10 +160,8 @@ test.describe('POST /tracks/upload — processing failures', () => {
     test.setTimeout(120_000);
 
     const runId = Date.now();
-    const audioKey = `e2e/${user.username}/${runId}-image.jpg`;
     const image = fs.readFileSync(path.join(__dirname, '../fixtures/assets/image.jpg'));
-
-    await putToDropbox(apiContext, audioKey, image, 'image/jpeg');
+    const audioKey = await putToDropbox(apiContext, `e2e/${runId}-image.jpg`, image, 'image/jpeg');
 
     const upload = await apiContext.post('/tracks/upload', {
       data: { name: `E2E image upload ${runId}`, audioKey },
@@ -178,11 +184,10 @@ test.describe('POST /tracks/upload — processing failures', () => {
     test.setTimeout(120_000);
 
     const runId = Date.now();
-    const audioKey = `e2e/${user.username}/${runId}-corrupted.wav`;
     const corrupted = fs.readFileSync(path.join(__dirname, '../fixtures/assets/corrupted.wav'));
 
     // Content-Type audio/wav passes the header check; ffmpeg then fails on the bytes
-    await putToDropbox(apiContext, audioKey, corrupted, 'audio/wav');
+    const audioKey = await putToDropbox(apiContext, `e2e/${runId}-corrupted.wav`, corrupted, 'audio/wav');
 
     const upload = await apiContext.post('/tracks/upload', {
       data: { name: `E2E corrupted upload ${runId}`, audioKey },

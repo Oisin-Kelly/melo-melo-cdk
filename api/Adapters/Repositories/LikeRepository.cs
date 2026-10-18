@@ -19,7 +19,8 @@ public sealed class LikeRepository : ILikeRepository
     {
         var normalisedTrackId = trackId.ToLowerInvariant();
 
-        // Read-before-write: liking twice must not double-increment likeCount
+        // Liking twice must not double-increment likeCount. The read is a fast path; the
+        // attribute_not_exists guard is what makes it safe against a concurrent double-like.
         var existing = await GetLikeAsync(normalisedTrackId, username);
         if (existing is not null)
             return;
@@ -27,7 +28,7 @@ public sealed class LikeRepository : ILikeRepository
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
-        likeTx.AddSaveItem(new LikeDataModel
+        _dynamoDbService.AddConditionalSave(likeTx, new LikeDataModel
         {
             Pk = $"TRACK#{normalisedTrackId}",
             Sk = $"LIKE#{username}",
@@ -36,13 +37,16 @@ public sealed class LikeRepository : ILikeRepository
             TrackOwnerUsername = trackOwnerUsername,
             Duration = duration,
             LikedAt = now,
-        });
-
-        var counterTx = CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1);
+        }, ConditionExpressions.ItemNotExists());
 
         var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
         playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
             CounterExpressions.Add(("trackCount", 1), ("totalDurationSeconds", duration)));
+
+        var parts = new List<ITransactWrite>
+        {
+            likeTx, CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1), playlistTx,
+        };
 
         // Notify the track owner — but never echo a self-like
         if (!string.Equals(username, trackOwnerUsername, StringComparison.OrdinalIgnoreCase))
@@ -50,11 +54,10 @@ public sealed class LikeRepository : ILikeRepository
             var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
             activityTx.AddSaveItem(ActivityItems.Build(trackOwnerUsername, ActivityType.TrackLiked, username,
                 FeedItemType.Track, normalisedTrackId, now));
-            await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx, activityTx);
-            return;
+            parts.Add(activityTx);
         }
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
 
     public async Task UnlikeTrackAsync(string trackId, string username, string trackOwnerUsername)
@@ -66,7 +69,7 @@ public sealed class LikeRepository : ILikeRepository
             return;
 
         var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
-        likeTx.AddDeleteItem(existing);
+        likeTx.AddDeleteKey(existing.Pk, existing.Sk, ConditionExpressions.ItemExists());
 
         var counterTx = CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, -1);
 
@@ -74,7 +77,7 @@ public sealed class LikeRepository : ILikeRepository
         playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
             CounterExpressions.Add(("trackCount", -1), ("totalDurationSeconds", -(long)existing.Duration)));
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
     }
 
     public async Task<bool> IsTrackLikedByUserAsync(string trackId, string username)
@@ -82,7 +85,7 @@ public sealed class LikeRepository : ILikeRepository
         return await GetLikeAsync(trackId.ToLowerInvariant(), username) is not null;
     }
 
-    public async Task<PaginatedResult<TrackSummary>> GetLikedTracksAsync(string username, int pageSize, string? cursor)
+    public async Task<PaginatedResult<LikedTrack>> GetLikedTracksAsync(string username, int pageSize, string? cursor)
     {
         var (likes, nextToken) = await _dynamoDbService.QueryPaginatedAsync<LikeDataModel>(
             hashKey: $"LIKES#{username}",
@@ -95,7 +98,7 @@ public sealed class LikeRepository : ILikeRepository
         );
 
         if (likes.Count == 0)
-            return new PaginatedResult<TrackSummary> { Items = [], NextCursor = null };
+            return new PaginatedResult<LikedTrack> { Items = [], NextCursor = null };
 
         var trackRefs = likes
             .Select(l => (l.TrackId, l.TrackOwnerUsername))
@@ -105,11 +108,11 @@ public sealed class LikeRepository : ILikeRepository
             _dynamoDbService, trackRefs, username, allLiked: true);
 
         var tracks = likes
-            .Select(l => tracksById.GetValueOrDefault(l.TrackId))
-            .OfType<TrackSummary>()
+            .Select(l => tracksById.GetValueOrDefault(l.TrackId) is { } track ? new LikedTrack(track, l.LikedAt) : null)
+            .OfType<LikedTrack>()
             .ToList();
 
-        return new PaginatedResult<TrackSummary> { Items = tracks, NextCursor = nextToken };
+        return new PaginatedResult<LikedTrack> { Items = tracks, NextCursor = nextToken };
     }
 
     public async Task<PaginatedResult<TrackLiker>> GetTrackLikersAsync(string trackId, int pageSize, string? cursor)
@@ -153,7 +156,7 @@ public sealed class LikeRepository : ILikeRepository
     private ITransactWrite CreateLikeCountUpdate(string normalisedTrackId, string trackOwnerUsername, int delta)
     {
         var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
-        
+
         tx.AddSaveItem(
             $"USER#{trackOwnerUsername}",
             $"TRACK#{normalisedTrackId}",

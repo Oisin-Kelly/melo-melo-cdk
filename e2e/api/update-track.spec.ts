@@ -10,10 +10,10 @@ async function uploadUnsharedTrack(
   if (!fixture) return null;
 
   const trackTitle = `E2E update track ${runId}`;
-  const audioKey = `e2e/update-track/${runId}${fixture.extension}`;
+  const requestedKey = `e2e/update-track/${runId}${fixture.extension}`;
 
-  const presign = await apiContext.get(`/buckets/dropbox?key=${encodeURIComponent(audioKey)}`);
-  const { url } = await presign.json();
+  const presign = await apiContext.get(`/buckets/dropbox?key=${encodeURIComponent(requestedKey)}`);
+  const { url, key: audioKey } = await presign.json();
 
   await fetch(url, {
     method: 'PUT',

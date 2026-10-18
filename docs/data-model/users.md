@@ -18,14 +18,15 @@ Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city
 
 ### Follow Relationship
 
-| PK | SK | GSI1PK | GSI1SK |
-|----|-----|--------|--------|
-| `FOLLOW#{usernameBeingFollowed}` | `USER#{followerUsername}#{epochMs}` | `FOLLOWING#{followerUsername}` | `DATE#{epochMs}#TARGET#{usernameBeingFollowed}` |
+| PK | SK | GSI1PK | GSI1SK | GSI3PK | GSI3SK |
+|----|-----|--------|--------|--------|--------|
+| `FOLLOW#{usernameBeingFollowed}` | `USER#{followerUsername}` | `FOLLOWING#{followerUsername}` | `DATE#{epochMs}#TARGET#{usernameBeingFollowed}` | `FOLLOWERS#{usernameBeingFollowed}` | `DATE#{epochMs}#USER#{followerUsername}` |
 
-Attributes: `createdAt`
+Attributes: `createdAt` (= `epochMs`)
 
-SK includes epoch timestamp for chronological sorting on base table (newest followers first).
-GSI1SK includes epoch timestamp for chronological sorting in GSI1 (newest followings first).
+The base-table SK is deterministic — one row per (target × follower) — so follow/unfollow are keyed `GetItem`s and a double-follow is cancelled by an `attribute_not_exists` guard instead of writing a duplicate row. Date order lives in the indexes: GSI1 lists a user's followings newest-first, GSI3 their followers newest-first.
+
+> Key format changed 2026-10-16 (SK used to be `USER#{follower}#{epochMs}`, no GSI3 keys). Rows in the old format aren't found by the new reads — dev follow rows were wiped rather than migrated.
 
 ---
 
@@ -49,7 +50,7 @@ GSI1SK includes epoch timestamp for chronological sorting in GSI1 (newest follow
 ### User APIs
 
 #### `POST /profile/update` — UpdateUserProfileLambda
-1. If `imageKey` provided: fetch image from S3 Dropbox bucket, resize to 400x400, upload to Public bucket as `users/{username}/profile_400x400.jpg`, extract dominant color
+1. If `imageKey` provided: must be staged under the caller's prefix (`{username}/…`, else 400); fetch image from S3 Dropbox bucket, resize to 400x400, upload to Public bucket as `users/{username}/profile_400x400.jpg`, extract dominant color
 2. `TransactWrite` with `UpdateExpression` on `PK=USER#{username}, SK=PROFILE`
    - Uses `SET` for provided fields, `REMOVE` for cleared fields (`UpdateExpressionBuilder` generates the expression dynamically)
    - `incomingShares` is only written when present in the request (omitted/null leaves it unchanged, unlike the other fields)
@@ -69,7 +70,7 @@ GSI1SK includes epoch timestamp for chronological sorting in GSI1 (newest follow
 ### Follow APIs
 
 #### `GET /users/{username}/follow-status` — IsFollowingUserLambda
-1. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → `{followStatus: bool, createdAt}` (1 item max)
+1. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → `{followStatus: bool, createdAt}`
 
 #### `POST /users/{username}/follow-user` — FollowUserLambda
 Request body: `{newValue: true|false}`
@@ -77,30 +78,30 @@ Request body: `{newValue: true|false}`
 **Follow** (`newValue: true`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
 2. **TransactWrite** (3 parts, atomic; **4 parts** when not a self-follow):
-   - `Save` follow record: `PK=FOLLOW#{username}, SK=USER#{requestor}#{epochMs}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}`
+   - `Save` follow record, guarded `attribute_not_exists(PK)` via `AddConditionalSave` (a concurrent double-follow cancels the whole transaction — counters and activity included): `PK=FOLLOW#{username}, SK=USER#{requestor}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}, GSI3PK=FOLLOWERS#{username}, GSI3SK=DATE#{epochMs}#USER#{requestor}`
    - `Update` target user: `ADD followerCount :1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :1` on `PK=USER#{requestor}, SK=PROFILE`
    - `Save` `USER_FOLLOWED` activity for the followed user (skipped on a self-follow): `PK=ACTIVITY#{username}, SK=DATE#{epochMs}#FOLLOW#{requestor}` — deterministic SK (same `epochMs` stored as the follow record's `createdAt`) so unfollow can delete it. See [activity.md](activity.md).
 
 **Unfollow** (`newValue: false`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. `Query(PK=FOLLOW#{username}, SK begins_with USER#{requestor}#)` → find exact follow record SK + `createdAt` (timestamp unknown at unfollow time); no-op if absent
+2. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → follow record + its `createdAt` (for the activity key); no-op if absent
 3. **TransactWrite** (3 parts, atomic; **4 parts** when the follow record has a `createdAt` and isn't a self-follow):
-   - `Delete` follow record using exact PK+SK from step 2
+   - `Delete` follow record, guarded `attribute_exists(PK)` (all parts run via `TryExecuteTransactWriteAsync`, so a concurrent double-unfollow decrements once)
    - `Update` target user: `ADD followerCount :-1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :-1` on `PK=USER#{requestor}, SK=PROFILE`
    - `DeleteKey` the `USER_FOLLOWED` activity: `PK=ACTIVITY#{username}, SK=DATE#{createdAt}#FOLLOW#{requestor}` — reconstructed from the follow record's `createdAt` (pre-existing records lacking it skip cleanly; a keyed delete of a missing item is a harmless no-op)
 
 #### `GET /users/{username}/followers` — GetUserFollowersLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followersPrivate` flag
-2. `Query(PK=FOLLOW#{username}, SK begins_with USER#, Limit=10, ScanIndexForward=false, cursor)` → paginated follow records newest-first
-3. Extract follower username from SK: `USER#{followerUsername}#{epochMs}` → `split('#')[1]`
-4. `BatchGet` each follower's profile → returns `PaginatedResult<UserSummary>`
+2. `Query(GSI3, GSI3PK=FOLLOWERS#{username}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated follow records newest-first
+3. Extract follower username from SK: `USER#{followerUsername}`
+4. `BatchGet` the (deduped) follower profiles, re-ordered to match the page → returns `PaginatedResult<UserSummary>`
 
 #### `GET /users/{username}/followings` — GetUserFollowingLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followingsPrivate` flag
 2. `Query(GSI1, GSI1PK=FOLLOWING#{username}, GSI1SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated following records newest-first
 3. Extract followed username from GSI1SK: `DATE#{epochMs}#TARGET#{targetUsername}` → `split("#TARGET#")[1]`
-4. `BatchGet` each followed user's profile → returns `PaginatedResult<UserSummary>`
+4. `BatchGet` the (deduped) followed users' profiles, re-ordered to match the page → returns `PaginatedResult<UserSummary>`
 
 > The `incomingShares` setting is enforced when validating share recipients — see [tracks.md](tracks.md) and [albums.md](albums.md).

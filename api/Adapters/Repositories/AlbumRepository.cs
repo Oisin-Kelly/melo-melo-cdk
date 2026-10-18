@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports.Repositories;
@@ -30,11 +31,11 @@ public sealed class AlbumRepository : IAlbumRepository
             return new PaginatedResult<AlbumSummary> { Items = [], NextCursor = null };
 
         var ownerTask = _dynamoDbService.GetFromDynamoAsync<UserDataModel>($"USER#{ownerUsername}", "PROFILE");
-        
+
         // likedAlbumIdsTask is for checking if the user's own album is liked by themselves
         var likedAlbumIdsTask = AlbumLikeRepository.GetLikedAlbumIdsAsync(
             _dynamoDbService, ownerUsername, items.Select(i => i.AlbumId).ToList());
-        
+
         await Task.WhenAll(ownerTask, likedAlbumIdsTask);
 
         var owner = ownerTask.Result;
@@ -309,14 +310,16 @@ public sealed class AlbumRepository : IAlbumRepository
             "ALBUM#",
             QueryOperator.BeginsWith);
 
-        foreach (var album in albums)
-        {
-            var membership = await _dynamoDbService.GetFromDynamoAsync<AlbumTrackDataModel>(
-                $"ALBUM#{album.AlbumId}", $"TRACK#{normalisedTrackId}");
+        if (albums.Count == 0)
+            return;
 
-            if (membership is not null)
-                await RemoveTracksAsync(album.AlbumId, ownerUsername, [normalisedTrackId]);
-        }
+        // One BatchGet probes every album's membership key at once (album ids are unique,
+        // so no duplicate keys); only the albums that actually contain the track are touched
+        var memberships = await _dynamoDbService.BatchGetAsync<AlbumTrackDataModel>(
+            albums.Select(a => (pk: $"ALBUM#{a.AlbumId}", sk: $"TRACK#{normalisedTrackId}")));
+
+        foreach (var membership in memberships)
+            await RemoveTracksAsync(membership.Pk.Replace("ALBUM#", ""), ownerUsername, [normalisedTrackId]);
     }
 
     // Track deletion path only — API-driven removals go through SetTracksAsync
@@ -380,13 +383,22 @@ public sealed class AlbumRepository : IAlbumRepository
             .Where(r => !existingByRecipient.ContainsKey(r))
             .ToList();
 
-        if (removeRecipients.Count > 0)
+        // Resolve removals to the stored recipient spelling: keys are case-sensitive, so
+        // deleting with the request's casing ("bob" for a stored "Bob") would miss every
+        // record while still counting as removed. Non-recipients drop out here too.
+        var removes = removeRecipients
+            .Select(r => existingByRecipient.GetValueOrDefault(r)?.Recipient)
+            .OfType<string>()
+            .Distinct()
+            .ToList();
+
+        if (removes.Count > 0)
         {
-            await DeleteGrantsAsync(trackIds, removeRecipients, normalisedId);
+            await DeleteGrantsAsync(trackIds, removes, normalisedId);
 
             var removeBatch = _dynamoDbService.CreateBatchWritePart<AlbumShareDataModel>();
             var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-            foreach (var recipient in removeRecipients)
+            foreach (var recipient in removes)
             {
                 removeBatch.AddDeleteKey($"ALBUM#{normalisedId}", $"SHARED#{recipient}");
                 var (fpk, fsk) = FeedItems.Key(recipient, FeedItemType.Album, normalisedId);
@@ -425,7 +437,7 @@ public sealed class AlbumRepository : IAlbumRepository
             await _dynamoDbService.ExecuteBatchWriteAsync(addBatch, feedBatch, activityBatch);
         }
 
-        var shareDelta = newRecipients.Count - removeRecipients.Count;
+        var shareDelta = newRecipients.Count - removes.Count;
         if (shareDelta != 0)
             await UpdateAlbumCountersAsync(ownerUsername, normalisedId, ("shareCount", shareDelta));
     }
@@ -447,17 +459,20 @@ public sealed class AlbumRepository : IAlbumRepository
         var trackIds = await GetAlbumTrackIdsAsync(normalisedId);
         await DeleteGrantsAsync(trackIds, [username], normalisedId);
 
-        var shareBatch = _dynamoDbService.CreateBatchWritePart<AlbumShareDataModel>();
-        var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-        shareBatch.AddDeleteKey($"ALBUM#{normalisedId}", $"SHARED#{username}");
+        var shareTx = _dynamoDbService.CreateTransactionPart<AlbumShareDataModel>();
+        shareTx.AddDeleteKey($"ALBUM#{normalisedId}", $"SHARED#{username}", ConditionExpressions.ItemExists());
+        var feedTx = _dynamoDbService.CreateTransactionPart<FeedItemDataModel>();
         var (fpk, fsk) = FeedItems.Key(username, FeedItemType.Album, normalisedId);
-        feedBatch.AddDeleteKey(fpk, fsk);
-        await _dynamoDbService.ExecuteBatchWriteAsync(shareBatch, feedBatch);
+        feedTx.AddDeleteKey(fpk, fsk);
+
+        var parts = new List<ITransactWrite> { shareTx, feedTx };
 
         // shareCount tracks the number of album-share records, so a self-removal decrements it
         // (kept in sync with the re-share upsert, which counts a missing record as new).
         if (!string.IsNullOrEmpty(share.AlbumOwnerUsername))
-            await UpdateAlbumCountersAsync(share.AlbumOwnerUsername, normalisedId, ("shareCount", -1));
+            parts.Add(CreateAlbumCounterUpdate(share.AlbumOwnerUsername, normalisedId, ("shareCount", -1)));
+
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
 
     public async Task<List<Recipient>> GetAlbumRecipientDetailsAsync(string albumId)
@@ -549,17 +564,17 @@ public sealed class AlbumRepository : IAlbumRepository
 
         var batch = _dynamoDbService.CreateBatchWritePart<AlbumTrackGrantDataModel>();
         foreach (var trackId in trackIds)
-        foreach (var recipient in recipients)
-        {
-            batch.AddPutItem(new AlbumTrackGrantDataModel
+            foreach (var recipient in recipients)
             {
-                Pk = $"TRACK#{trackId.ToLowerInvariant()}",
-                Sk = AlbumTrackGrantDataModel.BuildSk(recipient, normalisedAlbumId),
-                TrackOwnerUsername = trackOwnerUsername,
-                AlbumId = normalisedAlbumId,
-                GrantedAt = now,
-            });
-        }
+                batch.AddPutItem(new AlbumTrackGrantDataModel
+                {
+                    Pk = $"TRACK#{trackId.ToLowerInvariant()}",
+                    Sk = AlbumTrackGrantDataModel.BuildSk(recipient, normalisedAlbumId),
+                    TrackOwnerUsername = trackOwnerUsername,
+                    AlbumId = normalisedAlbumId,
+                    GrantedAt = now,
+                });
+            }
 
         return _dynamoDbService.ExecuteBatchWriteAsync(batch);
     }
@@ -572,26 +587,26 @@ public sealed class AlbumRepository : IAlbumRepository
 
         var batch = _dynamoDbService.CreateBatchWritePart<AlbumTrackGrantDataModel>();
         foreach (var trackId in trackIds)
-        foreach (var recipient in recipients)
-        {
-            batch.AddDeleteKey($"TRACK#{trackId.ToLowerInvariant()}",
-                AlbumTrackGrantDataModel.BuildSk(recipient, normalisedAlbumId));
-        }
+            foreach (var recipient in recipients)
+            {
+                batch.AddDeleteKey($"TRACK#{trackId.ToLowerInvariant()}",
+                    AlbumTrackGrantDataModel.BuildSk(recipient, normalisedAlbumId));
+            }
 
         return _dynamoDbService.ExecuteBatchWriteAsync(batch);
     }
 
     private static AlbumTrackDataModel BuildMembership(string normalisedAlbumId, string trackId,
         string ownerUsername, long now, int rank, int duration) => new()
-    {
-        Pk = $"ALBUM#{normalisedAlbumId}",
-        Sk = $"TRACK#{trackId.ToLowerInvariant()}",
-        Gsi1Pk = $"ALBUM#{normalisedAlbumId}",
-        Gsi1Sk = MembershipRank.ToSortKey(rank),
-        TrackOwnerUsername = ownerUsername,
-        Duration = duration,
-        AddedAt = now,
-    };
+        {
+            Pk = $"ALBUM#{normalisedAlbumId}",
+            Sk = $"TRACK#{trackId.ToLowerInvariant()}",
+            Gsi1Pk = $"ALBUM#{normalisedAlbumId}",
+            Gsi1Sk = MembershipRank.ToSortKey(rank),
+            TrackOwnerUsername = ownerUsername,
+            Duration = duration,
+            AddedAt = now,
+        };
 
     private async Task<Dictionary<string, int>> GetTrackDurationsAsync(string ownerUsername,
         IReadOnlyList<string> trackIds)
@@ -624,11 +639,15 @@ public sealed class AlbumRepository : IAlbumRepository
     }
 
     private Task UpdateAlbumCountersAsync(string ownerUsername, string normalisedAlbumId,
+        params (string Attribute, long Delta)[] deltas) =>
+        _dynamoDbService.ExecuteTransactWriteAsync(CreateAlbumCounterUpdate(ownerUsername, normalisedAlbumId, deltas));
+
+    private ITransactWrite CreateAlbumCounterUpdate(string ownerUsername, string normalisedAlbumId,
         params (string Attribute, long Delta)[] deltas)
     {
         var tx = _dynamoDbService.CreateTransactionPart<AlbumDataModel>();
         tx.AddSaveItem($"USER#{ownerUsername}", $"ALBUM#{normalisedAlbumId}", CounterExpressions.Add(deltas));
-        return _dynamoDbService.ExecuteTransactWriteAsync(tx);
+        return tx;
     }
 
     private static Album ToAlbum(AlbumDataModel item, User? owner = null) => new()

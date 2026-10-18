@@ -50,7 +50,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (updateRequest.ImageKey is not null)
             {
                 image = await _imageService.ProcessImageAsync(
-                    updateRequest.ImageKey,
+                    username, updateRequest.ImageKey,
                     $"tracks/{track.Id}/cover_400x400.jpg",
                     400,
                     400

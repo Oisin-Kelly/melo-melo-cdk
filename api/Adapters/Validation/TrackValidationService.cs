@@ -110,8 +110,10 @@ public sealed class TrackValidationService : ITrackValidationService
         throw new ArgumentException(string.Join(" ", result.Errors.Select(x => x.ErrorMessage)));
     }
 
-    public async Task ValidateUploadedAudioAsync(string audioKey)
+    public async Task ValidateUploadedAudioAsync(string audioKey, string ownerUsername)
     {
+        DropboxKeys.EnsureOwnedBy(audioKey, ownerUsername);
+
         try
         {
             var metadata = await _dropboxS3Service.GetObjectMetadata(audioKey);

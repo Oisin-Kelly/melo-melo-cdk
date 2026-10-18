@@ -34,8 +34,8 @@ public class StepFunctionStack : BaseStack
         });
         ffprobeLayer.ApplyRemovalPolicy(DeletionPolicy);
 
-        // 1792MB = one full vCPU — the lame encode is single-threaded and CPU-bound,
-        // so this ~1.75×es encode speed; more memory adds cores lame can't use
+        // 1792MB = one full vCPU — ffmpeg's native AAC encode is effectively single-threaded
+        // and CPU-bound, so this ~1.75×es encode speed; more memory adds cores it can't use
         var processTrackFunction = CreateAotFunction("Track/ProcessTrackLambda", table, dropboxBucket,
             publicReadonlyBucket, privateReadonlyBucket, memorySize: 1792, timeout: Duration.Minutes(15),
             layers: [ffmpegLayer, ffprobeLayer], ephemeralStorage: Size.Gibibytes(10));

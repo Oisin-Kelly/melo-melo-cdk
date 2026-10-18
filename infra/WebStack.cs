@@ -83,7 +83,7 @@ public class WebStack : BaseStack
         // never cache, and invalidate CloudFront so new deploys go live immediately.
         // Both Prune=false: with Exclude-based splits, pruning would delete the other
         // deployment's files.
-        new BucketDeployment(this, "DeployAssets", new BucketDeploymentProps
+        var deployAssets = new BucketDeployment(this, "DeployAssets", new BucketDeploymentProps
         {
             Sources = [Source.Asset("web/dist")],
             DestinationBucket = bucket,
@@ -92,7 +92,7 @@ public class WebStack : BaseStack
             Prune = false,
         });
 
-        new BucketDeployment(this, "DeployIndex", new BucketDeploymentProps
+        var deployIndex = new BucketDeployment(this, "DeployIndex", new BucketDeploymentProps
         {
             Sources = [Source.Asset("web/dist")],
             DestinationBucket = bucket,
@@ -103,6 +103,11 @@ public class WebStack : BaseStack
             DistributionPaths = ["/*"],
             Prune = false,
         });
+
+        // index.html points at the new hashed assets, so it may only go live (and invalidate
+        // CloudFront) once they're uploaded — otherwise browsers briefly load an index whose
+        // scripts 403 → SPA fallback → HTML-as-JS → blank page
+        deployIndex.Node.AddDependency(deployAssets);
 
         if (isProd)
         {

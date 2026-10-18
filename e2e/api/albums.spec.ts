@@ -11,10 +11,10 @@ async function uploadUnsharedTrack(
   if (!fixture) return null;
 
   const trackTitle = `E2E album track ${runId}`;
-  const audioKey = `e2e/albums/${runId}${fixture.extension}`;
+  const requestedKey = `e2e/albums/${runId}${fixture.extension}`;
 
-  const presign = await apiContext.get(`/buckets/dropbox?key=${encodeURIComponent(audioKey)}`);
-  const { url } = await presign.json();
+  const presign = await apiContext.get(`/buckets/dropbox?key=${encodeURIComponent(requestedKey)}`);
+  const { url, key: audioKey } = await presign.json();
 
   await fetch(url, {
     method: 'PUT',
@@ -178,6 +178,54 @@ test.describe('Album sharing grants track access', () => {
     // The owner still has the track — only derived access was revoked
     expect((await apiContext.get(`/tracks/${trackId}`)).status()).toBe(200);
   });
+
+  // Removal keys are rebuilt from the stored recipient, so the request's casing must not
+  // matter: a remove that matched case-insensitively but deleted nothing would leave B
+  // with access while still decrementing shareCount.
+  test('unshare with different username casing still revokes access', async ({
+    apiContext,
+    apiContextB,
+    userB,
+  }) => {
+    test.skip(!findAudioFixture(), 'No audio fixture — add e2e/fixtures/assets/sample.mp3');
+    test.setTimeout(300_000);
+
+    const runId = Date.now();
+    const trackId = await uploadUnsharedTrack(apiContext, runId);
+    expect(trackId, 'unshared track should be processed').not.toBeNull();
+
+    const create = await apiContext.post('/albums', {
+      data: { name: `E2E unshare casing ${runId}`, trackIds: [trackId] },
+    });
+    expect(create.status()).toBe(201);
+    const album = await create.json();
+
+    try {
+      expect(
+        (await apiContext.post(`/albums/${album.id}/share`, { data: { add: [userB.username] } })).status()
+      ).toBe(200);
+      expect((await apiContextB.get(`/tracks/${trackId}`)).status()).toBe(200);
+
+      const differentCase = userB.username.toUpperCase();
+      expect(differentCase, 'test needs a username with letters').not.toBe(userB.username);
+
+      const unshare = await apiContext.post(`/albums/${album.id}/share`, {
+        data: { remove: [differentCase] },
+      });
+      expect(unshare.status()).toBe(200);
+      expect((await unshare.json()).sharedWith).not.toContain(userB.username);
+
+      // Access is actually gone (album + derived track grant), and the count agrees
+      expect((await apiContextB.get(`/albums/${album.id}`)).status()).toBe(404);
+      expect((await apiContextB.get(`/tracks/${trackId}`)).status()).toBe(404);
+      const recipients = await (await apiContext.get(`/albums/${album.id}/recipients`)).json();
+      expect(recipients.items).toHaveLength(0);
+      expect((await (await apiContext.get(`/albums/${album.id}`)).json()).album.shareCount).toBe(0);
+    } finally {
+      await apiContext.delete(`/albums/${album.id}`);
+      await apiContext.delete(`/tracks/${trackId}`);
+    }
+  });
 });
 
 test.describe('Album cover images', () => {
@@ -185,8 +233,7 @@ test.describe('Album cover images', () => {
     apiContext,
   }) => {
     const runId = Date.now();
-    const imageKey = `e2e/albums/${runId}-cover.jpg`;
-    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+    const imageKey = await putToDropbox(apiContext, `e2e/albums/${runId}-cover.jpg`, readImageFixture(), 'image/jpeg');
 
     const create = await apiContext.post('/albums', {
       data: { name: `E2E album cover ${runId}`, imageKey },
@@ -209,8 +256,7 @@ test.describe('Album cover images', () => {
   test('returns 400 when the staged object is not an image', async ({ apiContext }) => {
     const runId = Date.now();
     // Image bytes uploaded under an audio content type — ImageService rejects on content type
-    const imageKey = `e2e/albums/${runId}-not-image.wav`;
-    await putToDropbox(apiContext, imageKey, readImageFixture(), 'audio/wav');
+    const imageKey = await putToDropbox(apiContext, `e2e/albums/${runId}-not-image.wav`, readImageFixture(), 'audio/wav');
 
     const create = await apiContext.post('/albums', {
       data: { name: `E2E album bad cover ${runId}`, imageKey },

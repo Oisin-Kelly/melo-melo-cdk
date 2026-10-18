@@ -29,6 +29,20 @@ public class StorageStack : BaseStack
                 {
                     Expiration = Duration.Days(1)
                 }
+            ],
+            // The web app PUTs uploads straight to presigned URLs, which the browser preflights.
+            // CORS isn't the access control here (the presigned signature is), so non-prod allows
+            // any origin (localhost dev server + the dev CloudFront domain, which this stack can't
+            // reference without a cycle); prod is pinned to the app's domain.
+            Cors =
+            [
+                new CorsRule
+                {
+                    AllowedMethods = [HttpMethods.PUT],
+                    AllowedOrigins = Env == "prod" ? ["https://melomelo.app"] : ["*"],
+                    AllowedHeaders = ["*"],
+                    MaxAge = 3000,
+                }
             ]
         });
 

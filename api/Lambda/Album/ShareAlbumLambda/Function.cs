@@ -54,8 +54,13 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var currentRecipients = await _albumRepository.GetAlbumRecipientsAsync(album.Id);
 
-            // Strips self, duplicates, and unknown usernames
-            var validatedAdds = await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username);
+            // Strips self, duplicates, and unknown usernames. A user in both add and remove is
+            // contradictory — remove wins, and that's decided here (against the raw remove list)
+            // so the recipient cap and the sharedWith response agree with what gets written.
+            var removeRequested = new HashSet<string>(shareRequest.Remove, StringComparer.OrdinalIgnoreCase);
+            var validatedAdds = (await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username))
+                .Where(u => !removeRequested.Contains(u))
+                .ToList();
 
             var removeRecipients = shareRequest.Remove
                 .Where(u => currentRecipients.Contains(u, StringComparer.OrdinalIgnoreCase))

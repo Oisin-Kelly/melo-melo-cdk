@@ -1,7 +1,9 @@
 import { defineConfig } from '@playwright/test';
 import 'dotenv/config';
 
-const MUTATING_SPEC = '**/sharing-permissions.spec.ts';
+// Specs asserting on a shared test user's global/aggregate state run after the parallel
+// `api` project (see the api-mutating project below)
+const MUTATING_SPEC = ['**/sharing-permissions.spec.ts', '**/shared-user-state.spec.ts'];
 
 export default defineConfig({
   timeout: 30_000,

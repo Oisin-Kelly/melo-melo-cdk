@@ -30,7 +30,7 @@ public sealed class Function
 
         try
         {
-            var imageTask = ProcessImageAsync(input.ImageKey, trackId);
+            var imageTask = ProcessImageAsync(input.Username, input.ImageKey, trackId);
             var audioTask = _audioService.ProcessAudioAsync(input.AudioKey!, trackId);
             await Task.WhenAll(imageTask, audioTask);
 
@@ -54,11 +54,12 @@ public sealed class Function
         }
     }
 
-    private async Task<ImageProcessingResult?> ProcessImageAsync(string? imageKey, string trackId)
+    private async Task<ImageProcessingResult?> ProcessImageAsync(string username, string? imageKey, string trackId)
     {
         if (imageKey is null) return null;
 
         return await _imageService.ProcessImageAsync(
+            username,
             imageKey,
             $"tracks/{trackId}/cover_400x400.jpg",
             400,

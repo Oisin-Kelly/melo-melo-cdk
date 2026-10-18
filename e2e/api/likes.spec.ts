@@ -29,6 +29,7 @@ test.describe('Track likes', () => {
     expect(grantC.status()).toBe(200);
 
     // B and C both like the track
+    const beforeLike = Date.now();
     for (const ctx of [apiContextB, apiContextC]) {
       const like = await ctx.post(`/tracks/${trackId}/like`, { data: { newValue: true } });
       expect(like.status()).toBe(200);
@@ -56,6 +57,12 @@ test.describe('Track likes', () => {
     const likesPlaylistBody = await likesPlaylist.json();
     expect(likesPlaylistBody.playlist.type).toBe('LIKES');
     expect(likesPlaylistBody.tracks.items.map((e: { trackId: string }) => e.trackId)).toContain(trackId);
+
+    // addedAt on a likes-playlist entry is when it was liked (not when the track was created —
+    // the persistent track is from an earlier run). A minute's slack covers local/Lambda clock skew.
+    const likedEntry = likesPlaylistBody.tracks.items.find((e: { trackId: string }) => e.trackId === trackId);
+    expect(likedEntry.addedAt).toBeGreaterThanOrEqual(beforeLike - 60_000);
+    expect(likedEntry.addedAt).toBeLessThanOrEqual(Date.now() + 60_000);
 
     // Double-like is idempotent — count unchanged
     await apiContextB.post(`/tracks/${trackId}/like`, { data: { newValue: true } });

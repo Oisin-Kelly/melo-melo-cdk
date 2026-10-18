@@ -49,7 +49,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (updateRequest.ImageKey is not null)
             {
                 image = await _imageService.ProcessImageAsync(
-                    updateRequest.ImageKey, $"albums/{album.Id}/cover_400x400.jpg", 400, 400);
+                    username, updateRequest.ImageKey, $"albums/{album.Id}/cover_400x400.jpg", 400, 400);
             }
 
             var updated = await _albumRepository.UpdateAlbumAsync(

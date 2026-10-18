@@ -95,7 +95,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         if (updateProfileRequest.ImageKey is not null)
         {
             imageProcessingResult = await _imageService.ProcessImageAsync(
-                updateProfileRequest.ImageKey,
+                username, updateProfileRequest.ImageKey,
                 $"users/{username}/profile_400x400.jpg",
                 400,
                 400

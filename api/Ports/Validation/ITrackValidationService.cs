@@ -12,7 +12,8 @@ public interface ITrackValidationService
     /// Sanitises and validates in place. Throws ArgumentException with a user-safe message.
     ShareTrackRequest ValidateShare(ShareTrackRequest request);
 
-    /// Checks the uploaded audio file exists in the dropbox bucket and is within the
-    /// size limit. Throws ArgumentException (user-safe message) otherwise.
-    Task ValidateUploadedAudioAsync(string audioKey);
+    /// Checks the uploaded audio file was staged by `ownerUsername` (see DropboxKeys),
+    /// exists in the dropbox bucket and is within the size limit. Throws
+    /// ArgumentException (user-safe message) otherwise.
+    Task ValidateUploadedAudioAsync(string audioKey, string ownerUsername);
 }

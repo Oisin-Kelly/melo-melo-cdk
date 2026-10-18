@@ -105,7 +105,7 @@ public abstract class BaseStack : Stack
             },
             Layers = layers,
         });
-        
+
         function.ApplyRemovalPolicy(DeletionPolicy);
         return function;
     }

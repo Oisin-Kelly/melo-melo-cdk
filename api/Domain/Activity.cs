@@ -56,6 +56,8 @@ public record ActivityItemDataModel
 
 public static class ActivityItems
 {
+    // `now` must be the exact value written as the triggering record's likedAt/sharedAt:
+    // GET /activity only shows a like/share row whose relationship timestamp equals createdAt.
     public static ActivityItemDataModel Build(string recipient, string type, string actorUsername,
         string targetType, string targetId, long now)
     {

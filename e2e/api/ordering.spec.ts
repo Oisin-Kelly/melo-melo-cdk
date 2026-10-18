@@ -30,7 +30,9 @@ test.describe('Track ordering and declarative saves', () => {
         const detail = await apiContext.get(`/albums/${album.id}`);
         return (await detail.json()).tracks.items.map((t: { id: string }) => t.id);
       };
-      expect(await albumIds()).toEqual([t1, t2]);
+      // Tracklists are read from GSI1 (rank order), which is eventually consistent —
+      // poll each read-after-write rather than asserting on the first response
+      await expect.poll(albumIds, { timeout: 10_000 }).toEqual([t1, t2]);
 
       // Reorder alone: same members, new order
       const reorder = await apiContext.put(`/albums/${album.id}/tracks`, {
@@ -38,7 +40,7 @@ test.describe('Track ordering and declarative saves', () => {
       });
       expect(reorder.status()).toBe(200);
       expect(await reorder.json()).toMatchObject({ trackCount: 2, added: 0, removed: 0 });
-      expect(await albumIds()).toEqual([t2, t1]);
+      await expect.poll(albumIds, { timeout: 10_000 }).toEqual([t2, t1]);
 
       // One save: add t3, drop t2, reorder the rest
       const save = await apiContext.put(`/albums/${album.id}/tracks`, {
@@ -46,7 +48,7 @@ test.describe('Track ordering and declarative saves', () => {
       });
       expect(save.status()).toBe(200);
       expect(await save.json()).toMatchObject({ trackCount: 2, added: 1, removed: 1 });
-      expect(await albumIds()).toEqual([t3, t1]);
+      await expect.poll(albumIds, { timeout: 10_000 }).toEqual([t3, t1]);
 
       // Someone else's / unknown track → 400
       const bad = await apiContext.put(`/albums/${album.id}/tracks`, {
@@ -90,14 +92,14 @@ test.describe('Track ordering and declarative saves', () => {
       // Sequential single adds append in call order
       expect((await apiContext.post(`/playlists/${playlist.id}/tracks/${t1}`)).status()).toBe(200);
       expect((await apiContext.post(`/playlists/${playlist.id}/tracks/${t2}`)).status()).toBe(200);
-      expect(await playlistIds()).toEqual([t1, t2]);
+      await expect.poll(playlistIds, { timeout: 10_000 }).toEqual([t1, t2]);
       const t1AddedAt = (await entries()).find((e) => e.trackId === t1)!.addedAt;
 
       // Re-adding an existing member is a no-op: position and addedAt kept
       const readd = await apiContext.post(`/playlists/${playlist.id}/tracks/${t1}`);
       expect(readd.status()).toBe(200);
       expect(await readd.json()).toMatchObject({ added: false });
-      expect(await playlistIds()).toEqual([t1, t2]);
+      await expect.poll(playlistIds, { timeout: 10_000 }).toEqual([t1, t2]);
 
       // PUT reorders; addedAt survives the rank rewrite
       const reorder = await apiContext.put(`/playlists/${playlist.id}/tracks`, {
@@ -105,7 +107,7 @@ test.describe('Track ordering and declarative saves', () => {
       });
       expect(reorder.status()).toBe(200);
       expect(await reorder.json()).toMatchObject({ trackCount: 2, removed: 0 });
-      expect(await playlistIds()).toEqual([t2, t1]);
+      await expect.poll(playlistIds, { timeout: 10_000 }).toEqual([t2, t1]);
       expect((await entries()).find((e) => e.trackId === t1)!.addedAt).toBe(t1AddedAt);
 
       // Omitting a member removes it
@@ -114,7 +116,7 @@ test.describe('Track ordering and declarative saves', () => {
       });
       expect(shrink.status()).toBe(200);
       expect(await shrink.json()).toMatchObject({ trackCount: 1, removed: 1 });
-      expect(await playlistIds()).toEqual([t1]);
+      await expect.poll(playlistIds, { timeout: 10_000 }).toEqual([t1]);
 
       // The PUT is reorder/remove only — a non-member id is a 400, not an add
       const bad = await apiContext.put(`/playlists/${playlist.id}/tracks`, {

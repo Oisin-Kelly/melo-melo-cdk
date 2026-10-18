@@ -38,6 +38,15 @@ public interface IDynamoDBService
 
     public Task ExecuteTransactWriteAsync(params ITransactWrite[] transactionItems);
 
+    // For idempotent writes guarded by a condition expression: returns false (nothing written)
+    // when a condition fails — i.e. a concurrent request already did it — instead of throwing.
+    public Task<bool> TryExecuteTransactWriteAsync(params ITransactWrite[] transactionItems);
+
+    // Adds a put of `item` to `part` that only applies if `condition` holds (e.g. the item doesn't
+    // exist yet) — the typed AddSaveItem(item) has no condition overload.
+    public void AddConditionalSave<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        ITransactWrite<T> part, T item, Expression condition);
+
     public IBatchWrite<T> CreateBatchWritePart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>();
 
     public Task ExecuteBatchWriteAsync(params IBatchWrite[] batchParts);

@@ -107,24 +107,25 @@ public sealed class Function : BaseLambdaFunctionHandler
     }
 
     // Drops liked tracks the caller can no longer access (owner/direct/album-grant)
-    private async Task<List<TrackSummary>> FilterToAccessibleAsync(IReadOnlyList<TrackSummary> tracks, string username)
+    private async Task<List<LikedTrack>> FilterToAccessibleAsync(IReadOnlyList<LikedTrack> liked, string username)
     {
-        var checks = tracks.Select(async track =>
-            track.Owner.Username == username ||
-            await _sharedTrackRepository.IsTrackAccessibleToUser(track.Id, username)
-                ? track
+        var checks = liked.Select(async l =>
+            l.Track.Owner.Username == username ||
+            await _sharedTrackRepository.IsTrackAccessibleToUser(l.Track.Id, username)
+                ? l
                 : null);
 
-        return (await Task.WhenAll(checks)).OfType<TrackSummary>().ToList();
+        return (await Task.WhenAll(checks)).OfType<LikedTrack>().ToList();
     }
 
-    private static PlaylistTrackEntry ToAvailableEntry(TrackSummary track) => new()
+    // A liked track was "added" to the likes playlist when it was liked
+    private static PlaylistTrackEntry ToAvailableEntry(LikedTrack liked) => new()
     {
-        TrackId = track.Id,
-        Name = track.Name,
-        Duration = track.Duration,
-        AddedAt = track.CreatedAt,
+        TrackId = liked.Track.Id,
+        Name = liked.Track.Name,
+        Duration = liked.Track.Duration,
+        AddedAt = liked.LikedAt,
         Unavailable = false,
-        Track = track,
+        Track = liked.Track,
     };
 }

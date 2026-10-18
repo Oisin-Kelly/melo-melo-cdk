@@ -58,7 +58,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (createRequest.ImageKey is not null)
             {
                 image = await _imageService.ProcessImageAsync(
-                    createRequest.ImageKey, $"albums/{albumId}/cover_400x400.jpg", 400, 400);
+                    username, createRequest.ImageKey, $"albums/{albumId}/cover_400x400.jpg", 400, 400);
             }
 
             var album = await _albumRepository.CreateAlbumAsync(

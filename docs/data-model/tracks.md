@@ -24,7 +24,7 @@ GSI1 gives by-id lookup (owner unknown at query time); GSI3 gives the owner's tr
 
 Attributes: `status` (`PROCESSING` / `COMPLETE` / `FAILED`), `error`, `createdAt`, `expiresAt` (table TTL attribute — records self-expire after 24h). No GSI keys — only ever fetched point-wise by the owner.
 
-Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before encoding).
+Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before encoding — when ffprobe can't read a duration (`N/A`), the encode is capped with `-t` just past the limit and the encoded file's duration is checked instead; unreadable even then → FAILED).
 
 ### Shared Track
 
@@ -46,7 +46,7 @@ GSI2SK is a sender+date prefix for per-sender filtered sorting (GSI2). Both GSI1
 
 Attributes: `trackOwnerUsername`, `duration` (denormalized so unlike can decrement the likes playlist's `totalDurationSeconds` without re-fetching the track), `likedAt`
 
-Track-side base key lets the owner query who liked; GSI1 gives the user's liked-tracks feed. The Track item carries a `likeCount` attribute and the liker's likes-playlist meta carries `trackCount`/`totalDurationSeconds`, all maintained transactionally (`ADD :±`) with like/unlike writes; read-before-write makes the toggle idempotent.
+Track-side base key lets the owner query who liked; GSI1 gives the user's liked-tracks feed. The Track item carries a `likeCount` attribute and the liker's likes-playlist meta carries `trackCount`/`totalDurationSeconds`, all maintained transactionally (`ADD :±`) with like/unlike writes; read-before-write is the fast path, and an `attribute_not_exists(PK)` / `attribute_exists(PK)` guard on the like record (via `TryExecuteTransactWriteAsync`) makes the toggle idempotent under concurrency — a double-tapped like cancels the loser's whole transaction, counters and activity included. The guarded put goes through `IDynamoDBService.AddConditionalSave` (the SDK's typed put takes no condition).
 
 ---
 
@@ -92,8 +92,8 @@ Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct rec
 #### `DELETE /tracks/shared/{trackId}` — RemoveSharedTrackLambda
 Recipient-side "remove from my library" — the mirror of a single-recipient unshare, callable by anyone (drops the caller's own share; no owner check). `RemoveTrackFromLibraryAsync`:
 1. `GetItem(PK=TRACK#{id}, SK=SHARED#{requestor})` → **idempotency guard**: no-op 200 if absent
-2. **BatchWrite** delete the direct-share item + its feed item (`FEED#{requestor}` / `TRACK#{id}`); the album grant records (`SHARED#{requestor}#ALBUM#{id}`) are **never touched**, so a track that is also in a shared album stays accessible via that album ([access rule](README.md#track-access-rule) = direct OR album grant)
-3. Decrement the owner's `shareCount` by 1 (kept equal to the live direct-share record count, so the re-share upsert stays consistent). The `TRACK_SHARED` activity item is left to age out via TTL, same as owner-side unshare.
+2. **One transaction**: delete the direct-share item (guarded `attribute_exists(PK)`) + its feed item (`FEED#{requestor}` / `TRACK#{id}`) + step 3's counter — a concurrent double-remove cancels the loser, so it decrements once; the album grant records (`SHARED#{requestor}#ALBUM#{id}`) are **never touched**, so a track that is also in a shared album stays accessible via that album ([access rule](README.md#track-access-rule) = direct OR album grant)
+3. Decrement the owner's `shareCount` by 1, in that same transaction (kept equal to the live direct-share record count, so the re-share upsert stays consistent). The `TRACK_SHARED` activity item is left to age out via TTL, same as owner-side unshare.
 
 #### `GET /tracks/{trackId}/recipients` — GetTrackRecipientsLambda
 Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered to direct shares (drops `#ALBUM#` grant SKs) → BatchGet profiles → `{items:[{user, sharedAt}]}` newest-first. Bounded, no pagination.
@@ -109,8 +109,8 @@ Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered
 Owner-only (404 otherwise). Ordered so any mid-delete crash is retryable (track stays fetchable until the last step):
 1. Track fetch → owner check
 2. For each of the owner's albums: `GetItem(ALBUM#{albumId}, TRACK#{trackId})` → if a member, `RemoveTracksAsync` (revokes that album's per-recipient grants, then the membership)
-3. Delete S3 objects: `processed/{trackId}/audio.m4a` (private bucket) + cover (public bucket)
-4. `Query(PK=TRACK#{trackId}, SK begins_with SHARED#)` + `begins_with LIKE#` → batch-delete direct shares (and their feed items), leftover grants, likes, and the `UPLOAD#{trackId}` status record
+3. Delete S3 objects: `processed/{trackId}/audio.m4a` + the archived source `processed/{trackId}/original` (private bucket) + cover (public bucket)
+4. `Query(PK=TRACK#{trackId}, SK begins_with SHARED#)` + `begins_with LIKE#` → each like is deleted in its own transaction with its liker's likes-playlist decrement (`ADD trackCount -1, totalDurationSeconds -duration`, guarded `attribute_exists` on the like so retries/concurrent unlikes never double-decrement); then batch-delete direct shares (and their feed items), leftover grants, and the `UPLOAD#{trackId}` status record
 5. Delete the Track item (`USER#{owner}`, `TRACK#{trackId}`) last
 
 Playlist membership records referencing the track (any user's — not enumerable by track) are left dangling; playlist reads surface them as removable placeholders (see [playlists.md](playlists.md)).

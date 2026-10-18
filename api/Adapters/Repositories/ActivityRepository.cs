@@ -38,6 +38,9 @@ public sealed class ActivityRepository : IActivityRepository
         // (unshared, unliked, removed, revoked), the activity is stale and must not show — this is
         // what makes GET /activity a live snapshot of current relationships rather than an event
         // log. NOT general access (e.g. album grants) — the direct record that caused this row.
+        // The record must also be the *same* one: its likedAt/sharedAt has to equal the row's
+        // createdAt, so after unlike→re-like or a re-share only the newest row shows instead of
+        // the old ones reviving against the recreated key.
         // Follow has no liveness key: it's already eager-deleted on unfollow.
         (string pk, string sk)? RelKey(ActivityItemDataModel a) => a.Type switch
         {
@@ -70,14 +73,15 @@ public sealed class ActivityRepository : IActivityRepository
         var actors = actorsTask.Result.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
         var trackNames = tracksTask.Result.ToDictionary(t => t.TrackId, t => t.TrackName, StringComparer.OrdinalIgnoreCase);
         var albumNames = albumsTask.Result.ToDictionary(a => a.AlbumId, a => a.Name, StringComparer.OrdinalIgnoreCase);
-        var liveRel = liveTask.Result.Select(p => (p.Pk, p.Sk)).ToHashSet();
+        var liveRelAt = liveTask.Result.ToDictionary(p => (p.Pk, p.Sk), p => p.LikedAt ?? p.SharedAt);
 
         string? TargetName(ActivityItemDataModel a) => a.TargetType == FeedItemType.Track
             ? trackNames.GetValueOrDefault(a.TargetId)
             : albumNames.GetValueOrDefault(a.TargetId);
 
         // Keep a row only if: the actor resolves, and — for share/like — its underlying
-        // relationship record still exists (liveness) and its target still resolves.
+        // relationship record still exists with a matching timestamp (liveness) and its target
+        // still resolves.
         // Follow rows skip target/liveness (USER target, no name; eager-deleted on unfollow).
         bool Keep(ActivityItemDataModel a)
         {
@@ -88,7 +92,8 @@ public sealed class ActivityRepository : IActivityRepository
             if (TargetName(a) is null)
                 return false;
             var rk = RelKey(a);
-            return rk is null || liveRel.Contains((rk.Value.pk, rk.Value.sk));
+            return rk is null
+                || (liveRelAt.TryGetValue((rk.Value.pk, rk.Value.sk), out var at) && at == a.CreatedAt);
         }
 
         var entries = items

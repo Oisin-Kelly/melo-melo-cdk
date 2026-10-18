@@ -23,8 +23,7 @@ export async function uploadTrack(
   const fixture = findAudioFixture();
   if (!fixture) throw new Error('no audio fixture — gate the test on findAudioFixture()');
 
-  const audioKey = `e2e/uploads/${Date.now()}-${Math.random().toString(36).slice(2)}${fixture.extension}`;
-  await putToDropbox(apiContext, audioKey, fixture.buffer, fixture.contentType);
+  const audioKey = await putToDropbox(apiContext, `e2e/uploads/${Date.now()}-${Math.random().toString(36).slice(2)}${fixture.extension}`, fixture.buffer, fixture.contentType);
 
   const upload = await apiContext.post('/tracks/upload', { data: { name: trackTitle, audioKey, sharedWith } });
   expect(upload.status()).toBe(202);

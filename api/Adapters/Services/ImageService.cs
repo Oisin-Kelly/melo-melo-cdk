@@ -24,11 +24,14 @@ public sealed class ImageService : IImageService
     }
 
     public async Task<ImageProcessingResult> ProcessImageAsync(
+        string ownerUsername,
         string imageKey,
         string publicImageKey,
         int width,
         int height)
     {
+        DropboxKeys.EnsureOwnedBy(imageKey, ownerUsername);
+
         var metadata = await _dropboxS3Service.GetObjectMetadata(imageKey);
         if (!metadata.Headers.ContentType?.StartsWith("image/") ?? true)
         {

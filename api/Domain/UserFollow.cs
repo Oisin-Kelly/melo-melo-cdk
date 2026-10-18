@@ -17,7 +17,8 @@ public record UserFollowDataModel
     [DynamoDBHashKey("PK")]
     public required string Pk { get; set; }
 
-    // USER#{followerUsername}#{ISO-timestamp} — chronological sort on base table
+    // USER#{followerUsername} — deterministic, one row per (target × follower), so a
+    // double-follow is a guarded no-op rather than a duplicate row
     [DynamoDBRangeKey("SK")]
     public required string Sk { get; set; }
 
@@ -27,6 +28,14 @@ public record UserFollowDataModel
     // DATE#{ISO-timestamp}#TARGET#{usernameToFollow} — chronological sort in GSI1
     [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
     public string? Gsi1Sk { get; set; }
+
+    // FOLLOWERS#{usernameToFollow} / DATE#{timestamp}#USER#{followerUsername} — the
+    // target's followers newest-first (the base-table SK sorts by username)
+    [DynamoDBGlobalSecondaryIndexHashKey("GSI3", AttributeName = "GSI3PK")]
+    public string? Gsi3Pk { get; set; }
+
+    [DynamoDBGlobalSecondaryIndexRangeKey("GSI3", AttributeName = "GSI3SK")]
+    public string? Gsi3Sk { get; set; }
 
     [DynamoDBProperty("createdAt")]
     public long? CreatedAt { get; set; }

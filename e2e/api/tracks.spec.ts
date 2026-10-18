@@ -59,17 +59,24 @@ test.describe('GET /tracks', () => {
 });
 
 test.describe('GET /buckets/dropbox', () => {
-  test('returns a presigned URL when given a key', async ({ apiContext }) => {
+  test('returns a presigned URL when given a key', async ({ apiContext, user }) => {
     const res = await apiContext.get('/buckets/dropbox?key=test/upload.mp3');
     expect(res.status()).toBe(200);
 
     const body = await res.json();
     expect(typeof body.url).toBe('string');
     expect(body.url.length).toBeGreaterThan(0);
+    // Staged under the caller's own prefix — this is the key to send as audioKey/imageKey
+    expect(body.key).toBe(`${user.username}/test/upload.mp3`);
   });
 
   test('returns 400 when key is missing', async ({ apiContext }) => {
     const res = await apiContext.get('/buckets/dropbox');
+    expect(res.status()).toBe(400);
+  });
+
+  test('returns 400 when other params are present but key is missing', async ({ apiContext }) => {
+    const res = await apiContext.get('/buckets/dropbox?foo=1');
     expect(res.status()).toBe(400);
   });
 });

@@ -92,32 +92,31 @@ public sealed class UserRepository : IUserRepository
 
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
-        // Idempotency: the follow record SK carries a timestamp, so a second follow without an
-        // intervening unfollow would write a duplicate row, double-count both profiles, and emit
-        // a second activity item. No-op if the relationship already exists (mirrors UnfollowUser's
-        // read-then-act guard — a rapid double-tap still races, but the common case is clean).
-        var existing = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
-            hashKey: $"FOLLOW#{usernameToFollow}",
-            rangeKey: $"USER#{followerUsername}#",
-            queryOperator: QueryOperator.BeginsWith);
-        if (existing.Count > 0) return;
+        // Following twice must not double-count both profiles or emit a second activity item.
+        // The read is a fast path; the attribute_not_exists guard on the (deterministic) follow
+        // key cancels a concurrent double-follow's whole transaction.
+        if (await GetFollowRecordAsync(usernameToFollow, followerUsername) is not null) return;
 
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        var followRecord = new UserFollowDataModel
+        var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
+        _dynamoDbService.AddConditionalSave(followTx, new UserFollowDataModel
         {
             Pk = $"FOLLOW#{usernameToFollow}",
-            Sk = $"USER#{followerUsername}#{timestamp}",
+            Sk = $"USER#{followerUsername}",
             CreatedAt = timestamp,
             Gsi1Pk = $"FOLLOWING#{followerUsername}",
-            Gsi1Sk = $"DATE#{timestamp}#TARGET#{usernameToFollow}"
+            Gsi1Sk = $"DATE#{timestamp}#TARGET#{usernameToFollow}",
+            Gsi3Pk = $"FOLLOWERS#{usernameToFollow}",
+            Gsi3Sk = $"DATE#{timestamp}#USER#{followerUsername}",
+        }, ConditionExpressions.ItemNotExists());
+
+        var parts = new List<ITransactWrite>
+        {
+            followTx,
+            CreateCounterUpdate(usernameToFollow, "followerCount", 1),
+            CreateCounterUpdate(followerUsername, "followingCount", 1),
         };
-
-        var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
-        followTx.AddSaveItem(followRecord);
-
-        var userProfileTx = CreateCounterUpdate(usernameToFollow, "followerCount", 1);
-        var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", 1);
 
         // Notify the followed user (recipient-perspective activity), skipping self-follows
         // (mirrors the like feed's no-self-echo). The activity SK is deterministic on the
@@ -126,12 +125,15 @@ public sealed class UserRepository : IUserRepository
         {
             var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
             activityTx.AddSaveItem(ActivityItems.BuildFollow(usernameToFollow, followerUsername, timestamp));
-            await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx, activityTx);
-            return;
+            parts.Add(activityTx);
         }
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
+
+    private Task<UserFollowDataModel?> GetFollowRecordAsync(string followedUsername, string followerUsername) =>
+        _dynamoDbService.GetFromDynamoAsync<UserFollowDataModel>(
+            $"FOLLOW#{followedUsername}", $"USER#{followerUsername}");
 
     private ITransactWrite CreateCounterUpdate(string username, string attribute, int value)
     {
@@ -153,21 +155,20 @@ public sealed class UserRepository : IUserRepository
 
     public async Task UnfollowUser(string usernameToUnfollow, string followerUsername)
     {
-        // Query to find the exact record (SK includes timestamp, unknown at unfollow time)
-        var existingRecords = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
-            hashKey: $"FOLLOW#{usernameToUnfollow}",
-            rangeKey: $"USER#{followerUsername}#",
-            queryOperator: QueryOperator.BeginsWith
-        );
-
-        var existingRecord = existingRecords.FirstOrDefault();
+        // The read supplies CreatedAt (for the activity key); the guard makes a concurrent
+        // double-unfollow decrement once
+        var existingRecord = await GetFollowRecordAsync(usernameToUnfollow, followerUsername);
         if (existingRecord is null) return;
 
         var followTx = _dynamoDbService.CreateTransactionPart<UserFollowDataModel>();
-        followTx.AddDeleteItem(existingRecord);
+        followTx.AddDeleteKey(existingRecord.Pk, existingRecord.Sk, ConditionExpressions.ItemExists());
 
-        var userProfileTx = CreateCounterUpdate(usernameToUnfollow, "followerCount", -1);
-        var followerProfileTx = CreateCounterUpdate(followerUsername, "followingCount", -1);
+        var parts = new List<ITransactWrite>
+        {
+            followTx,
+            CreateCounterUpdate(usernameToUnfollow, "followerCount", -1),
+            CreateCounterUpdate(followerUsername, "followingCount", -1),
+        };
 
         // Remove the follow activity written at FollowUser time. The SK is reconstructed from
         // the follow record's CreatedAt; older records without it (or self-follows, which never
@@ -178,22 +179,15 @@ public sealed class UserRepository : IUserRepository
             var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
             activityTx.AddDeleteKey($"ACTIVITY#{usernameToUnfollow}",
                 ActivityItems.FollowSk(followerUsername, followTimestamp));
-            await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx, activityTx);
-            return;
+            parts.Add(activityTx);
         }
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(followTx, userProfileTx, followerProfileTx);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
 
     public async Task<UserFollow> GetFollowStatus(string username, string followerUsername)
     {
-        var records = await _dynamoDbService.QueryAsync<UserFollowDataModel>(
-            hashKey: $"FOLLOW#{username}",
-            rangeKey: $"USER#{followerUsername}#",
-            queryOperator: QueryOperator.BeginsWith
-        );
-
-        var userFollowDataModel = records.FirstOrDefault();
+        var userFollowDataModel = await GetFollowRecordAsync(username, followerUsername);
 
         return new UserFollow
         {
@@ -224,28 +218,43 @@ public sealed class UserRepository : IUserRepository
 
     public async Task<PaginatedResult<UserSummary>> GetUserFollowers(string username, int pageSize, string? cursor)
     {
+        // GSI3 gives the followers newest-first: FOLLOWERS#{username} / DATE#{ts}#USER#{follower}
         var (followRecords, nextToken) = await _dynamoDbService.QueryPaginatedAsync<UserFollowDataModel>(
-            hashKey: $"FOLLOW#{username}",
-            rangeKey: "USER#",
+            hashKey: $"FOLLOWERS#{username}",
+            rangeKey: "DATE#",
             queryOperator: QueryOperator.BeginsWith,
-            indexName: null,
+            indexName: "GSI3",
             pageSize: pageSize,
             paginationToken: cursor,
             scanIndexForward: false
         );
 
-        if (followRecords.Count == 0)
-            return new PaginatedResult<UserSummary> { Items = [], NextCursor = null };
-
-        // SK format: USER#{followerUsername}#{timestamp} — extract username at index 1
-        var keys = followRecords.Select(f => ($"USER#{f.Sk.Split('#')[1]}", "PROFILE"));
-        var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
-
+        var followers = followRecords.Select(f => f.Sk.Replace("USER#", "")).ToList();
         return new PaginatedResult<UserSummary>
         {
-            Items = profiles.Select(UserSummary.From).ToList(),
+            Items = await GetProfilesInOrderAsync(followers),
             NextCursor = nextToken,
         };
+    }
+
+    // BatchGet returns profiles in arbitrary order and rejects duplicate keys, so dedupe the
+    // usernames, then re-apply the page's order (dropping any profile that no longer exists)
+    private async Task<List<UserSummary>> GetProfilesInOrderAsync(List<string> usernames)
+    {
+        if (usernames.Count == 0)
+            return [];
+
+        var keys = usernames
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
+        var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(keys))
+            .ToDictionary(p => p.Username, StringComparer.OrdinalIgnoreCase);
+
+        return usernames
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(profiles.ContainsKey)
+            .Select(u => UserSummary.From(profiles[u]))
+            .ToList();
     }
 
     public async Task<PaginatedResult<UserSummary>> GetUserFollowings(string username, int pageSize, string? cursor)
@@ -260,16 +269,11 @@ public sealed class UserRepository : IUserRepository
             scanIndexForward: false
         );
 
-        if (followingRecords.Count == 0)
-            return new PaginatedResult<UserSummary> { Items = [], NextCursor = null };
-
         // GSI1SK format: DATE#{timestamp}#TARGET#{usernameToFollow}
-        var keys = followingRecords.Select(f => ($"USER#{f.Gsi1Sk!.Split("#TARGET#")[1]}", "PROFILE"));
-        var profiles = await _dynamoDbService.BatchGetAsync<UserDataModel>(keys);
-
+        var followings = followingRecords.Select(f => f.Gsi1Sk!.Split("#TARGET#")[1]).ToList();
         return new PaginatedResult<UserSummary>
         {
-            Items = profiles.Select(UserSummary.From).ToList(),
+            Items = await GetProfilesInOrderAsync(followings),
             NextCursor = nextToken,
         };
     }

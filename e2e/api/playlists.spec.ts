@@ -179,8 +179,7 @@ test.describe('Playlist track editing', () => {
 test.describe('Playlist cover images', () => {
   test('create with imageKey sets the cover', async ({ apiContext }) => {
     const runId = Date.now();
-    const imageKey = `e2e/playlists/${runId}-create-cover.jpg`;
-    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+    const imageKey = await putToDropbox(apiContext, `e2e/playlists/${runId}-create-cover.jpg`, readImageFixture(), 'image/jpeg');
 
     const create = await apiContext.post('/playlists', {
       data: { name: `E2E playlist created cover ${runId}`, imageKey },
@@ -201,8 +200,7 @@ test.describe('Playlist cover images', () => {
     expect(create.status()).toBe(201);
     const playlist = await create.json();
 
-    const imageKey = `e2e/playlists/${runId}-cover.jpg`;
-    await putToDropbox(apiContext, imageKey, readImageFixture(), 'image/jpeg');
+    const imageKey = await putToDropbox(apiContext, `e2e/playlists/${runId}-cover.jpg`, readImageFixture(), 'image/jpeg');
 
     const update = await apiContext.put(`/playlists/${playlist.id}`, { data: { imageKey } });
     expect(update.status()).toBe(200);

@@ -20,12 +20,12 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
         var normalisedId = albumId.ToLowerInvariant();
 
         if (await GetLikeAsync(normalisedId, username) is not null)
-            return; // read-before-write: liking twice must not double-increment
+            return;
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var likeTx = _dynamoDbService.CreateTransactionPart<AlbumLikeDataModel>();
-        likeTx.AddSaveItem(new AlbumLikeDataModel
+        _dynamoDbService.AddConditionalSave(likeTx, new AlbumLikeDataModel
         {
             Pk = $"ALBUM#{normalisedId}",
             Sk = $"LIKE#{username}",
@@ -33,34 +33,31 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
             Gsi1Sk = $"DATE#{now}",
             AlbumOwnerUsername = albumOwnerUsername,
             LikedAt = now,
-        });
+        }, ConditionExpressions.ItemNotExists());
 
-        var counterTx = CreateLikeCountUpdate(normalisedId, albumOwnerUsername, 1);
+        var parts = new List<ITransactWrite> { likeTx, CreateLikeCountUpdate(normalisedId, albumOwnerUsername, 1) };
 
         if (!string.Equals(username, albumOwnerUsername, StringComparison.OrdinalIgnoreCase))
         {
             var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
             activityTx.AddSaveItem(ActivityItems.Build(albumOwnerUsername, ActivityType.AlbumLiked, username,
                 FeedItemType.Album, normalisedId, now));
-            await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx, activityTx);
-            return;
+            parts.Add(activityTx);
         }
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, counterTx);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
 
     public async Task UnlikeAlbumAsync(string albumId, string username, string albumOwnerUsername)
     {
         var normalisedId = albumId.ToLowerInvariant();
 
-        var existing = await GetLikeAsync(normalisedId, username);
-        if (existing is null)
-            return;
-
+        // No read needed: the existence guard makes unliking a not-liked album a no-op
         var likeTx = _dynamoDbService.CreateTransactionPart<AlbumLikeDataModel>();
-        likeTx.AddDeleteItem(existing);
+        likeTx.AddDeleteKey($"ALBUM#{normalisedId}", $"LIKE#{username}", ConditionExpressions.ItemExists());
 
-        await _dynamoDbService.ExecuteTransactWriteAsync(likeTx, CreateLikeCountUpdate(normalisedId, albumOwnerUsername, -1));
+        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx,
+            CreateLikeCountUpdate(normalisedId, albumOwnerUsername, -1));
     }
 
     public async Task<bool> IsAlbumLikedByUserAsync(string albumId, string username)
@@ -139,7 +136,7 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
             .Select(l => l.LikerUsername)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
-        
+
         var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(profileKeys))
             .ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
 

@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports.Repositories;
@@ -132,13 +133,16 @@ public sealed class PlaylistRepository : IPlaylistRepository
         var normalisedId = playlistId.ToLowerInvariant();
         var normalisedTrackId = track.Id.ToLowerInvariant();
 
+        // Re-adding is a no-op. The read is a fast path; the attribute_not_exists guard makes
+        // a concurrent double-add write the membership (and move the counters) only once.
         var existing = await _dynamoDbService.GetFromDynamoAsync<PlaylistTrackDataModel>(
             $"PLAYLIST#{normalisedId}", $"TRACK#{normalisedTrackId}");
         if (existing is not null)
             return false;
 
         var rank = await GetMaxRankAsync(normalisedId) + MembershipRank.Gap;
-        await _dynamoDbService.WriteToDynamoAsync(new PlaylistTrackDataModel
+        var membershipTx = _dynamoDbService.CreateTransactionPart<PlaylistTrackDataModel>();
+        _dynamoDbService.AddConditionalSave(membershipTx, new PlaylistTrackDataModel
         {
             Pk = $"PLAYLIST#{normalisedId}",
             Sk = $"TRACK#{normalisedTrackId}",
@@ -148,12 +152,12 @@ public sealed class PlaylistRepository : IPlaylistRepository
             Duration = track.Duration,
             TrackName = track.TrackName,
             AddedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        });
+        }, ConditionExpressions.ItemNotExists());
 
-        await UpdatePlaylistCountersAsync(username, normalisedId,
-            ("trackCount", 1),
-            ("totalDurationSeconds", track.Duration));
-        return true;
+        return await _dynamoDbService.TryExecuteTransactWriteAsync(membershipTx,
+            CreatePlaylistCounterUpdate(username, normalisedId,
+                ("trackCount", 1),
+                ("totalDurationSeconds", track.Duration)));
     }
 
     // Highest existing rank in the playlist's GSI1 partition (0 when empty)
@@ -182,14 +186,15 @@ public sealed class PlaylistRepository : IPlaylistRepository
         if (existing is null)
             return false;
 
-        var batch = _dynamoDbService.CreateBatchWritePart<PlaylistTrackDataModel>();
-        batch.AddDeleteKey($"PLAYLIST#{normalisedId}", $"TRACK#{normalisedTrackId}");
-        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
+        // Guarded so a concurrent double-remove decrements once
+        var membershipTx = _dynamoDbService.CreateTransactionPart<PlaylistTrackDataModel>();
+        membershipTx.AddDeleteKey($"PLAYLIST#{normalisedId}", $"TRACK#{normalisedTrackId}",
+            ConditionExpressions.ItemExists());
 
-        await UpdatePlaylistCountersAsync(username, normalisedId,
-            ("trackCount", -1),
-            ("totalDurationSeconds", -(long)existing.Duration));
-        return true;
+        return await _dynamoDbService.TryExecuteTransactWriteAsync(membershipTx,
+            CreatePlaylistCounterUpdate(username, normalisedId,
+                ("trackCount", -1),
+                ("totalDurationSeconds", -(long)existing.Duration)));
     }
 
     public async Task<int> SetTracksAsync(string username, string playlistId, IReadOnlyList<string> orderedTrackIds)
@@ -232,11 +237,15 @@ public sealed class PlaylistRepository : IPlaylistRepository
     }
 
     private Task UpdatePlaylistCountersAsync(string username, string normalisedId,
+        params (string Attribute, long Delta)[] deltas) =>
+        _dynamoDbService.ExecuteTransactWriteAsync(CreatePlaylistCounterUpdate(username, normalisedId, deltas));
+
+    private ITransactWrite CreatePlaylistCounterUpdate(string username, string normalisedId,
         params (string Attribute, long Delta)[] deltas)
     {
         var tx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
         tx.AddSaveItem($"USER#{username}", $"PLAYLIST#{normalisedId}", CounterExpressions.Add(deltas));
-        return _dynamoDbService.ExecuteTransactWriteAsync(tx);
+        return tx;
     }
 
     public async Task<PaginatedResult<PlaylistTrackEntry>> GetPlaylistTracksAsync(string playlistId,

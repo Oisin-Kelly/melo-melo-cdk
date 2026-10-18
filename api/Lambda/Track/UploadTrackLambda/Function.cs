@@ -53,9 +53,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             await _trackValidationService.ValidateAsync(input);
             input.SharedWith = await _userRepository.GetValidatedRecipientsAsync(input.SharedWith, username);
 
-            // Missing/oversized files fail here as a 400 (via the ArgumentException
-            // catch) instead of crashing processing against its /tmp limit
-            await _trackValidationService.ValidateUploadedAudioAsync(input.AudioKey!);
+            // Missing/oversized/not-yours files fail here as a 400 (via the ArgumentException
+            // catch) instead of crashing processing against its /tmp limit. The cover is
+            // only processed later, so check its ownership now too rather than FAIL the track.
+            await _trackValidationService.ValidateUploadedAudioAsync(input.AudioKey!, username);
+            if (input.ImageKey is not null)
+                DropboxKeys.EnsureOwnedBy(input.ImageKey, username);
 
             input.TrackId = Guid.NewGuid().ToString("N").ToLowerInvariant();
 

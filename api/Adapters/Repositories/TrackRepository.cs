@@ -220,8 +220,23 @@ public sealed class TrackRepository : ITrackRepository
             .Where(r => !r.Sk.Contains("#ALBUM#"))
             .Select(r => FeedItems.Key(r.Sk.Replace("SHARED#", ""), FeedItemType.Track, normalisedId));
 
+        // Each like goes together with its liker's likes-playlist decrement (the like record
+        // holds the only denormalized duration, so it's now or never). Guarded on the like
+        // still existing, so a retried delete or a concurrent unlike never decrements twice.
+        await Parallel.ForEachAsync(likes, new ParallelOptions { MaxDegreeOfParallelism = 10 },
+            async (like, _) =>
+            {
+                var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
+                likeTx.AddDeleteKey(like.Pk, like.Sk, ConditionExpressions.ItemExists());
+
+                var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
+                playlistTx.AddSaveItem($"USER#{like.LikerUsername}", "PLAYLIST#likes",
+                    CounterExpressions.Add(("trackCount", -1), ("totalDurationSeconds", -(long)like.Duration)));
+
+                await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx, playlistTx);
+            });
+
         var keys = accessRecords.Select(r => (r.Pk, r.Sk))
-            .Concat(likes.Select(l => (l.Pk, l.Sk)))
             .Concat(feedKeys)
             .Append(($"USER#{ownerUsername}", $"UPLOAD#{normalisedId}"))
             .ToList();

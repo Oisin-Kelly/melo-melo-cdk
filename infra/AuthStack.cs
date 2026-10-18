@@ -56,18 +56,16 @@ public class AuthStack : BaseStack
 
         UserPoolClient = UserPool.AddClient("AppClient", new UserPoolClientOptions()
         {
-            OAuth = new OAuthSettings()
-            {
-                Flows = new OAuthFlows()
-                {
-                    AuthorizationCodeGrant = true
-                },
-            },
+            // No hosted UI / federated login — omitting OAuth would let CDK default-enable
+            // the code + implicit grants with an example.com callback
+            DisableOAuth = true,
             IdTokenValidity = Duration.Hours(8),
             AccessTokenValidity = Duration.Hours(8),
             RefreshTokenValidity = Duration.Days(90),
             AuthFlows = new AuthFlow()
             {
+                // SRP for the web app (Amplify's default); UserPassword for the e2e fixtures
+                UserSrp = true,
                 UserPassword = true
             },
             PreventUserExistenceErrors = true,

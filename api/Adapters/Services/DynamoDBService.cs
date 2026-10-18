@@ -204,6 +204,53 @@ public sealed class DynamoDBService : IDynamoDBService
         return multiTableTx.ExecuteAsync();
     }
 
+    public async Task<bool> TryExecuteTransactWriteAsync(params ITransactWrite[] transactionItems)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await ExecuteTransactWriteAsync(transactionItems);
+                return true;
+            }
+            catch (TransactionCanceledException e) when (HasCancellationReason(e, "ConditionalCheckFailed"))
+            {
+                return false;
+            }
+            // Two concurrent transactions on the same items (e.g. a double-tapped like) can cancel one
+            // with TransactionConflict rather than a failed condition. One retry settles it: the other
+            // has committed by then, so the condition now decides.
+            catch (TransactionCanceledException e) when (attempt == 0 && HasCancellationReason(e, "TransactionConflict"))
+            {
+                // Short jittered pause so the competing transaction can commit first, and two
+                // conflicting retries don't collide again in lockstep
+                await Task.Delay(Random.Shared.Next(25, 100));
+            }
+        }
+    }
+
+    public void AddConditionalSave<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(
+        ITransactWrite<T> part, T item, Expression condition)
+    {
+        // The typed AddSaveItem(item) takes no condition, so re-express the put as a guarded
+        // update: the model stays the single source of attribute names (GSI keys included)
+        var document = _dbContext.ToDocument(item, new ToDocumentConfig { IgnoreNullValues = true });
+
+        var update = new Repositories.UpdateExpressionBuilder();
+        var i = 0;
+        foreach (var (attribute, value) in document)
+        {
+            if (attribute is "PK" or "SK" || value is DynamoDBNull)
+                continue;
+            update.AddValue(attribute, $"a{i++}", value);
+        }
+
+        part.AddSaveItem(document["PK"].AsString(), document["SK"].AsString(), update.Build(), condition);
+    }
+
+    private static bool HasCancellationReason(TransactionCanceledException e, string code) =>
+        e.CancellationReasons?.Any(r => r.Code == code) == true;
+
     public IBatchWrite<T> CreateBatchWritePart<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
     {
         return _dbContext.CreateBatchWrite<T>(new BatchWriteConfig

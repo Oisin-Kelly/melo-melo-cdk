@@ -42,7 +42,7 @@ Returns `{playlist, tracks}` where `tracks.items` are `PlaylistTrackEntry` (avai
 1. `GetItem(PK=USER#{requestor}, SK=PLAYLIST#{id})` → meta or 404
 2. Likes: `Query(GSI1, GSI1PK=LIKES#{requestor}, begins_with DATE#, Limit=10, cursor)` (like history order); Custom: `Query(GSI1, GSI1PK=PLAYLIST#{id}, begins_with ORDER#, ascending, Limit=10, cursor)`
 3. `TrackBatchLookup`: parallel BatchGet tracks + unique owner profiles, join → `PlaylistTrackEntry` per membership (a BatchGet miss → `unavailable`, reason `DELETED`, rendered from the denormalized name/duration)
-4. Per-item parallel access check (owner/direct/album-grant); an entry whose owner lost access is downgraded to `unavailable`, reason `REVOKED` (kept as a removable placeholder, not dropped). The likes playlist has no denormalized name, so deleted/inaccessible liked tracks are simply dropped (still access-filtered).
+4. Per-item parallel access check (owner/direct/album-grant); an entry whose owner lost access is downgraded to `unavailable`, reason `REVOKED` (kept as a removable placeholder, not dropped). The likes playlist has no denormalized name, so deleted/inaccessible liked tracks are simply dropped (still access-filtered); its entries' `addedAt` is the like record's `likedAt`.
 
 #### `PUT /playlists/{playlistId}` — UpdatePlaylistLambda
 1. Meta get → 404 if missing, 400 if `LIKES`

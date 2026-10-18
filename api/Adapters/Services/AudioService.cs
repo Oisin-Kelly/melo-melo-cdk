@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Ports.Services;
@@ -48,22 +49,33 @@ public sealed class AudioService : IAudioService
             }
 
             // Probe before encoding so an over-long file is rejected without
-            // paying for the (much slower) ffmpeg re-encode
-            var durationSeconds = await GetDurationAsync(inputPath);
-            if (durationSeconds > MaxDurationSeconds)
+            // paying for the (much slower) ffmpeg re-encode. Some inputs (e.g. raw
+            // streams with no container header) report no duration — null here.
+            var probedSeconds = await GetDurationAsync(inputPath);
+            if (probedSeconds > MaxDurationSeconds)
                 throw new ArgumentException($"Audio is longer than the {MaxDurationHours} hour limit.");
 
             // -vn drops any stray video stream; +faststart moves the seek index to
             // the front so the player can seek anywhere via HTTP range requests
             // without downloading the whole file (critical for long tracks).
+            // -t caps the output just past the limit, so an input whose length the
+            // probe couldn't read still can't sneak past it (checked below).
             await RunProcessAsync(FfmpegPath, [
                 "-i", inputPath,
                 "-vn",
+                "-t", (MaxDurationSeconds + 1).ToString(CultureInfo.InvariantCulture),
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart",
                 outputPath
             ]);
+
+            // The encoded m4a always carries a duration, so fall back to it
+            var durationSeconds = probedSeconds
+                ?? await GetDurationAsync(outputPath)
+                ?? throw new ArgumentException("Couldn't determine the length of this audio file.");
+            if (durationSeconds > MaxDurationSeconds)
+                throw new ArgumentException($"Audio is longer than the {MaxDurationHours} hour limit.");
 
             await using (var fileStream = File.OpenRead(outputPath))
                 await _privateS3Service.PutObjectAsync(fileStream, AudioKey(trackId));
@@ -94,7 +106,9 @@ public sealed class AudioService : IAudioService
         return _privateS3Service.GetPresignedGetUrlAsync(AudioKey(trackId), expiry);
     }
 
-    private static async Task<int> GetDurationAsync(string inputPath)
+    // Whole seconds, or null when ffprobe can't tell ("N/A" / empty) — never 0 for unknown,
+    // which would read as a zero-length track and skip the duration limit
+    private static async Task<int?> GetDurationAsync(string inputPath)
     {
         var output = await RunProcessAsync(FfprobePath, [
             "-v", "error",
@@ -103,7 +117,9 @@ public sealed class AudioService : IAudioService
             inputPath
         ]);
 
-        return double.TryParse(output.Trim(), out var d) ? (int)d : 0;
+        return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+            ? (int)d
+            : null;
     }
 
     private static async Task<string> RunProcessAsync(string executable, string[] args)

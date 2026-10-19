@@ -103,6 +103,14 @@ test.describe('Follow lifecycle', () => {
     expect(res.status()).toBe(400);
   });
 
+  test('returns 400 when following yourself (in any casing)', async ({ apiContext, user }) => {
+    for (const target of [user.username, user.username.toUpperCase()]) {
+      const res = await apiContext.post(`/users/${target}/follow-user`, { data: { newValue: true } });
+      expect(res.status()).toBe(400);
+      expect((await res.json()).message).toContain("can't follow yourself");
+    }
+  });
+
   test('returns 404 when following a nonexistent user', async ({ apiContext }) => {
     const res = await apiContext.post('/users/nonexistent-user-xyz/follow-user', {
       data: { newValue: true },

@@ -33,21 +33,19 @@ public sealed class FeedRepository : IFeedRepository
             return new PaginatedResult<FeedEntry> { Items = [], NextCursor = nextToken };
 
         // Sender profile == track/album owner in every current share path
-        var senderKeys = items.Select(i => i.SenderUsername).Distinct()
-            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
         var trackRefs = items.Where(i => i.Type == FeedItemType.Track)
             .Select(i => (i.TargetId, i.SenderUsername)).ToList();
         var albumKeys = items.Where(i => i.Type == FeedItemType.Album)
             .Select(i => (pk: $"USER#{i.SenderUsername}", sk: $"ALBUM#{i.TargetId}"));
         var albumIds = items.Where(i => i.Type == FeedItemType.Album).Select(i => i.TargetId).ToList();
 
-        var sendersTask = _dynamoDbService.BatchGetAsync<UserDataModel>(senderKeys);
+        var sendersTask = ProfileLookup.GetAsync(_dynamoDbService, items.Select(i => i.SenderUsername));
         var tracksTask = TrackBatchLookup.GetTrackSummariesAsync(_dynamoDbService, trackRefs, username);
         var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(albumKeys);
         var likedAlbumsTask = AlbumLikeRepository.GetLikedAlbumIdsAsync(_dynamoDbService, username, albumIds);
         await Task.WhenAll(sendersTask, tracksTask, albumsTask, likedAlbumsTask);
 
-        var senderProfiles = sendersTask.Result.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
+        var senderProfiles = sendersTask.Result;
         var tracks = tracksTask.Result;
         var albums = albumsTask.Result.ToDictionary(a => a.AlbumId, StringComparer.OrdinalIgnoreCase);
 

@@ -14,10 +14,12 @@ public sealed class Function : BaseLambdaFunctionHandler
     private const int PageSize = 10;
 
     private readonly IUserRepository _userRepository;
+    private readonly IFollowRepository _followRepository;
 
-    public Function(IUserRepository userRepository)
+    public Function(IUserRepository userRepository, IFollowRepository followRepository)
     {
         _userRepository = userRepository;
+        _followRepository = followRepository;
     }
 
     [LambdaFunction]
@@ -28,6 +30,8 @@ public sealed class Function : BaseLambdaFunctionHandler
         var (requestorUsername, authError) = GetCallerUsername(request);
 
         if (authError is not null) return authError;
+
+        username = NormaliseUsername(username);
         if (string.IsNullOrWhiteSpace(username))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
 
@@ -43,19 +47,19 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (user.FollowersPrivate && username != requestorUsername)
                 return Error(HttpStatusCode.Forbidden, $"{username} has their followers private", "Forbidden");
 
-            var result = await _userRepository.GetUserFollowers(username, PageSize, cursor);
+            var result = await _followRepository.GetUserFollowers(username, PageSize, cursor);
 
             return Ok(
                 JsonSerializer.Serialize(
                     result,
-                    CustomJsonSerializerContext.Default.PaginatedResultUserSummary
+                    GetUserFollowersJsonContext.Default.PaginatedResultUserSummary
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUserFollowersLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

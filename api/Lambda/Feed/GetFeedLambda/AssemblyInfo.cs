@@ -4,4 +4,4 @@ using Amazon.Lambda.Serialization.SystemTextJson;
 using GetFeedLambda;
 
 [assembly: LambdaGlobalProperties(GenerateMain = true)]
-[assembly: LambdaSerializer(typeof(SourceGeneratorLambdaJsonSerializer<CustomJsonSerializerContext>))]
+[assembly: LambdaSerializer(typeof(SourceGeneratorLambdaJsonSerializer<GetFeedJsonContext>))]

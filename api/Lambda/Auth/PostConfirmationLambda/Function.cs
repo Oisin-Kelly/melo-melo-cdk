@@ -7,7 +7,7 @@ using Ports.Services;
 
 namespace PostConfirmationLambda;
 
-public sealed class Function 
+public sealed class Function
 {
     private readonly IDynamoDBService _dbService;
 
@@ -23,7 +23,7 @@ public sealed class Function
         if (cognitoEvent.TriggerSource != "PostConfirmation_ConfirmSignUp")
             return cognitoEvent;
 
-        var username = cognitoEvent.UserName;
+        var username = cognitoEvent.UserName.ToLowerInvariant();
         var email = cognitoEvent.Request.UserAttributes.GetValueOrDefault("email");
 
         try

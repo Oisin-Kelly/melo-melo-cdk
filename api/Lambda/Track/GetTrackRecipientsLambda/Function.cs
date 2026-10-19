@@ -41,12 +41,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             var items = await _sharedTrackRepository.GetTrackRecipientDetailsAsync(track.Id);
 
             var response = new RecipientsResponse { Items = items };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.RecipientsResponse));
+            return Ok(JsonSerializer.Serialize(response, GetTrackRecipientsJsonContext.Default.RecipientsResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTrackRecipientsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

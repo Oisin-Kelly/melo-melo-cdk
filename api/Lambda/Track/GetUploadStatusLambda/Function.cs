@@ -34,12 +34,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (status is null)
                 return Error(HttpStatusCode.NotFound, $"no upload found by id {trackId}", "Not Found");
 
-            return Ok(JsonSerializer.Serialize(status, CustomJsonSerializerContext.Default.UploadStatus));
+            return Ok(JsonSerializer.Serialize(status, GetUploadStatusJsonContext.Default.UploadStatus));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUploadStatusLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

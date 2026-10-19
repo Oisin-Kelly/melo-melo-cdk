@@ -34,12 +34,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _playlistRepository.GetPlaylistsAsync(username, limit, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultPlaylist));
+            return Ok(JsonSerializer.Serialize(result, GetPlaylistsJsonContext.Default.PaginatedResultPlaylist));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetPlaylistsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

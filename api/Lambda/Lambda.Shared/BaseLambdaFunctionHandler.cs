@@ -13,16 +13,27 @@ public abstract class BaseLambdaFunctionHandler
                 CustomJsonSerializerContext.Default.ErrorResponse));
     }
 
+    // Usernames are lowercase everywhere they're stored or keyed (see NormaliseUsername), so the
+    // caller's identity is normalised here, at the one place every handler reads it
     protected static (string Username, APIGatewayHttpApiV2ProxyResponse? Error) GetCallerUsername(
         APIGatewayHttpApiV2ProxyRequest request)
     {
         var claims = request.RequestContext?.Authorizer?.Jwt?.Claims;
         if (claims is not null && claims.TryGetValue("cognito:username", out var username) &&
             !string.IsNullOrWhiteSpace(username))
-            return (username, null);
+            return (NormaliseUsername(username), null);
 
         return (string.Empty, Error(HttpStatusCode.Unauthorized, "Unauthorized", "Unauthorized"));
     }
+
+    // The one spelling of a username: every key, record and comparison uses it. Applied to the JWT
+    // claim and to usernames arriving in paths/bodies; displayName keeps the user's chosen casing.
+    protected static string NormaliseUsername(string username) => username.Trim().ToLowerInvariant();
+
+    // Catch-all 500: the exception detail goes to the logs only — its message can carry AWS/SDK
+    // internals (table names, ARNs, request ids) that clients must never see
+    protected static APIGatewayHttpApiV2ProxyResponse InternalError() =>
+        Error(HttpStatusCode.InternalServerError, "Something went wrong. Please try again.", "Internal Server Error");
 
     protected static int ParseLimit(IDictionary<string, string>? query, int defaultValue = 10, int max = 100)
     {

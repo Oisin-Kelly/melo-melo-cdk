@@ -60,17 +60,19 @@ public sealed class Function : BaseLambdaFunctionHandler
             // Strips self, duplicates, and unknown usernames. A user in both add and remove is
             // contradictory — remove wins, and that's decided here (against the raw remove list)
             // so the recipient cap and the sharedWith response agree with what gets written.
-            var removeRequested = new HashSet<string>(shareRequest.Remove, StringComparer.OrdinalIgnoreCase);
+            var removeList = shareRequest.Remove
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(NormaliseUsername)
+                .Distinct()
+                .ToList();
+            var removeRequested = removeList.ToHashSet();
             var validatedAdds = (await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username))
                 .Where(u => !removeRequested.Contains(u))
                 .ToList();
 
-            var removeRecipients = shareRequest.Remove
-                .Where(u => currentRecipients.Contains(u, StringComparer.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var removeRecipients = removeList.Where(currentRecipients.Contains).ToList();
 
-            var newRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
+            var newRecipients = validatedAdds.Except(currentRecipients).ToList();
             var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
             if (totalAfter > MaxRecipientsPerTrack)
                 return Error(HttpStatusCode.BadRequest,
@@ -86,7 +88,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 .ToList();
 
             var response = new ShareTrackResponse { SharedWith = sharedWith };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.ShareTrackResponse));
+            return Ok(JsonSerializer.Serialize(response, ShareTrackJsonContext.Default.ShareTrackResponse));
         }
         catch (ArgumentException ex)
         {
@@ -95,7 +97,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in ShareTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

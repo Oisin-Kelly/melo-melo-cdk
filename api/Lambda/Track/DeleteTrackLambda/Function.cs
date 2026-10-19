@@ -12,15 +12,15 @@ namespace DeleteTrackLambda;
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly ITrackRepository _trackRepository;
-    private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumTracklistRepository _albumTracklistRepository;
     private readonly IAudioService _audioService;
     private readonly IImageService _imageService;
 
-    public Function(ITrackRepository trackRepository, IAlbumRepository albumRepository,
+    public Function(ITrackRepository trackRepository, IAlbumTracklistRepository albumTracklistRepository,
         IAudioService audioService, IImageService imageService)
     {
         _trackRepository = trackRepository;
-        _albumRepository = albumRepository;
+        _albumTracklistRepository = albumTracklistRepository;
         _audioService = audioService;
         _imageService = imageService;
     }
@@ -43,7 +43,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             
             // Direct shares, remaining album grants, likes, upload status, then the Track item
 
-            await _albumRepository.RemoveTrackFromAllAlbumsAsync(username, track.Id);
+            await _albumTracklistRepository.RemoveTrackFromAllAlbumsAsync(username, track.Id);
             await _audioService.DeleteAudioAsync(track.Id);
 
             if (track.ImageUrl is not null)
@@ -56,7 +56,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in DeleteTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

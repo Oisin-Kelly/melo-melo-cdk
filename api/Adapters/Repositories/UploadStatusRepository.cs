@@ -39,6 +39,13 @@ public sealed class UploadStatusRepository : IUploadStatusRepository
         return UpdateStatusAsync(username, trackId, UploadState.Failed, reason);
     }
 
+    public async Task DeleteAsync(string username, string trackId)
+    {
+        var batch = _dynamoDbService.CreateBatchWritePart<UploadStatusDataModel>();
+        batch.AddDeleteKey($"USER#{username}", $"UPLOAD#{trackId.ToLowerInvariant()}");
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
+    }
+
     public async Task<UploadStatus?> GetAsync(string username, string trackId)
     {
         var item = await _dynamoDbService.GetFromDynamoAsync<UploadStatusDataModel>(

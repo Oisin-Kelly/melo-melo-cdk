@@ -11,11 +11,11 @@ namespace GetAlbumsSharedWithMeLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
 
-    public Function(IAlbumRepository albumRepository)
+    public Function(IAlbumShareRepository albumShareRepository)
     {
-        _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
     }
 
     [LambdaFunction]
@@ -33,14 +33,14 @@ public sealed class Function : BaseLambdaFunctionHandler
 
         try
         {
-            var result = await _albumRepository.GetAlbumsSharedWithUserAsync(username, limit, cursor);
+            var result = await _albumShareRepository.GetAlbumsSharedWithUserAsync(username, limit, cursor);
             return Ok(JsonSerializer.Serialize(result,
-                CustomJsonSerializerContext.Default.PaginatedResultSharedAlbum));
+                GetAlbumsSharedWithMeJsonContext.Default.PaginatedResultSharedAlbum));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetAlbumsSharedWithMeLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

@@ -63,12 +63,12 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var response = new AddPlaylistTrackResponse { TrackId = track.Id, Added = added };
             return Ok(JsonSerializer.Serialize(response,
-                CustomJsonSerializerContext.Default.AddPlaylistTrackResponse));
+                AddPlaylistTrackJsonContext.Default.AddPlaylistTrackResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in AddPlaylistTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

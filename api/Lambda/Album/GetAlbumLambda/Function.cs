@@ -22,11 +22,15 @@ public sealed class Function : BaseLambdaFunctionHandler
     private const int PageSize = 10;
 
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
+    private readonly IAlbumTracklistRepository _albumTracklistRepository;
     private readonly IAlbumLikeRepository _albumLikeRepository;
 
-    public Function(IAlbumRepository albumRepository, IAlbumLikeRepository albumLikeRepository)
+    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository, IAlbumTracklistRepository albumTracklistRepository, IAlbumLikeRepository albumLikeRepository)
     {
         _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
+        _albumTracklistRepository = albumTracklistRepository;
         _albumLikeRepository = albumLikeRepository;
     }
 
@@ -52,7 +56,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             // Access: owner, or the album is shared with the requester. No per-track checks needed —
             // every track is the owner's, and access derives from the album share itself.
             var isOwner = album.OwnerUsername == username;
-            if (!isOwner && !await _albumRepository.IsAlbumSharedWithUserAsync(album.Id, username))
+            if (!isOwner && !await _albumShareRepository.IsAlbumSharedWithUserAsync(album.Id, username))
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
             album.LikedByMe = await _albumLikeRepository.IsAlbumLikedByUserAsync(album.Id, username);
@@ -63,15 +67,15 @@ public sealed class Function : BaseLambdaFunctionHandler
                 album.LikeCount = null;
             }
 
-            var tracks = await _albumRepository.GetAlbumTracksAsync(album.Id, username, PageSize, cursor);
+            var tracks = await _albumTracklistRepository.GetAlbumTracksAsync(album.Id, username, PageSize, cursor);
 
             var response = new AlbumDetailResponse { Album = album, Tracks = tracks };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.AlbumDetailResponse));
+            return Ok(JsonSerializer.Serialize(response, GetAlbumJsonContext.Default.AlbumDetailResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

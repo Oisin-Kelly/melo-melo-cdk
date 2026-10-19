@@ -241,12 +241,8 @@ public sealed class PlaylistRepository : IPlaylistRepository
         _dynamoDbService.ExecuteTransactWriteAsync(CreatePlaylistCounterUpdate(username, normalisedId, deltas));
 
     private ITransactWrite CreatePlaylistCounterUpdate(string username, string normalisedId,
-        params (string Attribute, long Delta)[] deltas)
-    {
-        var tx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
-        tx.AddSaveItem($"USER#{username}", $"PLAYLIST#{normalisedId}", CounterExpressions.Add(deltas));
-        return tx;
-    }
+        params (string Attribute, long Delta)[] deltas) =>
+        _dynamoDbService.CounterUpdate<PlaylistDataModel>(Keys.Playlist(username, normalisedId), deltas);
 
     public async Task<PaginatedResult<PlaylistTrackEntry>> GetPlaylistTracksAsync(string playlistId,
         string viewerUsername, int pageSize, string? cursor)

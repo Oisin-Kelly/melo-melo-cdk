@@ -33,6 +33,9 @@ public sealed class Function : BaseLambdaFunctionHandler
 
         if (authError is not null) return authError;
 
+
+        username = NormaliseUsername(username);
+
         try
         {
             var user = await _userRepository.GetUserByUsername(username);
@@ -53,14 +56,14 @@ public sealed class Function : BaseLambdaFunctionHandler
             return Ok(
                 JsonSerializer.Serialize(
                     user,
-                    CustomJsonSerializerContext.Default.User
+                    GetUserJsonContext.Default.User
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUserLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

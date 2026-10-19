@@ -43,12 +43,12 @@ public sealed class Function : BaseLambdaFunctionHandler
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
             var result = await _albumLikeRepository.GetAlbumLikersAsync(album.Id, PageSize, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultAlbumLiker));
+            return Ok(JsonSerializer.Serialize(result, GetAlbumLikesJsonContext.Default.PaginatedResultAlbumLiker));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetAlbumLikesLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

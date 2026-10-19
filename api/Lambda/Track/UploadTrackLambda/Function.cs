@@ -69,7 +69,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             await _stepFunctions.StartExecutionAsync(new StartExecutionRequest
             {
                 StateMachineArn = _stateMachineArn,
-                Input = JsonSerializer.Serialize(input, CustomJsonSerializerContext.Default.ProcessTrackInput),
+                Input = JsonSerializer.Serialize(input, UploadTrackJsonContext.Default.ProcessTrackInput),
             });
 
             var response = new UploadStatus
@@ -78,7 +78,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 Status = UploadState.Processing,
                 CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
-            return Accepted(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.UploadStatus));
+            return Accepted(JsonSerializer.Serialize(response, UploadTrackJsonContext.Default.UploadStatus));
         }
         catch (ArgumentException ex)
         {
@@ -87,7 +87,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error in UploadTrackLambda: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

@@ -1,0 +1,121 @@
+name: CI
+
+# Two stages on every push to main:
+#   unit-tests — the api/ unit suite against DynamoDB Local (no AWS, fast)
+#   e2e        — deploys the full app to an ephemeral `test` environment, provisions
+#                Cognito test users, runs the Playwright API suite, then tears it all
+#                down (destroy runs even when the tests fail)
+# e2e needs unit-tests, so a failing unit test stops the run before it spends on AWS.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  ENVIRONMENT: test
+  AWS_REGION: eu-west-1
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04-arm
+
+    # DynamoDB Local for the repository tests (arm64 image available)
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 8000:8000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+
+      # REQUIRE_DYNAMODB_LOCAL turns "DynamoDB Local unreachable" from a skip into a failure
+      - name: Repository + validation tests
+        env:
+          DYNAMODB_LOCAL_URL: http://localhost:8000
+          REQUIRE_DYNAMODB_LOCAL: "1"
+        run: dotnet test --project api/Tests/Adapters.Tests
+
+      - name: Lambda handler tests
+        run: dotnet test --project api/Tests/Lambda.Tests
+
+  e2e:
+    needs: unit-tests
+
+    # arm64 runner: the lambdas are linux-arm64 native AOT, so the docker build
+    # runs natively instead of under QEMU emulation
+    runs-on: ubuntu-24.04-arm
+
+    # OIDC role assumption needs an ID token
+    permissions:
+      id-token: write
+      contents: read
+
+    # Stack names are fixed (*-test), so two runs can't share the environment
+    concurrency:
+      group: e2e-test-env
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Build lambdas (native arm64 AOT)
+        run: ./scripts/build-lambdas.sh
+
+      - name: Deploy test stacks
+        id: deploy
+        run: |
+          USE_PREBUILT=1 cdk deploy --all --require-approval never \
+            --outputs-file cdk-outputs.json
+
+      - name: Write e2e/.env from CDK outputs
+        run: |
+          API_BASE_URL=$(jq -re '."api-stack-test".ApiBaseUrl' cdk-outputs.json | sed 's:/*$::')
+          USER_POOL_ID=$(jq -re '."auth-stack-test".UserPoolId' cdk-outputs.json)
+          CLIENT_ID=$(jq -re '."auth-stack-test".UserPoolClientId' cdk-outputs.json)
+          cat > e2e/.env <<EOF
+          API_BASE_URL=$API_BASE_URL
+          COGNITO_USER_POOL_ID=$USER_POOL_ID
+          COGNITO_CLIENT_ID=$CLIENT_ID
+          AWS_REGION=${AWS_REGION}
+          EOF
+
+      # Also generates e2e/test-accounts.json (random per-run passwords)
+      - name: Provision Cognito test users
+        run: ./e2e/setup-test-users.sh
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      # api-mutating depends on api, so it runs strictly after the parallel api project
+      - name: Run API e2e tests
+        working-directory: e2e
+        run: npx playwright test --project=api --project=api-mutating
+
+      - name: Destroy test stacks
+        if: always() && steps.deploy.outcome != 'skipped'
+        run: USE_PREBUILT=1 cdk destroy --all --force

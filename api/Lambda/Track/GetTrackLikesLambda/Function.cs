@@ -59,12 +59,12 @@ public sealed class Function : BaseLambdaFunctionHandler
                 NextCursor = likers.NextCursor,
             };
 
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.TrackLikesResponse));
+            return Ok(JsonSerializer.Serialize(response, GetTrackLikesJsonContext.Default.TrackLikesResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTrackLikesLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

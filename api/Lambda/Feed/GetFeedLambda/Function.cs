@@ -46,7 +46,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             var ascending = string.Equals(sort, "asc", StringComparison.OrdinalIgnoreCase);
 
             var result = await _feedRepository.GetFeedAsync(username, type, ascending, PageSize, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultFeedEntry));
+            return Ok(JsonSerializer.Serialize(result, GetFeedJsonContext.Default.PaginatedResultFeedEntry));
         }
         catch (ArgumentException ex)
         {
@@ -55,7 +55,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetFeedLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

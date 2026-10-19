@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!--
+    Every Lambda builds to an assembly named "bootstrap" (the custom-runtime entry point), so the
+    test project can't reference them as projects — 52 same-named assemblies would collide.
+    Instead the handlers' own source is compiled in: Function.cs (+ its {Name}JsonContext — each
+    Lambda's context has a unique name so the JSON source generator's output files don't collide
+    when they all share this one compilation). Startup.cs
+    (DI wiring) and AssemblyInfo.cs (assembly-level Lambda attributes, once per Lambda) are left out,
+    and Annotations is referenced without its source generator, so tests call FunctionHandler directly.
+  -->
+  <ItemGroup>
+    <Compile Include="../../Lambda/*/*/Function.cs" LinkBase="Handlers" />
+    <Compile Include="../../Lambda/*/*/*JsonContext.cs" LinkBase="Handlers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Lambda/Lambda.Shared/Lambda.Shared.csproj" />
+    <ProjectReference Include="../../Adapters/Adapters.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.Annotations" Version="1.8.0" ExcludeAssets="analyzers" />
+    <PackageReference Include="Amazon.Lambda.APIGatewayEvents" Version="2.7.3" />
+    <PackageReference Include="Amazon.Lambda.CognitoEvents" Version="4.0.1" />
+    <PackageReference Include="Amazon.Lambda.Core" Version="2.8.0" />
+    <PackageReference Include="AWSSDK.StepFunctions" Version="4.0.0.6" />
+    <PackageReference Include="FluentAssertions" Version="7.2.2" />
+    <PackageReference Include="NSubstitute" Version="6.2.0" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+
+  <!-- The Annotations source generator/analyzers would generate Lambda entry-point wrappers (and
+       demand a LambdaSerializer assembly attribute) for all 52 handlers; tests call FunctionHandler
+       directly, so drop them from this compilation. -->
+  <Target Name="RemoveLambdaAnnotationsAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('Amazon.Lambda.Annotations'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>

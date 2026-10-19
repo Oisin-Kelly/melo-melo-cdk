@@ -35,7 +35,7 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
             LikedAt = now,
         }, ConditionExpressions.ItemNotExists());
 
-        var parts = new List<ITransactWrite> { likeTx, CreateLikeCountUpdate(normalisedId, albumOwnerUsername, 1) };
+        var parts = new List<ITransactWrite> { likeTx, LikeCountUpdate(normalisedId, albumOwnerUsername, 1) };
 
         if (!string.Equals(username, albumOwnerUsername, StringComparison.OrdinalIgnoreCase))
         {
@@ -57,7 +57,21 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
         likeTx.AddDeleteKey($"ALBUM#{normalisedId}", $"LIKE#{username}", ConditionExpressions.ItemExists());
 
         await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx,
-            CreateLikeCountUpdate(normalisedId, albumOwnerUsername, -1));
+            LikeCountUpdate(normalisedId, albumOwnerUsername, -1));
+    }
+
+    public async Task DeleteLikesForAlbumAsync(string albumId)
+    {
+        var likes = await _dynamoDbService.QueryAsync<AlbumLikeDataModel>(
+            $"ALBUM#{albumId.ToLowerInvariant()}", "LIKE#", QueryOperator.BeginsWith);
+        if (likes.Count == 0)
+            return;
+
+        // No per-liker counters to reconcile (album likes don't feed a playlist), so a batch will do
+        var batch = _dynamoDbService.CreateBatchWritePart<AlbumLikeDataModel>();
+        foreach (var like in likes)
+            batch.AddDeleteItem(like);
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
     }
 
     public async Task<bool> IsAlbumLikedByUserAsync(string albumId, string username)
@@ -98,16 +112,13 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
         if (likes.Count == 0)
             return new PaginatedResult<AlbumSummary> { Items = [], NextCursor = null };
 
-        var albumKeys = likes.Select(l => (pk: $"USER#{l.AlbumOwnerUsername}", sk: $"ALBUM#{l.AlbumId}"));
-        var ownerKeys = likes.Select(l => l.AlbumOwnerUsername).Distinct()
-            .Select(o => (pk: $"USER#{o}", sk: "PROFILE"));
-
-        var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(albumKeys);
-        var ownersTask = _dynamoDbService.BatchGetAsync<UserDataModel>(ownerKeys);
+        var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(
+            likes.Select(l => Keys.Album(l.AlbumOwnerUsername, l.AlbumId)));
+        var ownersTask = ProfileLookup.GetAsync(_dynamoDbService, likes.Select(l => l.AlbumOwnerUsername));
         await Task.WhenAll(albumsTask, ownersTask);
 
         var albums = albumsTask.Result.ToDictionary(a => a.AlbumId, StringComparer.OrdinalIgnoreCase);
-        var owners = ownersTask.Result.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
+        var owners = ownersTask.Result;
 
         var items = likes
             .Where(l => albums.ContainsKey(l.AlbumId) && owners.ContainsKey(l.AlbumOwnerUsername))
@@ -132,13 +143,7 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
         if (likes.Count == 0)
             return new PaginatedResult<AlbumLiker> { Items = [], NextCursor = null };
 
-        var profileKeys = likes
-            .Select(l => l.LikerUsername)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
-
-        var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(profileKeys))
-            .ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
+        var profiles = await ProfileLookup.GetAsync(_dynamoDbService, likes.Select(l => l.LikerUsername));
 
         var likers = likes
             .Where(l => profiles.ContainsKey(l.LikerUsername))
@@ -154,13 +159,7 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
             $"ALBUM#{normalisedAlbumId}", $"LIKE#{username}");
     }
 
-    private ITransactWrite CreateLikeCountUpdate(string normalisedAlbumId, string albumOwnerUsername, int delta)
-    {
-        var tx = _dynamoDbService.CreateTransactionPart<AlbumDataModel>();
-        tx.AddSaveItem(
-            $"USER#{albumOwnerUsername}",
-            $"ALBUM#{normalisedAlbumId}",
-            CounterExpressions.Add(("likeCount", delta)));
-        return tx;
-    }
+    private ITransactWrite LikeCountUpdate(string normalisedAlbumId, string albumOwnerUsername, int delta) =>
+        _dynamoDbService.CounterUpdate<AlbumDataModel>(Keys.Album(albumOwnerUsername, normalisedAlbumId),
+            ("likeCount", delta));
 }

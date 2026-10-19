@@ -39,13 +39,14 @@ The base-table SK is deterministic — one row per (target × follower) — so f
 - **TransactWrite** (2 parts, atomic):
   - User profile: `PK=USER#{username}`, `SK=PROFILE`, `GSI1PK=EMAIL#{email}`, `GSI1SK=PROFILE`
   - Likes playlist meta: `PK=USER#{username}`, `SK=PLAYLIST#likes`, `type=LIKES`, `name="Likes"`
+- `username` is saved **lowercased** whatever casing was typed (every key uses it)
 - Default values: `displayName=username`, `bio="Hey! I'm using MeloMelo!"`, counts=0, privacy=false, `incomingShares=EVERYONE`
 - Also writes the GSI3 search keys (`GSI3PK=USERS`, `GSI3SK=USERNAME#{lowercased username}`)
 
 #### CheckEmailExistenceLambda — Validate email uniqueness on pre-signup
 - **Trigger:** Cognito `PreSignUp`
 - **No DynamoDB access** — validates via Cognito `ListUsers` API with email filter
-- Also validates username format via regex: `^[a-zA-Z0-9._]{2,30}$`
+- Also validates username format via regex: `^[a-zA-Z0-9._]{2,30}$` (any casing — PostConfirmation saves it lowercased)
 
 ### User APIs
 
@@ -73,20 +74,20 @@ The base-table SK is deterministic — one row per (target × follower) — so f
 1. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → `{followStatus: bool, createdAt}`
 
 #### `POST /users/{username}/follow-user` — FollowUserLambda
-Request body: `{newValue: true|false}`
+Request body: `{newValue: true|false}`. Following (or unfollowing) yourself, in any casing → **400** "You can't follow yourself." — rejected in the Lambda, and `FollowUser` throws on it too: both counters live on the one profile item and a transaction can't touch an item twice.
 
 **Follow** (`newValue: true`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. **TransactWrite** (3 parts, atomic; **4 parts** when not a self-follow):
+2. **TransactWrite** (4 parts, atomic):
    - `Save` follow record, guarded `attribute_not_exists(PK)` via `AddConditionalSave` (a concurrent double-follow cancels the whole transaction — counters and activity included): `PK=FOLLOW#{username}, SK=USER#{requestor}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}, GSI3PK=FOLLOWERS#{username}, GSI3SK=DATE#{epochMs}#USER#{requestor}`
    - `Update` target user: `ADD followerCount :1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :1` on `PK=USER#{requestor}, SK=PROFILE`
-   - `Save` `USER_FOLLOWED` activity for the followed user (skipped on a self-follow): `PK=ACTIVITY#{username}, SK=DATE#{epochMs}#FOLLOW#{requestor}` — deterministic SK (same `epochMs` stored as the follow record's `createdAt`) so unfollow can delete it. See [activity.md](activity.md).
+   - `Save` `USER_FOLLOWED` activity for the followed user: `PK=ACTIVITY#{username}, SK=DATE#{epochMs}#FOLLOW#{requestor}` — deterministic SK (same `epochMs` stored as the follow record's `createdAt`) so unfollow can delete it. See [activity.md](activity.md).
 
 **Unfollow** (`newValue: false`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
 2. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → follow record + its `createdAt` (for the activity key); no-op if absent
-3. **TransactWrite** (3 parts, atomic; **4 parts** when the follow record has a `createdAt` and isn't a self-follow):
+3. **TransactWrite** (3 parts, atomic; **4 parts** when the follow record has a `createdAt`):
    - `Delete` follow record, guarded `attribute_exists(PK)` (all parts run via `TryExecuteTransactWriteAsync`, so a concurrent double-unfollow decrements once)
    - `Update` target user: `ADD followerCount :-1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :-1` on `PK=USER#{requestor}, SK=PROFILE`

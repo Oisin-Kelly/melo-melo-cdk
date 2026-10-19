@@ -35,12 +35,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _albumLikeRepository.GetLikedAlbumsAsync(username, limit, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultAlbumSummary));
+            return Ok(JsonSerializer.Serialize(result, GetLikedAlbumsJsonContext.Default.PaginatedResultAlbumSummary));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetLikedAlbumsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

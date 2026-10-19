@@ -54,8 +54,6 @@ public sealed class ActivityRepository : IActivityRepository
         // Keys must be de-duplicated: a user can have several activities about the same
         // target (e.g. a track re-shared after an unshare, or re-liked), and BatchGetItem
         // rejects duplicate keys in one request.
-        var actorKeys = items.Select(a => a.ActorUsername).Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
         var trackKeys = items.Where(a => a.TargetType == FeedItemType.Track)
             .Select(a => (pk: $"USER#{TargetOwner(a)}", sk: $"TRACK#{a.TargetId}"))
             .Distinct();
@@ -64,13 +62,13 @@ public sealed class ActivityRepository : IActivityRepository
             .Distinct();
         var relKeys = items.Select(RelKey).Where(k => k.HasValue).Select(k => k!.Value).Distinct();
 
-        var actorsTask = _dynamoDbService.BatchGetAsync<UserDataModel>(actorKeys);
+        var actorsTask = ProfileLookup.GetAsync(_dynamoDbService, items.Select(a => a.ActorUsername));
         var tracksTask = _dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
         var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(albumKeys);
         var liveTask = _dynamoDbService.BatchGetAsync<KeyProbeDataModel>(relKeys);
         await Task.WhenAll(actorsTask, tracksTask, albumsTask, liveTask);
 
-        var actors = actorsTask.Result.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
+        var actors = actorsTask.Result;
         var trackNames = tracksTask.Result.ToDictionary(t => t.TrackId, t => t.TrackName, StringComparer.OrdinalIgnoreCase);
         var albumNames = albumsTask.Result.ToDictionary(a => a.AlbumId, a => a.Name, StringComparer.OrdinalIgnoreCase);
         var liveRelAt = liveTask.Result.ToDictionary(p => (p.Pk, p.Sk), p => p.LikedAt ?? p.SharedAt);

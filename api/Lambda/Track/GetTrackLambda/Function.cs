@@ -56,14 +56,14 @@ public sealed class Function : BaseLambdaFunctionHandler
             return Ok(
                 JsonSerializer.Serialize(
                     track,
-                    CustomJsonSerializerContext.Default.Track
+                    GetTrackJsonContext.Default.Track
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

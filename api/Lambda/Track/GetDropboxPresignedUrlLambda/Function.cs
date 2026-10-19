@@ -52,7 +52,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             return Ok(
                 JsonSerializer.Serialize(
                     new PresignedUrlResponse { Url = url, Key = stagedKey },
-                    CustomJsonSerializerContext.Default.PresignedUrlResponse
+                    GetDropboxPresignedUrlJsonContext.Default.PresignedUrlResponse
                 )
             );
         }
@@ -63,7 +63,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetDropboxPresignedUrlLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

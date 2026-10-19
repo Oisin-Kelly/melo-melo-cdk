@@ -14,22 +14,15 @@ internal static class TrackBatchLookup
         if (trackRefs.Count == 0)
             return [];
 
-        var trackKeys = trackRefs
-            .Select(r => (pk: $"USER#{r.OwnerUsername}", sk: $"TRACK#{r.TrackId}"));
-
-        var ownerKeys = trackRefs
-            .Select(r => r.OwnerUsername)
-            .Distinct()
-            .Select(owner => (pk: $"USER#{owner}", sk: "PROFILE"));
-
-        var tracksTask = dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
-        var ownersTask = dynamoDbService.BatchGetAsync<UserDataModel>(ownerKeys);
+        var tracksTask = dynamoDbService.BatchGetAsync<TrackDataModel>(
+            trackRefs.Select(r => Keys.Track(r.OwnerUsername, r.TrackId)));
+        var ownersTask = ProfileLookup.GetAsync(dynamoDbService, trackRefs.Select(r => r.OwnerUsername));
         var likedTask = allLiked
             ? Task.FromResult(new HashSet<string>(StringComparer.OrdinalIgnoreCase))
             : GetLikedTrackIdsAsync(dynamoDbService, viewerUsername, trackRefs.Select(r => r.TrackId).ToList());
         await Task.WhenAll(tracksTask, ownersTask, likedTask);
 
-        var owners = ownersTask.Result.ToDictionary(u => u.Username);
+        var owners = ownersTask.Result;
         var liked = likedTask.Result;
 
         return tracksTask.Result

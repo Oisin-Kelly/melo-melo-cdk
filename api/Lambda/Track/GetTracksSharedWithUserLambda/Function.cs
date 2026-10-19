@@ -32,12 +32,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _sharedTrackRepository.GetTracksSharedWithUser(requestorUsername, limit, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultSharedTrack));
+            return Ok(JsonSerializer.Serialize(result, GetTracksSharedWithUserJsonContext.Default.PaginatedResultSharedTrack));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTracksSharedWithUserLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

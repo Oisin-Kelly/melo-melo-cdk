@@ -64,7 +64,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             var album = await _albumRepository.CreateAlbumAsync(
                 albumId, username, createRequest.Name!, createRequest.Description, image, createRequest.TrackIds);
 
-            return Created(JsonSerializer.Serialize(album, CustomJsonSerializerContext.Default.Album));
+            return Created(JsonSerializer.Serialize(album, CreateAlbumJsonContext.Default.Album));
         }
         catch (ArgumentException ex)
         {
@@ -73,7 +73,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in CreateAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

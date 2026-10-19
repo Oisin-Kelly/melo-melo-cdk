@@ -22,13 +22,15 @@ public sealed class Function : BaseLambdaFunctionHandler
     private const int MaxRecipientsPerAlbum = 50;
 
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
     private readonly IUserRepository _userRepository;
     private readonly IAlbumValidationService _albumValidationService;
 
-    public Function(IAlbumRepository albumRepository, IUserRepository userRepository,
+    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository, IUserRepository userRepository,
         IAlbumValidationService albumValidationService)
     {
         _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
         _userRepository = userRepository;
         _albumValidationService = albumValidationService;
     }
@@ -52,28 +54,30 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (album is null || album.OwnerUsername != username)
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
-            var currentRecipients = await _albumRepository.GetAlbumRecipientsAsync(album.Id);
+            var currentRecipients = await _albumShareRepository.GetAlbumRecipientsAsync(album.Id);
 
             // Strips self, duplicates, and unknown usernames. A user in both add and remove is
             // contradictory — remove wins, and that's decided here (against the raw remove list)
             // so the recipient cap and the sharedWith response agree with what gets written.
-            var removeRequested = new HashSet<string>(shareRequest.Remove, StringComparer.OrdinalIgnoreCase);
+            var removeList = shareRequest.Remove
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(NormaliseUsername)
+                .Distinct()
+                .ToList();
+            var removeRequested = removeList.ToHashSet();
             var validatedAdds = (await _userRepository.GetValidatedRecipientsAsync(shareRequest.Add, username))
                 .Where(u => !removeRequested.Contains(u))
                 .ToList();
 
-            var removeRecipients = shareRequest.Remove
-                .Where(u => currentRecipients.Contains(u, StringComparer.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var removeRecipients = removeList.Where(currentRecipients.Contains).ToList();
 
-            var newRecipients = validatedAdds.Except(currentRecipients, StringComparer.OrdinalIgnoreCase).ToList();
+            var newRecipients = validatedAdds.Except(currentRecipients).ToList();
             var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
             if (totalAfter > MaxRecipientsPerAlbum)
                 return Error(HttpStatusCode.BadRequest,
                     $"albums can be shared with at most {MaxRecipientsPerAlbum} users", "Bad Request");
 
-            await _albumRepository.ShareAlbumAsync(album.Id, username, validatedAdds, removeRecipients,
+            await _albumShareRepository.ShareAlbumAsync(album.Id, username, validatedAdds, removeRecipients,
                 shareRequest.Caption);
 
             var sharedWith = currentRecipients
@@ -83,7 +87,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 .ToList();
 
             var response = new ShareAlbumResponse { SharedWith = sharedWith };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.ShareAlbumResponse));
+            return Ok(JsonSerializer.Serialize(response, ShareAlbumJsonContext.Default.ShareAlbumResponse));
         }
         catch (ArgumentException ex)
         {
@@ -92,7 +96,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in ShareAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

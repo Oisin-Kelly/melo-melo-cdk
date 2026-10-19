@@ -27,6 +27,7 @@ public sealed class Function : BaseLambdaFunctionHandler
     {
         var (requestorUsername, authError) = GetCallerUsername(request);
         if (authError is not null) return authError;
+        username = NormaliseUsername(username);
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
@@ -36,13 +37,13 @@ public sealed class Function : BaseLambdaFunctionHandler
             var result = await _sharedTrackRepository.GetTracksSharedFromUser(username, requestorUsername, PageSize, cursor);
 
             return Ok(
-                JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultSharedTrack)
+                JsonSerializer.Serialize(result, GetTracksSharedFromUserJsonContext.Default.PaginatedResultSharedTrack)
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTracksSharedFromUserLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

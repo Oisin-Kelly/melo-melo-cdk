@@ -114,7 +114,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         var shareDelta = newCount - removedCount;
         if (shareDelta != 0)
             await _dynamoDbService.ExecuteTransactWriteAsync(
-                CreateShareCountUpdate(ownerUsername, normalisedTrackId, shareDelta));
+                ShareCountUpdate(ownerUsername, normalisedTrackId, shareDelta));
     }
 
     // Recipient-side "remove from my library": drops only the direct share of this track with
@@ -142,17 +142,35 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         // shareCount tracks the number of direct-share records, so a self-removal must decrement
         // it (kept in sync with the re-share upsert, which counts a missing record as new).
         if (!string.IsNullOrEmpty(share.TrackOwnerUsername))
-            parts.Add(CreateShareCountUpdate(share.TrackOwnerUsername, normalisedTrackId, -1));
+            parts.Add(ShareCountUpdate(share.TrackOwnerUsername, normalisedTrackId, -1));
 
         await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
     }
 
-    private ITransactWrite CreateShareCountUpdate(string ownerUsername, string normalisedTrackId, int delta)
+    private ITransactWrite ShareCountUpdate(string ownerUsername, string normalisedTrackId, int delta) =>
+        _dynamoDbService.CounterUpdate<TrackDataModel>(Keys.Track(ownerUsername, normalisedTrackId),
+            ("shareCount", delta));
+
+    public async Task DeleteSharesForTrackAsync(string trackId)
     {
-        var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
-        tx.AddSaveItem($"USER#{ownerUsername}", $"TRACK#{normalisedTrackId}",
-            CounterExpressions.Add(("shareCount", delta)));
-        return tx;
+        var normalisedTrackId = trackId.ToLowerInvariant();
+
+        // Every access record on the track: direct shares (SHARED#{user}) and any album grants
+        // (SHARED#{user}#ALBUM#{id}) not already revoked by RemoveTrackFromAllAlbumsAsync
+        var accessRecords = await _dynamoDbService.QueryAsync<AlbumTrackGrantDataModel>(
+            $"TRACK#{normalisedTrackId}", "SHARED#", QueryOperator.BeginsWith);
+        if (accessRecords.Count == 0)
+            return;
+
+        // Direct-share recipients each have a feed item; album grants never created one
+        var feedKeys = accessRecords
+            .Where(r => !r.Sk.Contains("#ALBUM#"))
+            .Select(r => FeedItems.Key(r.Sk.Replace("SHARED#", ""), FeedItemType.Track, normalisedTrackId));
+
+        var batch = _dynamoDbService.CreateBatchWritePart<TrackDataModel>();
+        foreach (var (pk, sk) in accessRecords.Select(r => (r.Pk, r.Sk)).Concat(feedKeys))
+            batch.AddDeleteKey(pk, sk);
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch);
     }
 
     public async Task<List<Recipient>> GetTrackRecipientDetailsAsync(string trackId)
@@ -161,12 +179,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         if (shares.Count == 0)
             return [];
 
-        var keys = shares
-            .Select(s => s.Sk.Replace("SHARED#", ""))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
-        var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(keys))
-            .ToDictionary(p => p.Username, StringComparer.OrdinalIgnoreCase);
+        var profiles = await ProfileLookup.GetAsync(_dynamoDbService, shares.Select(s => s.Sk.Replace("SHARED#", "")));
 
         return shares
             .Where(s => profiles.ContainsKey(s.Sk.Replace("SHARED#", "")))

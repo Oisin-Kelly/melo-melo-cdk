@@ -34,12 +34,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _albumRepository.GetAlbumsAsync(username, limit, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultAlbumSummary));
+            return Ok(JsonSerializer.Serialize(result, GetAlbumsJsonContext.Default.PaginatedResultAlbumSummary));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetAlbumsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

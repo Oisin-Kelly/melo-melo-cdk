@@ -10,11 +10,19 @@ public sealed class TrackRepository : ITrackRepository
 {
     private readonly IDynamoDBService _dynamoDbService;
     private readonly IUserRepository _userRepository;
+    private readonly ILikeRepository _likeRepository;
+    private readonly ISharedTrackRepository _sharedTrackRepository;
+    private readonly IUploadStatusRepository _uploadStatusRepository;
 
-    public TrackRepository(IDynamoDBService dynamoDbService, IUserRepository userRepository)
+    public TrackRepository(IDynamoDBService dynamoDbService, IUserRepository userRepository,
+        ILikeRepository likeRepository, ISharedTrackRepository sharedTrackRepository,
+        IUploadStatusRepository uploadStatusRepository)
     {
         _dynamoDbService = dynamoDbService;
         _userRepository = userRepository;
+        _likeRepository = likeRepository;
+        _sharedTrackRepository = sharedTrackRepository;
+        _uploadStatusRepository = uploadStatusRepository;
     }
 
     public async Task<Track?> GetTrackAsync(string trackId)
@@ -200,60 +208,20 @@ public sealed class TrackRepository : ITrackRepository
         };
     }
 
+    // The Track item's footprint, each part removed by the repository that owns it (DeleteTrackLambda
+    // has already revoked album memberships/grants and deleted the S3 objects). Retryable order:
+    // relationships first, the Track item last, so a failed delete can simply run again.
     public async Task DeleteTrackAsync(string ownerUsername, string trackId)
     {
         var normalisedId = trackId.ToLowerInvariant();
 
-        var accessRecords = await _dynamoDbService.QueryAsync<AlbumTrackGrantDataModel>(
-            $"TRACK#{normalisedId}",
-            "SHARED#",
-            QueryOperator.BeginsWith);
-
-        var likes = await _dynamoDbService.QueryAsync<LikeDataModel>(
-            $"TRACK#{normalisedId}",
-            "LIKE#",
-            QueryOperator.BeginsWith);
-
-        // Direct-share recipients (SK SHARED#{user}, not SHARED#{user}#ALBUM#…) each
-        // have a feed item to remove; album grants never created feed items
-        var feedKeys = accessRecords
-            .Where(r => !r.Sk.Contains("#ALBUM#"))
-            .Select(r => FeedItems.Key(r.Sk.Replace("SHARED#", ""), FeedItemType.Track, normalisedId));
-
-        // Each like goes together with its liker's likes-playlist decrement (the like record
-        // holds the only denormalized duration, so it's now or never). Guarded on the like
-        // still existing, so a retried delete or a concurrent unlike never decrements twice.
-        await Parallel.ForEachAsync(likes, new ParallelOptions { MaxDegreeOfParallelism = 10 },
-            async (like, _) =>
-            {
-                var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
-                likeTx.AddDeleteKey(like.Pk, like.Sk, ConditionExpressions.ItemExists());
-
-                var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
-                playlistTx.AddSaveItem($"USER#{like.LikerUsername}", "PLAYLIST#likes",
-                    CounterExpressions.Add(("trackCount", -1), ("totalDurationSeconds", -(long)like.Duration)));
-
-                await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx, playlistTx);
-            });
-
-        var keys = accessRecords.Select(r => (r.Pk, r.Sk))
-            .Concat(feedKeys)
-            .Append(($"USER#{ownerUsername}", $"UPLOAD#{normalisedId}"))
-            .ToList();
-
-        if (keys.Count > 0)
-        {
-            var batch = _dynamoDbService.CreateBatchWritePart<TrackDataModel>();
-            
-            foreach (var (pk, sk) in keys)
-                batch.AddDeleteKey(pk, sk);
-            
-            await _dynamoDbService.ExecuteBatchWriteAsync(batch);
-        }
+        await _likeRepository.DeleteLikesForTrackAsync(normalisedId);
+        await _sharedTrackRepository.DeleteSharesForTrackAsync(normalisedId);
+        await _uploadStatusRepository.DeleteAsync(ownerUsername, normalisedId);
 
         var trackBatch = _dynamoDbService.CreateBatchWritePart<TrackDataModel>();
-        trackBatch.AddDeleteKey($"USER#{ownerUsername}", $"TRACK#{normalisedId}");
-        
+        var (pk, sk) = Keys.Track(ownerUsername, normalisedId);
+        trackBatch.AddDeleteKey(pk, sk);
         await _dynamoDbService.ExecuteBatchWriteAsync(trackBatch);
     }
 

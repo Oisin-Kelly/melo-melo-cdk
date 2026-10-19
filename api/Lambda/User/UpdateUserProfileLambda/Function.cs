@@ -74,7 +74,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             return newUser is null
                 ? Error(HttpStatusCode.InternalServerError, "Could not update user", "Internal Server Error")
-                : Ok(JsonSerializer.Serialize(newUser, CustomJsonSerializerContext.Default.User));
+                : Ok(JsonSerializer.Serialize(newUser, UpdateUserProfileJsonContext.Default.User));
         }
         catch (ArgumentException aex)
         {
@@ -84,7 +84,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in UpdateUserProfileLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 

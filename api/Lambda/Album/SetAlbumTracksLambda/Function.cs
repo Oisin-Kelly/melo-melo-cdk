@@ -22,11 +22,13 @@ public record SetAlbumTracksResponse
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumTracklistRepository _albumTracklistRepository;
     private readonly IAlbumValidationService _albumValidationService;
 
-    public Function(IAlbumRepository albumRepository, IAlbumValidationService albumValidationService)
+    public Function(IAlbumRepository albumRepository, IAlbumTracklistRepository albumTracklistRepository, IAlbumValidationService albumValidationService)
     {
         _albumRepository = albumRepository;
+        _albumTracklistRepository = albumTracklistRepository;
         _albumValidationService = albumValidationService;
     }
 
@@ -53,7 +55,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             // Declarative save: the submitted list becomes the tracklist in that
             // order — new ids fan out grants to existing recipients, dropped
             // members have their album-derived grants revoked
-            var (added, removed) = await _albumRepository.SetTracksAsync(album.Id, username, setRequest.TrackIds);
+            var (added, removed) = await _albumTracklistRepository.SetTracksAsync(album.Id, username, setRequest.TrackIds);
 
             var response = new SetAlbumTracksResponse
             {
@@ -63,7 +65,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             };
 
             return Ok(JsonSerializer.Serialize(response,
-                CustomJsonSerializerContext.Default.SetAlbumTracksResponse));
+                SetAlbumTracksJsonContext.Default.SetAlbumTracksResponse));
         }
         catch (ArgumentException ex)
         {
@@ -72,7 +74,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in SetAlbumTracksLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

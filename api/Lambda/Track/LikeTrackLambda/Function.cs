@@ -72,12 +72,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             }
 
             var response = new LikeTrackResponse { NewValue = newValue };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.LikeTrackResponse));
+            return Ok(JsonSerializer.Serialize(response, LikeTrackJsonContext.Default.LikeTrackResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in LikeTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

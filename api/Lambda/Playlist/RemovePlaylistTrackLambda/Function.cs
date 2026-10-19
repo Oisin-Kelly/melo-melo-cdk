@@ -55,12 +55,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             };
 
             return Ok(JsonSerializer.Serialize(response,
-                CustomJsonSerializerContext.Default.RemovePlaylistTrackResponse));
+                RemovePlaylistTrackJsonContext.Default.RemovePlaylistTrackResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in RemovePlaylistTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

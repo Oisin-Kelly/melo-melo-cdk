@@ -13,10 +13,12 @@ namespace GetAlbumRecipientsLambda;
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
 
-    public Function(IAlbumRepository albumRepository)
+    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository)
     {
         _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
     }
 
     [LambdaFunction]
@@ -36,15 +38,15 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (album is null || album.OwnerUsername != username)
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
-            var items = await _albumRepository.GetAlbumRecipientDetailsAsync(album.Id);
+            var items = await _albumShareRepository.GetAlbumRecipientDetailsAsync(album.Id);
 
             var response = new RecipientsResponse { Items = items };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.RecipientsResponse));
+            return Ok(JsonSerializer.Serialize(response, GetAlbumRecipientsJsonContext.Default.RecipientsResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetAlbumRecipientsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

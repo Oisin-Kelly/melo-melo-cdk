@@ -11,11 +11,11 @@ namespace IsFollowingUserLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private readonly IUserRepository _userRepository;
+    private readonly IFollowRepository _followRepository;
 
-    public Function(IUserRepository userRepository)
+    public Function(IFollowRepository followRepository)
     {
-        _userRepository = userRepository;
+        _followRepository = followRepository;
     }
 
     [LambdaFunction]
@@ -26,24 +26,26 @@ public sealed class Function : BaseLambdaFunctionHandler
         var (requestorUsername, authError) = GetCallerUsername(request);
 
         if (authError is not null) return authError;
+
+        username = NormaliseUsername(username);
         if (string.IsNullOrWhiteSpace(username))
             return Error(HttpStatusCode.BadRequest, "the path parameter 'username' is missing", "Bad Request");
         
         try
         {
-            var userFollow = await _userRepository.GetFollowStatus(username, requestorUsername);
+            var userFollow = await _followRepository.GetFollowStatus(username, requestorUsername);
 
             return Ok(
                 JsonSerializer.Serialize(
                     userFollow,
-                    CustomJsonSerializerContext.Default.UserFollow
+                    IsFollowingUserJsonContext.Default.UserFollow
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in IsFollowingUserLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

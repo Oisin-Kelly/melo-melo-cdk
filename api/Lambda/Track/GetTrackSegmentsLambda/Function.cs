@@ -64,12 +64,12 @@ public sealed class Function : BaseLambdaFunctionHandler
                 ExpiresAt = DateTimeOffset.UtcNow.Add(UrlExpiry).ToUnixTimeMilliseconds(),
                 Duration = track.Duration,
             };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.TrackStreamResponse));
+            return Ok(JsonSerializer.Serialize(response, GetTrackSegmentsJsonContext.Default.TrackStreamResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetTrackSegmentsLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

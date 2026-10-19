@@ -58,7 +58,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 username, playlistId, updateRequest.Name, updateRequest.Description,
                 image, updateRequest.ClearedImage);
 
-            return Ok(JsonSerializer.Serialize(updated, CustomJsonSerializerContext.Default.Playlist));
+            return Ok(JsonSerializer.Serialize(updated, UpdatePlaylistJsonContext.Default.Playlist));
         }
         catch (ArgumentException ex)
         {
@@ -67,7 +67,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in UpdatePlaylistLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

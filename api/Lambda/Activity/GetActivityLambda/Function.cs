@@ -36,12 +36,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _activityRepository.GetActivityAsync(username, PageSize, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultActivityEntry));
+            return Ok(JsonSerializer.Serialize(result, GetActivityJsonContext.Default.PaginatedResultActivityEntry));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetActivityLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

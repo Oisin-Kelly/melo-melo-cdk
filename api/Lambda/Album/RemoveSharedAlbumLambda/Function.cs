@@ -10,11 +10,11 @@ namespace RemoveSharedAlbumLambda;
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
 
-    public Function(IAlbumRepository albumRepository)
+    public Function(IAlbumShareRepository albumShareRepository)
     {
-        _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
     }
 
     [LambdaFunction]
@@ -29,13 +29,13 @@ public sealed class Function : BaseLambdaFunctionHandler
 
         try
         {
-            await _albumRepository.RemoveAlbumFromLibraryAsync(albumId, username);
+            await _albumShareRepository.RemoveAlbumFromLibraryAsync(albumId, username);
             return Ok("{\"message\":\"Album removed from library.\"}");
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in RemoveSharedAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

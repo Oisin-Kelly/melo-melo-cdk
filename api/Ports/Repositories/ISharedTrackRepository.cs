@@ -13,6 +13,9 @@ public interface ISharedTrackRepository
     public Task ShareTrackAsync(string trackId, string ownerUsername, IReadOnlyList<string> addRecipients,
         IReadOnlyList<string> removeRecipients, string? caption);
     public Task RemoveTrackFromLibraryAsync(string trackId, string username);
+
+    // Track-deletion cleanup: every direct share + leftover album grant on the track, and the feed items
+    public Task DeleteSharesForTrackAsync(string trackId);
     public Task<PaginatedResult<SharedTrack>> GetTracksSharedWithUser(string userId, int pageSize, string? cursor);
     public Task<PaginatedResult<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId, int pageSize, string? cursor);
 

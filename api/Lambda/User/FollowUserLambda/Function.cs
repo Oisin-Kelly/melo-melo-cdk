@@ -23,10 +23,12 @@ public record FollowUserResponse
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IUserRepository _userRepository;
+    private readonly IFollowRepository _followRepository;
 
-    public Function(IUserRepository userRepository)
+    public Function(IUserRepository userRepository, IFollowRepository followRepository)
     {
         _userRepository = userRepository;
+        _followRepository = followRepository;
     }
 
     [LambdaFunction]
@@ -37,10 +39,15 @@ public sealed class Function : BaseLambdaFunctionHandler
         var (requestorUsername, authError) = GetCallerUsername(request);
 
         if (authError is not null) return authError;
+
+        username = NormaliseUsername(username);
         if (followUserRequest.NewValue == null)
             return Error(HttpStatusCode.BadRequest,
                 "The 'newValue' property is required and must be a boolean (true/false).",
                 "Bad Request");
+
+        if (string.Equals(username, requestorUsername, StringComparison.OrdinalIgnoreCase))
+            return Error(HttpStatusCode.BadRequest, "You can't follow yourself.", "Bad Request");
 
         try
         {
@@ -51,21 +58,21 @@ public sealed class Function : BaseLambdaFunctionHandler
             var isFollowing = followUserRequest.NewValue.Value;
 
             if (isFollowing)
-                await _userRepository.FollowUser(username, requestorUsername);
+                await _followRepository.FollowUser(username, requestorUsername);
             else
-                await _userRepository.UnfollowUser(username, requestorUsername);
+                await _followRepository.UnfollowUser(username, requestorUsername);
 
             return Ok(
                 JsonSerializer.Serialize(
                     new FollowUserResponse { NewValue = isFollowing },
-                    CustomJsonSerializerContext.Default.FollowUserResponse
+                    FollowUserJsonContext.Default.FollowUserResponse
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in FollowUserLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

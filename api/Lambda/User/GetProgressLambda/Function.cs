@@ -34,12 +34,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (progress is null)
                 return new APIGatewayHttpApiV2ProxyResponse { StatusCode = (int)HttpStatusCode.NoContent };
 
-            return Ok(JsonSerializer.Serialize(progress, CustomJsonSerializerContext.Default.ProgressEntry));
+            return Ok(JsonSerializer.Serialize(progress, GetProgressJsonContext.Default.ProgressEntry));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetProgressLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

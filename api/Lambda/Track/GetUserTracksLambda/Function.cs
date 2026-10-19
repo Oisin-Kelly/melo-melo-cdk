@@ -34,12 +34,12 @@ public sealed class Function : BaseLambdaFunctionHandler
         try
         {
             var result = await _trackRepository.GetTracksByUsername(requestorUsername, limit, cursor);
-            return Ok(JsonSerializer.Serialize(result, CustomJsonSerializerContext.Default.PaginatedResultTrackSummary));
+            return Ok(JsonSerializer.Serialize(result, GetUserTracksJsonContext.Default.PaginatedResultTrackSummary));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetUserTracksLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

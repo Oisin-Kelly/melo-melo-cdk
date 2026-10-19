@@ -1,11 +1,9 @@
-using Amazon.DynamoDBv2;
 using Amazon.Lambda.Annotations;
 using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Adapters.Repositories;
+using Adapters;
 using Adapters.Services;
-using Ports.Repositories;
 using Ports.Services;
 
 namespace DeletePlaylistLambda;
@@ -28,12 +26,7 @@ public class Startup
                                        ?? throw new InvalidOperationException(
                                            "PUBLIC_READONLY_BUCKET_NAME environment variable is required");
 
-        builder.Services.AddSingleton<IAmazonDynamoDB>(new AmazonDynamoDBClient());
-        builder.Services.AddTransient<IDynamoDBService>(provider =>
-        {
-            var client = provider.GetRequiredService<IAmazonDynamoDB>();
-            return new DynamoDBService(client, tableName);
-        });
+        builder.Services.AddMeloMeloData(tableName);
 
         // ImageService (cover processing/deletion) needs the Dropbox + Public keyed S3 services
         builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client());
@@ -42,8 +35,6 @@ public class Startup
         builder.Services.AddKeyedTransient<IS3Service, S3Service>("Public", (sp, _) =>
             new S3Service(sp.GetRequiredService<IAmazonS3>(), publicReadonlyBucketName));
         builder.Services.AddTransient<IImageService, ImageService>();
-
-        builder.Services.AddTransient<IPlaylistRepository, PlaylistRepository>();
 
         return builder;
     }

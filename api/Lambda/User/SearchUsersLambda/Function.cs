@@ -49,14 +49,14 @@ public sealed class Function : BaseLambdaFunctionHandler
             return Ok(
                 JsonSerializer.Serialize(
                     result,
-                    CustomJsonSerializerContext.Default.PaginatedResultUserSummary
+                    SearchUsersJsonContext.Default.PaginatedResultUserSummary
                 )
             );
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in SearchUsersLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

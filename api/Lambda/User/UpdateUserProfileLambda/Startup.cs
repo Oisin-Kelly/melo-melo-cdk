@@ -1,13 +1,11 @@
 using Amazon.CognitoIdentityProvider;
-using Amazon.DynamoDBv2;
 using Amazon.Lambda.Annotations;
 using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Adapters.Repositories;
+using Adapters;
 using Adapters.Services;
 using Adapters.Validation;
-using Ports.Repositories;
 using Ports.Services;
 using Ports.Validation;
 
@@ -31,12 +29,7 @@ public class Startup
                                        ?? throw new InvalidOperationException(
                                            "PUBLIC_READONLY_BUCKET_NAME environment variable is required");
 
-        builder.Services.AddSingleton<IAmazonDynamoDB>(new AmazonDynamoDBClient());
-        builder.Services.AddTransient<IDynamoDBService>(provider =>
-        {
-            var client = provider.GetRequiredService<IAmazonDynamoDB>();
-            return new DynamoDBService(client, tableName);
-        });
+        builder.Services.AddMeloMeloData(tableName);
         
         builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client());
         builder.Services.AddKeyedTransient<IS3Service, S3Service>("Dropbox", (sp, _) =>
@@ -50,7 +43,6 @@ public class Startup
             return new S3Service(client, publicReadonlyBucketName);
         });
         
-        builder.Services.AddTransient<IUserRepository, UserRepository>();
         builder.Services.AddSingleton<IAmazonCognitoIdentityProvider>(new AmazonCognitoIdentityProviderClient());
 
         builder.Services.AddTransient<IUserPoolService, UserPoolService>();

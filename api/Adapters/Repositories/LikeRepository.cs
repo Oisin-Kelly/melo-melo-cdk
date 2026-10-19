@@ -39,13 +39,11 @@ public sealed class LikeRepository : ILikeRepository
             LikedAt = now,
         }, ConditionExpressions.ItemNotExists());
 
-        var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
-        playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
-            CounterExpressions.Add(("trackCount", 1), ("totalDurationSeconds", duration)));
-
         var parts = new List<ITransactWrite>
         {
-            likeTx, CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1), playlistTx,
+            likeTx,
+            LikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1),
+            LikesPlaylistUpdate(username, 1, duration),
         };
 
         // Notify the track owner — but never echo a self-like
@@ -71,13 +69,29 @@ public sealed class LikeRepository : ILikeRepository
         var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
         likeTx.AddDeleteKey(existing.Pk, existing.Sk, ConditionExpressions.ItemExists());
 
-        var counterTx = CreateLikeCountUpdate(normalisedTrackId, trackOwnerUsername, -1);
+        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx,
+            LikeCountUpdate(normalisedTrackId, trackOwnerUsername, -1),
+            LikesPlaylistUpdate(username, -1, -(long)existing.Duration));
+    }
 
-        var playlistTx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
-        playlistTx.AddSaveItem($"USER#{username}", "PLAYLIST#likes",
-            CounterExpressions.Add(("trackCount", -1), ("totalDurationSeconds", -(long)existing.Duration)));
+    public async Task DeleteLikesForTrackAsync(string trackId)
+    {
+        var likes = await _dynamoDbService.QueryAsync<LikeDataModel>(
+            $"TRACK#{trackId.ToLowerInvariant()}", "LIKE#", QueryOperator.BeginsWith);
 
-        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx, counterTx, playlistTx);
+        // Each like goes together with its liker's likes-playlist decrement (the like record holds
+        // the only denormalized duration, so it's now or never). Guarded on the like still existing,
+        // so a retried delete or a concurrent unlike never decrements twice. The track's own
+        // likeCount isn't touched — the track is being deleted.
+        await Parallel.ForEachAsync(likes, new ParallelOptions { MaxDegreeOfParallelism = 10 },
+            async (like, _) =>
+            {
+                var likeTx = _dynamoDbService.CreateTransactionPart<LikeDataModel>();
+                likeTx.AddDeleteKey(like.Pk, like.Sk, ConditionExpressions.ItemExists());
+
+                await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx,
+                    LikesPlaylistUpdate(like.LikerUsername, -1, -(long)like.Duration));
+            });
     }
 
     public async Task<bool> IsTrackLikedByUserAsync(string trackId, string username)
@@ -132,12 +146,7 @@ public sealed class LikeRepository : ILikeRepository
         if (likes.Count == 0)
             return new PaginatedResult<TrackLiker> { Items = [], NextCursor = null };
 
-        var profileKeys = likes
-            .Select(l => l.LikerUsername)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(u => (pk: $"USER#{u}", sk: "PROFILE"));
-        var profiles = (await _dynamoDbService.BatchGetAsync<UserDataModel>(profileKeys))
-            .ToDictionary(u => u.Username);
+        var profiles = await ProfileLookup.GetAsync(_dynamoDbService, likes.Select(l => l.LikerUsername));
 
         var likers = likes
             .Where(l => profiles.ContainsKey(l.LikerUsername))
@@ -153,21 +162,12 @@ public sealed class LikeRepository : ILikeRepository
             $"TRACK#{normalisedTrackId}", $"LIKE#{username}");
     }
 
-    private ITransactWrite CreateLikeCountUpdate(string normalisedTrackId, string trackOwnerUsername, int delta)
-    {
-        var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
+    private ITransactWrite LikeCountUpdate(string normalisedTrackId, string trackOwnerUsername, int delta) =>
+        _dynamoDbService.CounterUpdate<TrackDataModel>(Keys.Track(trackOwnerUsername, normalisedTrackId),
+            ("likeCount", delta));
 
-        tx.AddSaveItem(
-            $"USER#{trackOwnerUsername}",
-            $"TRACK#{normalisedTrackId}",
-            new Expression
-            {
-                ExpressionStatement = "ADD #lc :val",
-                ExpressionAttributeNames = new Dictionary<string, string> { { "#lc", "likeCount" } },
-                ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> { { ":val", delta } }
-            }
-        );
-
-        return tx;
-    }
+    // The liker's built-in likes playlist mirrors their likes: one track + its duration per like
+    private ITransactWrite LikesPlaylistUpdate(string username, int trackDelta, long durationDelta) =>
+        _dynamoDbService.CounterUpdate<PlaylistDataModel>(Keys.LikesPlaylist(username),
+            ("trackCount", trackDelta), ("totalDurationSeconds", durationDelta));
 }

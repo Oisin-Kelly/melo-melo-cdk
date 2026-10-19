@@ -23,11 +23,13 @@ public record LikeAlbumResponse
 public sealed class Function : BaseLambdaFunctionHandler
 {
     private readonly IAlbumRepository _albumRepository;
+    private readonly IAlbumShareRepository _albumShareRepository;
     private readonly IAlbumLikeRepository _albumLikeRepository;
 
-    public Function(IAlbumRepository albumRepository, IAlbumLikeRepository albumLikeRepository)
+    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository, IAlbumLikeRepository albumLikeRepository)
     {
         _albumRepository = albumRepository;
+        _albumShareRepository = albumShareRepository;
         _albumLikeRepository = albumLikeRepository;
     }
 
@@ -55,7 +57,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (newValue)
             {
                 var hasAccess = album.OwnerUsername == username ||
-                                await _albumRepository.IsAlbumSharedWithUserAsync(album.Id, username);
+                                await _albumShareRepository.IsAlbumSharedWithUserAsync(album.Id, username);
                 if (!hasAccess)
                     return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
@@ -68,12 +70,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             }
 
             var response = new LikeAlbumResponse { NewValue = newValue };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.LikeAlbumResponse));
+            return Ok(JsonSerializer.Serialize(response, LikeAlbumJsonContext.Default.LikeAlbumResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in LikeAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

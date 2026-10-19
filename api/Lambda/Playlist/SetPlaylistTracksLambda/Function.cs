@@ -71,7 +71,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 Removed = removed,
             };
             return Ok(JsonSerializer.Serialize(response,
-                CustomJsonSerializerContext.Default.SetPlaylistTracksResponse));
+                SetPlaylistTracksJsonContext.Default.SetPlaylistTracksResponse));
         }
         catch (ArgumentException ex)
         {
@@ -80,7 +80,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in SetPlaylistTracksLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

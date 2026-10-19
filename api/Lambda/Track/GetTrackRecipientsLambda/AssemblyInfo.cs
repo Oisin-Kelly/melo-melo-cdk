@@ -4,4 +4,4 @@ using Amazon.Lambda.Serialization.SystemTextJson;
 using GetTrackRecipientsLambda;
 
 [assembly: LambdaGlobalProperties(GenerateMain = true)]
-[assembly: LambdaSerializer(typeof(SourceGeneratorLambdaJsonSerializer<CustomJsonSerializerContext>))]
+[assembly: LambdaSerializer(typeof(SourceGeneratorLambdaJsonSerializer<GetTrackRecipientsJsonContext>))]

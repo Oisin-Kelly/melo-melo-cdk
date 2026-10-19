@@ -56,7 +56,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 username, album.Id, updateRequest.Name, updateRequest.Description,
                 image, updateRequest.ClearedImage);
 
-            return Ok(JsonSerializer.Serialize(updated, CustomJsonSerializerContext.Default.Album));
+            return Ok(JsonSerializer.Serialize(updated, UpdateAlbumJsonContext.Default.Album));
         }
         catch (ArgumentException ex)
         {
@@ -65,7 +65,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in UpdateAlbumLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

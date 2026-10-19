@@ -63,7 +63,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             return updated is null
                 ? Error(HttpStatusCode.InternalServerError, "Could not update track", "Internal Server Error")
-                : Ok(JsonSerializer.Serialize(updated, CustomJsonSerializerContext.Default.Track));
+                : Ok(JsonSerializer.Serialize(updated, UpdateTrackJsonContext.Default.Track));
         }
         catch (ArgumentException aex)
         {
@@ -73,7 +73,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in UpdateTrackLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

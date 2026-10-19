@@ -54,7 +54,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             var playlist = await _playlistRepository.CreatePlaylistAsync(
                 playlistId, username, createRequest.Name!, createRequest.Description, image);
 
-            return Created(JsonSerializer.Serialize(playlist, CustomJsonSerializerContext.Default.Playlist));
+            return Created(JsonSerializer.Serialize(playlist, CreatePlaylistJsonContext.Default.Playlist));
         }
         catch (ArgumentException ex)
         {
@@ -63,7 +63,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in CreatePlaylistLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 }

@@ -72,12 +72,12 @@ public sealed class Function : BaseLambdaFunctionHandler
             }
 
             var response = new PlaylistDetailResponse { Playlist = playlist, Tracks = tracks };
-            return Ok(JsonSerializer.Serialize(response, CustomJsonSerializerContext.Default.PlaylistDetailResponse));
+            return Ok(JsonSerializer.Serialize(response, GetPlaylistJsonContext.Default.PlaylistDetailResponse));
         }
         catch (Exception ex)
         {
             context.Logger.LogError($"Error occured in GetPlaylistLambda. Error: {ex.Message}");
-            return Error(HttpStatusCode.InternalServerError, ex.Message, "Internal Server Error");
+            return InternalError();
         }
     }
 

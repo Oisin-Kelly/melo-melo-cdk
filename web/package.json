@@ -16,7 +16,8 @@
     "@tanstack/react-query": "^5.104.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.4.0"
+    "react-router": "^8.4.0",
+    "sileo": "^0.1.6"
   },
   "devDependencies": {
     "@astryxdesign/cli": "^0.6.8",

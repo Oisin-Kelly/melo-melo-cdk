@@ -1,0 +1,17 @@
+/* Sileo toasts in the Astryx theme. Sileo's default inverts the page (dark pill on a light
+   page); these use the theme's popover surface + text tokens instead, so toasts follow the
+   Astryx light/dark theme. The pill is SVG, so the colour is set with `fill` — a CSS rule
+   overrides Sileo's fill attribute. State colours (green success, red error…) stay Sileo's. */
+[data-sileo-viewport] :is([data-sileo-pill], [data-sileo-body]) {
+  fill: var(--color-background-popover);
+}
+
+[data-sileo-viewport] [data-sileo-svg] {
+  filter: drop-shadow(0 0 1px var(--color-border)) drop-shadow(0 4px 12px rgb(0 0 0 / 0.12));
+}
+
+/* Out-specifies Sileo's own description rule — its CSS is injected at runtime, after ours,
+   so matching specificity isn't enough (the repeated attribute is the extra notch) */
+[data-sileo-viewport][data-theme] [data-sileo-description][data-sileo-description] {
+  color: var(--color-text-secondary);
+}

@@ -17,6 +17,6 @@ test.describe('liked', () => {
   test('sends old Liked-albums links to Library', async ({ authenticatedPage: page }) => {
     await page.goto('/liked?tab=albums');
     await expect(page).toHaveURL(/\/library$/);
-    await expect(page.getByRole('link', { name: /Liked tracks/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Library', level: 1 })).toBeVisible();
   });
 });

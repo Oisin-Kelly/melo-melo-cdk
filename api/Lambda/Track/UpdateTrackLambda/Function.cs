@@ -59,7 +59,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var updated = await _trackRepository.UpdateTrackAsync(
                 username, track.Id, updateRequest.Name!, updateRequest.Genre, updateRequest.Description,
-                image, updateRequest.ClearedImage);
+                image, updateRequest.ClearedImage, updateRequest.Slug);
 
             return updated is null
                 ? Error(HttpStatusCode.InternalServerError, "Could not update track", "Internal Server Error")

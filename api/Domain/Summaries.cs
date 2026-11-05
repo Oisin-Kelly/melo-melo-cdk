@@ -44,6 +44,8 @@ public record TrackSummary
 
     [JsonPropertyName("owner")] public required UserSummary Owner { get; set; }
 
+    [JsonPropertyName("slug")] public string? Slug { get; set; }
+
     public static TrackSummary From(TrackDataModel track, User owner, bool likedByMe) => new()
     {
         Id = track.TrackId,
@@ -52,6 +54,7 @@ public record TrackSummary
         ImageUrl = track.ImageUrl,
         ImageBgColor = track.ImageBgColor,
         CreatedAt = track.CreatedAt,
+        Slug = track.Slug,
         LikedByMe = likedByMe,
         Owner = UserSummary.From(owner)
     };
@@ -66,6 +69,8 @@ public record AlbumSummary
     [JsonPropertyName("imageUrl")] public string? ImageUrl { get; set; }
 
     [JsonPropertyName("imageBgColor")] public string? ImageBgColor { get; set; }
+
+    [JsonPropertyName("slug")] public string? Slug { get; set; }
 
     [JsonPropertyName("trackCount")] public required int TrackCount { get; set; }
 
@@ -86,6 +91,7 @@ public record AlbumSummary
         TrackCount = album.TrackCount,
         TotalDurationSeconds = album.TotalDurationSeconds,
         CreatedAt = album.CreatedAt,
+        Slug = album.Slug,
         LikedByMe = likedByMe,
         Owner = UserSummary.From(owner)
     };

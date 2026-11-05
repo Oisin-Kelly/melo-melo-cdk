@@ -43,6 +43,9 @@ public record Album
     [JsonPropertyName("createdAt")]
     public required long CreatedAt { get; set; }
 
+    [JsonPropertyName("slug")]
+    public string? Slug { get; set; }
+
     // Populated on the shared-with-me feed; omitted on the owner's own album list
     [JsonPropertyName("owner")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -87,6 +90,8 @@ public record UpdateAlbumRequest
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
     [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
+    // New readable URL; null/omitted leaves it unchanged (renaming never changes it)
+    [JsonPropertyName("slug")] public string? Slug { get; set; }
 }
 
 public record SetAlbumTracksRequest
@@ -139,6 +144,9 @@ public record AlbumDataModel
 
     [DynamoDBProperty("likeCount")]
     public int LikeCount { get; set; }
+
+    [DynamoDBProperty("slug")]
+    public string? Slug { get; set; }
 
     [DynamoDBProperty("createdAt")]
     public required long CreatedAt { get; set; }
@@ -195,6 +203,10 @@ public record AlbumShareDataModel
 
     [DynamoDBGlobalSecondaryIndexRangeKey("GSI1", AttributeName = "GSI1SK")]
     public string? Gsi1Sk { get; set; }
+
+    // SENDER#{owner}#DATE#{epochMs} — "albums this person shared with me" via GSI2 (shares GSI1PK)
+    [DynamoDBGlobalSecondaryIndexRangeKey("GSI2", AttributeName = "GSI2SK")]
+    public string? Gsi2Sk { get; set; }
 
     [DynamoDBProperty("albumOwnerUsername")]
     public required string AlbumOwnerUsername { get; set; }

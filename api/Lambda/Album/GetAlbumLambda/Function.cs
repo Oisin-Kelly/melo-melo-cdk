@@ -25,13 +25,16 @@ public sealed class Function : BaseLambdaFunctionHandler
     private readonly IAlbumShareRepository _albumShareRepository;
     private readonly IAlbumTracklistRepository _albumTracklistRepository;
     private readonly IAlbumLikeRepository _albumLikeRepository;
+    private readonly IUserRepository _userRepository;
 
-    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository, IAlbumTracklistRepository albumTracklistRepository, IAlbumLikeRepository albumLikeRepository)
+    public Function(IAlbumRepository albumRepository, IAlbumShareRepository albumShareRepository, IAlbumTracklistRepository albumTracklistRepository, IAlbumLikeRepository albumLikeRepository,
+        IUserRepository userRepository)
     {
         _albumRepository = albumRepository;
         _albumShareRepository = albumShareRepository;
         _albumTracklistRepository = albumTracklistRepository;
         _albumLikeRepository = albumLikeRepository;
+        _userRepository = userRepository;
     }
 
     [LambdaFunction]
@@ -59,7 +62,15 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (!isOwner && !await _albumShareRepository.IsAlbumSharedWithUserAsync(album.Id, username))
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
-            album.LikedByMe = await _albumLikeRepository.IsAlbumLikedByUserAsync(album.Id, username);
+            // Independent reads, run together: like status, the owner's profile (the detail
+            // carries `owner` for the album header), and the first tracklist page
+            var likedTask = _albumLikeRepository.IsAlbumLikedByUserAsync(album.Id, username);
+            var ownerTask = _userRepository.GetUserByUsername(album.OwnerUsername!);
+            var tracksTask = _albumTracklistRepository.GetAlbumTracksAsync(album.Id, username, PageSize, cursor);
+            await Task.WhenAll(likedTask, ownerTask, tracksTask);
+
+            album.LikedByMe = likedTask.Result;
+            album.Owner = ownerTask.Result is { } owner ? UserSummary.From(owner) : null;
             if (!isOwner)
             {
                 // share/like counts are visible to the owner only
@@ -67,9 +78,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 album.LikeCount = null;
             }
 
-            var tracks = await _albumTracklistRepository.GetAlbumTracksAsync(album.Id, username, PageSize, cursor);
-
-            var response = new AlbumDetailResponse { Album = album, Tracks = tracks };
+            var response = new AlbumDetailResponse { Album = album, Tracks = tracksTask.Result };
             return Ok(JsonSerializer.Serialize(response, GetAlbumJsonContext.Default.AlbumDetailResponse));
         }
         catch (Exception ex)

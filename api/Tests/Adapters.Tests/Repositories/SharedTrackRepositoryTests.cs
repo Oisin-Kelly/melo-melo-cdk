@@ -37,6 +37,30 @@ public class SharedTrackRepositoryTests(DynamoDbLocalFixture fixture)
     }
 
     [Fact]
+    public async Task Library_IsOwnPlusDirectPlusAlbumTracks_DedupedAndNothingElse()
+    {
+        var db = fixture.Db;
+        var seed = new Seed(db);
+        var shares = new SharedTrackRepository(db);
+        var me = await seed.UserAsync();
+        var friend = await seed.UserAsync();
+        var mine = await seed.TrackAsync(me);
+        var direct = await seed.TrackAsync(friend, 180, me);
+        var inAlbum = await seed.TrackAsync(friend);
+        var both = await seed.TrackAsync(friend, 180, me); // direct AND in the album
+        var notShared = await seed.TrackAsync(friend);
+        var albumId = await seed.AlbumAsync(friend, inAlbum, both);
+        await seed.AlbumShares.ShareAlbumAsync(albumId, friend, [me], [], null);
+
+        var library = await shares.GetLibraryTracksAsync(me);
+
+        library.Select(t => t.Id).Should().BeEquivalentTo([mine, direct, inAlbum, both]);
+        library.Should().OnlyHaveUniqueItems(t => t.Id);
+        library.Should().NotContain(t => t.Id == notShared);
+        library.Single(t => t.Id == inAlbum).Owner.Username.Should().Be(friend);
+    }
+
+    [Fact]
     public async Task ReShare_OverwritesCaptionAndResurfaces_WithoutCountingTwice()
     {
         var (seed, shares, owner, recipient, trackId) = await ArrangeUnsharedAsync();

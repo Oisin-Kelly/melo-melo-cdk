@@ -19,8 +19,6 @@ public record ShareAlbumResponse
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private const int MaxRecipientsPerAlbum = 50;
-
     private readonly IAlbumRepository _albumRepository;
     private readonly IAlbumShareRepository _albumShareRepository;
     private readonly IUserRepository _userRepository;
@@ -58,7 +56,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Strips self, duplicates, and unknown usernames. A user in both add and remove is
             // contradictory — remove wins, and that's decided here (against the raw remove list)
-            // so the recipient cap and the sharedWith response agree with what gets written.
+            // so the sharedWith response agrees with what gets written.
             var removeList = shareRequest.Remove
                 .Where(u => !string.IsNullOrWhiteSpace(u))
                 .Select(NormaliseUsername)
@@ -71,11 +69,6 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var removeRecipients = removeList.Where(currentRecipients.Contains).ToList();
 
-            var newRecipients = validatedAdds.Except(currentRecipients).ToList();
-            var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
-            if (totalAfter > MaxRecipientsPerAlbum)
-                return Error(HttpStatusCode.BadRequest,
-                    $"albums can be shared with at most {MaxRecipientsPerAlbum} users", "Bad Request");
 
             await _albumShareRepository.ShareAlbumAsync(album.Id, username, validatedAdds, removeRecipients,
                 shareRequest.Caption);

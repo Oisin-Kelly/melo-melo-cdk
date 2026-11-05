@@ -32,6 +32,16 @@ public record ActivityEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TargetName { get; set; }
 
+    // For building the target's readable URL (/{owner}/{slug}); null on follow rows and on
+    // items created before slugs existed (the client falls back to the id route)
+    [JsonPropertyName("targetOwner")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TargetOwner { get; set; }
+
+    [JsonPropertyName("targetSlug")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TargetSlug { get; set; }
+
     [JsonPropertyName("createdAt")] public required long CreatedAt { get; set; }
 }
 

@@ -11,6 +11,6 @@ public interface ITrackRepository
         ImageProcessingResult? image);
     public Task<List<string>> GetOwnedTrackIdsAsync(string ownerUsername, IReadOnlyList<string> trackIds);
     public Task<Track?> UpdateTrackAsync(string ownerUsername, string trackId, string name, string? genre,
-        string? description, ImageProcessingResult? image, bool clearImage);
+        string? description, ImageProcessingResult? image, bool clearImage, string? slug = null);
     public Task DeleteTrackAsync(string ownerUsername, string trackId);
 }

@@ -28,6 +28,14 @@ The base-table SK is deterministic — one row per (target × follower) — so f
 
 > Key format changed 2026-10-16 (SK used to be `USER#{follower}#{epochMs}`, no GSI3 keys). Rows in the old format aren't found by the new reads — dev follow rows were wiped rather than migrated.
 
+### Slug
+
+| PK | SK |
+|----|----|
+| `USER#{owner}` | `SLUG#{TRACK\|ALBUM\|PLAYLIST}#{slug}` |
+
+Attributes: `targetId`, `createdAt`. One per readable URL an item has ever had — the item's current one is its meta `slug`; the rest redirect. Shares the owner partition with the profile and the owner's track/album/playlist metas, which are always queried by `begins_with` on their own SK prefix, so slug records never appear in them. Rules in [README.md](README.md#readable-urls-slugs).
+
 ---
 
 ## Access Patterns
@@ -64,6 +72,13 @@ The base-table SK is deterministic — one row per (target × follower) — so f
 #### `GET /users/search?q=&limit=&cursor=` — SearchUsersLambda
 1. Validate `q`: trim + lowercase, 400 if empty or outside the username charset (`[a-zA-Z0-9._]`)
 2. `Query(GSI3, GSI3PK=USERS, GSI3SK begins_with USERNAME#{q}, Limit, ScanIndexForward=true, cursor)` → `PaginatedResult<UserSummary>` alphabetically (GSI3 projects ALL, so no hydration step)
+
+#### `GET /users/{username}/slugs/{kind}/{slug}` — ResolveSlugLambda
+`kind` = `tracks` | `albums` | `playlists` (anything else 404). Under `/slugs/` so a slug can't collide with `/users/{u}/albums/shared` and friends.
+1. Playlists: caller ≠ owner → 404 before any read (private)
+2. `GetItem(PK=USER#{owner}, SK=SLUG#{KIND}#{slug})` → `targetId` (404 if absent)
+3. Access, same as the item's detail GET: track → `GetTrackAsync` + owner match + `IsTrackAccessibleToUser`; album → `GetAlbumByIdAsync` + owner match + owner or `IsAlbumSharedWithUserAsync`; playlist → `GetItem(USER#{owner}, PLAYLIST#{id})`
+4. → `{id, slug: meta.slug}` (the canonical slug; differs from the requested one after a URL change). Every miss — no slug, no access, someone else's playlist, an old slug of an item you can't see — is the identical 404 `"This isn't available"`, so a guessed URL reveals nothing.
 
 #### `POST /me/seen` — MarkSeenLambda
 `UpdateItem SET lastSeenAt = now` on the profile (the new-since-last-visit marker; the client renders the divider itself).

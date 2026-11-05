@@ -19,8 +19,6 @@ public record ShareTrackResponse
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private const int MaxRecipientsPerTrack = 50;
-
     private readonly ITrackRepository _trackRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
     private readonly IUserRepository _userRepository;
@@ -59,7 +57,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Strips self, duplicates, and unknown usernames. A user in both add and remove is
             // contradictory — remove wins, and that's decided here (against the raw remove list)
-            // so the recipient cap and the sharedWith response agree with what gets written.
+            // so the sharedWith response agrees with what gets written.
             var removeList = shareRequest.Remove
                 .Where(u => !string.IsNullOrWhiteSpace(u))
                 .Select(NormaliseUsername)
@@ -72,11 +70,6 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var removeRecipients = removeList.Where(currentRecipients.Contains).ToList();
 
-            var newRecipients = validatedAdds.Except(currentRecipients).ToList();
-            var totalAfter = currentRecipients.Count + newRecipients.Count - removeRecipients.Count;
-            if (totalAfter > MaxRecipientsPerTrack)
-                return Error(HttpStatusCode.BadRequest,
-                    $"tracks can be shared with at most {MaxRecipientsPerTrack} users", "Bad Request");
 
             await _sharedTrackRepository.ShareTrackAsync(track.Id, username, validatedAdds, removeRecipients,
                 shareRequest.Caption);

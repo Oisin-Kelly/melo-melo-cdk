@@ -210,6 +210,25 @@ public class PlaylistHandlerTests
         tracks.GetProperty("nextCursor").GetString().Should().Be("next");
     }
 
+    [Theory]
+    [InlineData(null, 10)]
+    [InlineData("100", 100)]
+    [InlineData("500", 100)]
+    [InlineData("0", 1)]
+    public async Task Get_PassesTheClampedLimitThrough(string? limit, int expected)
+    {
+        _playlists.GetPlaylistTracksAsync(PlaylistId, Owner, Arg.Any<int>(), Arg.Any<string?>()).Returns(Fakes.Page<PlaylistTrackEntry>());
+        _likes.GetLikedTracksAsync(Owner, Arg.Any<int>(), Arg.Any<string?>())
+            .Returns(new PaginatedResult<LikedTrack> { Items = [] });
+        var query = limit is null ? null : new Dictionary<string, string> { ["limit"] = limit };
+
+        (await Get.FunctionHandler(Http.As(Owner, query), _context, PlaylistId)).ShouldHaveStatus(HttpStatusCode.OK);
+        (await Get.FunctionHandler(Http.As(Owner, query), _context, LikesId)).ShouldHaveStatus(HttpStatusCode.OK);
+
+        await _playlists.Received(1).GetPlaylistTracksAsync(PlaylistId, Owner, expected, null);
+        await _likes.Received(1).GetLikedTracksAsync(Owner, expected, null);
+    }
+
     private static PlaylistTrackEntry Entry(string id, TrackSummary track) => new()
     {
         TrackId = id, Name = track.Name, Duration = track.Duration, AddedAt = 1, Unavailable = false, Track = track,

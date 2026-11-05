@@ -33,6 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IFeedRepository, FeedRepository>();
         services.AddTransient<IActivityRepository, ActivityRepository>();
         services.AddTransient<IProgressRepository, ProgressRepository>();
+        services.AddTransient<ISlugRepository, SlugRepository>();
+        services.AddTransient<IShareLinkRepository, ShareLinkRepository>();
+        services.AddTransient<ILinkTargetService, LinkTargetService>();
 
         return services;
     }

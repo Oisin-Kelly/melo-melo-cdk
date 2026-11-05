@@ -53,6 +53,8 @@ public record UpdatePlaylistRequest
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
     [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
+    // New readable URL; null/omitted leaves it unchanged (renaming never changes it)
+    [JsonPropertyName("slug")] public string? Slug { get; set; }
 }
 
 public record Playlist
@@ -68,6 +70,9 @@ public record Playlist
 
     [JsonPropertyName("type")]
     public required string Type { get; set; }
+
+    [JsonPropertyName("slug")]
+    public string? Slug { get; set; }
 
     [JsonPropertyName("imageUrl")]
     public string? ImageUrl { get; set; }
@@ -109,6 +114,10 @@ public record PlaylistDataModel
 
     [DynamoDBProperty("type")]
     public required string Type { get; set; }
+
+    // Readable URL; null on the likes playlist (/liked is its URL)
+    [DynamoDBProperty("slug")]
+    public string? Slug { get; set; }
 
     [DynamoDBProperty("imageUrl")]
     public string? ImageUrl { get; set; }

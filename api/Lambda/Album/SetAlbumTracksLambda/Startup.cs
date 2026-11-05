@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Adapters;
 using Adapters.Validation;
-using Ports.Services;
 using Ports.Validation;
 
 namespace SetAlbumTracksLambda;

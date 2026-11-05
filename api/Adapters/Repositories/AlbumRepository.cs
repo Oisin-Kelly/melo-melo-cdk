@@ -11,14 +11,17 @@ public sealed class AlbumRepository : IAlbumRepository
     private readonly IAlbumTracklistRepository _tracklistRepository;
     private readonly IAlbumShareRepository _shareRepository;
     private readonly IAlbumLikeRepository _albumLikeRepository;
+    private readonly IShareLinkRepository _shareLinkRepository;
 
     public AlbumRepository(IDynamoDBService dynamoDbService, IAlbumTracklistRepository tracklistRepository,
-        IAlbumShareRepository shareRepository, IAlbumLikeRepository albumLikeRepository)
+        IAlbumShareRepository shareRepository, IAlbumLikeRepository albumLikeRepository,
+        IShareLinkRepository shareLinkRepository)
     {
         _dynamoDbService = dynamoDbService;
         _tracklistRepository = tracklistRepository;
         _shareRepository = shareRepository;
         _albumLikeRepository = albumLikeRepository;
+        _shareLinkRepository = shareLinkRepository;
     }
 
     public async Task<PaginatedResult<AlbumSummary>> GetAlbumsAsync(string ownerUsername, int pageSize, string? cursor)
@@ -77,6 +80,7 @@ public sealed class AlbumRepository : IAlbumRepository
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var durations = await AlbumRecords.GetTrackDurationsAsync(_dynamoDbService, ownerUsername, trackIds);
+        var slug = await SlugRecords.ClaimAsync(_dynamoDbService, ownerUsername, SlugKind.Album, albumId, name);
 
         // Memberships first, meta last — the album only becomes visible once fully written
         if (trackIds.Count > 0)
@@ -109,6 +113,7 @@ public sealed class AlbumRepository : IAlbumRepository
             TrackCount = trackIds.Count,
             TotalDurationSeconds = durations.Values.Sum(),
             CreatedAt = now,
+            Slug = slug,
         };
         await _dynamoDbService.WriteToDynamoAsync(meta);
 
@@ -116,9 +121,10 @@ public sealed class AlbumRepository : IAlbumRepository
     }
 
     public async Task<Album?> UpdateAlbumAsync(string ownerUsername, string albumId, string? name,
-        string? description, ImageProcessingResult? image, bool clearImage)
+        string? description, ImageProcessingResult? image, bool clearImage, string? slug = null)
     {
-        var (pk, sk) = Keys.Album(ownerUsername, albumId.ToLowerInvariant());
+        var normalisedId = albumId.ToLowerInvariant();
+        var (pk, sk) = Keys.Album(ownerUsername, normalisedId);
 
         var builder = new UpdateExpressionBuilder();
         builder.AddNullableString("name", "n", name);
@@ -135,11 +141,19 @@ public sealed class AlbumRepository : IAlbumRepository
             builder.RemoveField("imageBgColor", "ib");
         }
 
+        // A new URL: claim its slug record in the same transaction (the old record stays as a redirect)
+        if (slug is not null)
+            builder.AddValue("slug", "s", slug);
+
         if (!builder.IsEmpty)
         {
             var tx = _dynamoDbService.CreateTransactionPart<AlbumDataModel>();
             tx.AddSaveItem(pk, sk, builder.Build());
-            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+            if (slug is null)
+                await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+            else if (!await _dynamoDbService.TryExecuteTransactWriteAsync(tx,
+                         SlugRecords.BuildClaim(_dynamoDbService, ownerUsername, SlugKind.Album, normalisedId, slug)))
+                throw new ArgumentException(SlugRecords.TakenMessage);
         }
 
         var item = await _dynamoDbService.GetFromDynamoAsync<AlbumDataModel>(pk, sk);
@@ -156,6 +170,8 @@ public sealed class AlbumRepository : IAlbumRepository
         await _shareRepository.DeleteAllSharesAsync(normalisedId);
         await _albumLikeRepository.DeleteLikesForAlbumAsync(normalisedId);
         await _tracklistRepository.DeleteAllTracksAsync(normalisedId);
+        await _shareLinkRepository.DeleteLinksForTargetAsync(ShareLinkKind.Album, normalisedId);
+        await SlugRecords.DeleteForTargetAsync(_dynamoDbService, ownerUsername, SlugKind.Album, normalisedId);
 
         var metaBatch = _dynamoDbService.CreateBatchWritePart<AlbumDataModel>();
         var (pk, sk) = Keys.Album(ownerUsername, normalisedId);
@@ -175,6 +191,7 @@ public sealed class AlbumRepository : IAlbumRepository
         ShareCount = item.ShareCount, // handlers null share/like counts for non-owners
         LikeCount = item.LikeCount,
         CreatedAt = item.CreatedAt,
+        Slug = item.Slug,
         OwnerUsername = item.OwnerUsername,
     };
 }

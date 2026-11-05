@@ -59,9 +59,8 @@ public class StepFunctionStack : BaseStack
 
         // Standard (not Express) so processing isn't hard-killed at Express's 5-minute
         // cap — the Lambda's own 15-minute timeout is the binding limit for long audio.
-        // Type is immutable in CloudFormation, so the EXPRESS→STANDARD switch replaced
-        // the machine; the name carries a -std suffix because create-before-delete
-        // replacement can't reuse the old explicit name.
+        // The type can't change in place (CloudFormation replaces the machine, and a
+        // replacement can't reuse an explicit name), hence the -std suffix on the name.
         UploadTrackStateMachine = new StateMachine(this, "UploadTrackStateMachine", new StateMachineProps
         {
             StateMachineName = $"melo-melo-upload-track-std-{Env}",

@@ -29,7 +29,7 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
     }
 
     public async Task ShareAlbumAsync(string albumId, string ownerUsername, IReadOnlyList<string> addRecipients,
-        IReadOnlyList<string> removeRecipients, string? caption)
+        IReadOnlyList<string> removeRecipients, string? caption, bool notifyRecipients = true)
     {
         var normalisedId = albumId.ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -84,14 +84,16 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
                     Sk = $"SHARED#{recipient}",
                     Gsi1Pk = $"ALBUMSHARED#{recipient}",
                     Gsi1Sk = $"DATE#{now}",
+                    Gsi2Sk = $"SENDER#{ownerUsername}#DATE#{now}",
                     AlbumOwnerUsername = ownerUsername,
                     Caption = caption,
                     SharedAt = now,
                 });
                 feedBatch.AddPutItem(
                     FeedItems.Build(recipient, FeedItemType.Album, normalisedId, ownerUsername, now, caption));
-                activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.AlbumShared, ownerUsername,
-                    FeedItemType.Album, normalisedId, now));
+                if (notifyRecipients)
+                    activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.AlbumShared,
+                        ownerUsername, FeedItemType.Album, normalisedId, now));
             }
 
             await _dynamoDbService.ExecuteBatchWriteAsync(addBatch, feedBatch, activityBatch);
@@ -166,6 +168,29 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
             scanIndexForward: false
         );
 
+        return await HydrateSharedAlbumsAsync(shares, username, nextToken);
+    }
+
+    public async Task<PaginatedResult<SharedAlbum>> GetAlbumsSharedFromUserAsync(string senderUsername,
+        string viewerUsername, int pageSize, string? cursor)
+    {
+        var (shares, nextToken) = await _dynamoDbService.QueryPaginatedAsync<AlbumShareDataModel>(
+            hashKey: $"ALBUMSHARED#{viewerUsername}",
+            rangeKey: $"SENDER#{senderUsername}#",
+            queryOperator: QueryOperator.BeginsWith,
+            indexName: "GSI2",
+            pageSize: pageSize,
+            paginationToken: cursor,
+            scanIndexForward: false
+        );
+
+        return await HydrateSharedAlbumsAsync(shares, viewerUsername, nextToken);
+    }
+
+    // Album metas + owner profiles + the viewer's like status, in one parallel BatchGet round
+    private async Task<PaginatedResult<SharedAlbum>> HydrateSharedAlbumsAsync(List<AlbumShareDataModel> shares,
+        string viewerUsername, string? nextToken)
+    {
         if (shares.Count == 0)
             return new PaginatedResult<SharedAlbum> { Items = [], NextCursor = null };
 
@@ -173,7 +198,7 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
             shares.Select(s => Keys.Album(s.AlbumOwnerUsername, s.AlbumId)));
         var ownersTask = ProfileLookup.GetAsync(_dynamoDbService, shares.Select(s => s.AlbumOwnerUsername));
         var likedAlbumIdsTask = AlbumLikeRepository.GetLikedAlbumIdsAsync(
-            _dynamoDbService, username, shares.Select(s => s.AlbumId).ToList());
+            _dynamoDbService, viewerUsername, shares.Select(s => s.AlbumId).ToList());
         await Task.WhenAll(albumsTask, ownersTask, likedAlbumIdsTask);
 
         var albums = albumsTask.Result.ToDictionary(a => a.AlbumId);

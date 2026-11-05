@@ -80,15 +80,29 @@ public class WebStack : BaseStack
         });
 
         // Hashed assets are immutable — cache forever. index.html is the deploy pointer —
-        // never cache, and invalidate CloudFront so new deploys go live immediately.
-        // Both Prune=false: with Exclude-based splits, pruning would delete the other
+        // never cache, and invalidate CloudFront so new deploys go live immediately. The
+        // service worker (sw.js) and app manifest have fixed names too, so they're served
+        // like index.html: a year-long cache would pin users to an old service worker. The
+        // icons have fixed names but rarely change: a week's cache, like most sites.
+        // All Prune=false: with Exclude-based splits, pruning would delete the other
         // deployment's files.
         var deployAssets = new BucketDeployment(this, "DeployAssets", new BucketDeploymentProps
         {
             Sources = [Source.Asset("web/dist")],
             DestinationBucket = bucket,
-            Exclude = ["index.html"],
+            Exclude = ["index.html", "sw.js", "manifest.webmanifest", "favicon.svg", "favicon-32.png", "apple-touch-icon.png", "og-image.png"],
             CacheControl = [CacheControl.MaxAge(Duration.Days(365)), CacheControl.Immutable()],
+            Prune = false,
+        });
+
+        var deployIcons = new BucketDeployment(this, "DeployIcons", new BucketDeploymentProps
+        {
+            Sources = [Source.Asset("web/dist")],
+            DestinationBucket = bucket,
+            Exclude = ["*"],
+            // + the link-preview card's image (og-image.png): fixed name too
+            Include = ["favicon.svg", "favicon-32.png", "apple-touch-icon.png", "og-image.png"],
+            CacheControl = [CacheControl.MaxAge(Duration.Days(7))],
             Prune = false,
         });
 
@@ -97,7 +111,7 @@ public class WebStack : BaseStack
             Sources = [Source.Asset("web/dist")],
             DestinationBucket = bucket,
             Exclude = ["*"],
-            Include = ["index.html"],
+            Include = ["index.html", "sw.js", "manifest.webmanifest"],
             CacheControl = [CacheControl.NoCache()],
             Distribution = distribution,
             DistributionPaths = ["/*"],
@@ -108,6 +122,8 @@ public class WebStack : BaseStack
         // CloudFront) once they're uploaded — otherwise browsers briefly load an index whose
         // scripts 403 → SPA fallback → HTML-as-JS → blank page
         deployIndex.Node.AddDependency(deployAssets);
+        // ...and its invalidation should also clear the edge's copy of any replaced icon
+        deployIndex.Node.AddDependency(deployIcons);
 
         if (isProd)
         {

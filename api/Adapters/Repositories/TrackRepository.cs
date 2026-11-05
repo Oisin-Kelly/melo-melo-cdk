@@ -13,16 +13,18 @@ public sealed class TrackRepository : ITrackRepository
     private readonly ILikeRepository _likeRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
     private readonly IUploadStatusRepository _uploadStatusRepository;
+    private readonly IShareLinkRepository _shareLinkRepository;
 
     public TrackRepository(IDynamoDBService dynamoDbService, IUserRepository userRepository,
         ILikeRepository likeRepository, ISharedTrackRepository sharedTrackRepository,
-        IUploadStatusRepository uploadStatusRepository)
+        IUploadStatusRepository uploadStatusRepository, IShareLinkRepository shareLinkRepository)
     {
         _dynamoDbService = dynamoDbService;
         _userRepository = userRepository;
         _likeRepository = likeRepository;
         _sharedTrackRepository = sharedTrackRepository;
         _uploadStatusRepository = uploadStatusRepository;
+        _shareLinkRepository = shareLinkRepository;
     }
 
     public async Task<Track?> GetTrackAsync(string trackId)
@@ -46,6 +48,7 @@ public sealed class TrackRepository : ITrackRepository
             TrackName = trackDto.TrackName,
             Owner = UserSummary.From(owner),
             Id = trackDto.TrackId,
+            Slug = trackDto.Slug,
             LikeCount = trackDto.LikeCount,
             ShareCount = trackDto.ShareCount,
         };
@@ -96,9 +99,13 @@ public sealed class TrackRepository : ITrackRepository
         return new PaginatedResult<TrackSummary> { Items = tracks, NextCursor = nextToken };
     }
 
-    public Task CreateTrackAsync(string trackId, ProcessTrackInput input, AudioProcessingResult audio,
+    public async Task CreateTrackAsync(string trackId, ProcessTrackInput input, AudioProcessingResult audio,
         ImageProcessingResult? image)
     {
+        // Slug claim first (idempotent per track, so a retried execution reuses it), Track item after
+        var slug = await SlugRecords.ClaimAsync(_dynamoDbService, input.Username, SlugKind.Track, trackId,
+            input.Name!);
+
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var trackTx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
@@ -118,10 +125,14 @@ public sealed class TrackRepository : ITrackRepository
             CreatedAt = now,
             Duration = audio.DurationSeconds,
             ShareCount = input.SharedWith.Count,
+            Slug = slug,
         });
 
         if (input.SharedWith.Count == 0)
-            return _dynamoDbService.ExecuteTransactWriteAsync(trackTx);
+        {
+            await _dynamoDbService.ExecuteTransactWriteAsync(trackTx);
+            return;
+        }
 
         var sharedTx = _dynamoDbService.CreateTransactionPart<SharedTrackDataModel>();
         foreach (var recipient in input.SharedWith)
@@ -139,7 +150,7 @@ public sealed class TrackRepository : ITrackRepository
             });
         }
 
-        return WriteTrackAndFeedAsync(trackTx, sharedTx, trackId, input, now);
+        await WriteTrackAndFeedAsync(trackTx, sharedTx, trackId, input, now);
     }
 
     private async Task WriteTrackAndFeedAsync(ITransactWrite trackTx, ITransactWrite sharedTx,
@@ -161,7 +172,7 @@ public sealed class TrackRepository : ITrackRepository
     }
 
     public async Task<Track?> UpdateTrackAsync(string ownerUsername, string trackId, string name, string? genre,
-        string? description, ImageProcessingResult? image, bool clearImage)
+        string? description, ImageProcessingResult? image, bool clearImage, string? slug = null)
     {
         var normalisedId = trackId.ToLowerInvariant();
 
@@ -181,9 +192,17 @@ public sealed class TrackRepository : ITrackRepository
             builder.RemoveField("imageBgColor", "ib");
         }
 
+        // A new URL: claim its slug record in the same transaction (the old record stays as a redirect)
+        if (slug is not null)
+            builder.AddValue("slug", "s", slug);
+
         var tx = _dynamoDbService.CreateTransactionPart<TrackDataModel>();
         tx.AddSaveItem($"USER#{ownerUsername}", $"TRACK#{normalisedId}", builder.Build());
-        await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+        if (slug is null)
+            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+        else if (!await _dynamoDbService.TryExecuteTransactWriteAsync(tx,
+                     SlugRecords.BuildClaim(_dynamoDbService, ownerUsername, SlugKind.Track, normalisedId, slug)))
+            throw new ArgumentException(SlugRecords.TakenMessage);
 
         var item = await _dynamoDbService.GetFromDynamoAsync<TrackDataModel>(
             $"USER#{ownerUsername}", $"TRACK#{normalisedId}");
@@ -205,6 +224,7 @@ public sealed class TrackRepository : ITrackRepository
             Owner = UserSummary.From(owner),
             CreatedAt = item.CreatedAt,
             Duration = item.Duration,
+            Slug = item.Slug,
         };
     }
 
@@ -218,6 +238,8 @@ public sealed class TrackRepository : ITrackRepository
         await _likeRepository.DeleteLikesForTrackAsync(normalisedId);
         await _sharedTrackRepository.DeleteSharesForTrackAsync(normalisedId);
         await _uploadStatusRepository.DeleteAsync(ownerUsername, normalisedId);
+        await _shareLinkRepository.DeleteLinksForTargetAsync(ShareLinkKind.Track, normalisedId);
+        await SlugRecords.DeleteForTargetAsync(_dynamoDbService, ownerUsername, SlugKind.Track, normalisedId);
 
         var trackBatch = _dynamoDbService.CreateBatchWritePart<TrackDataModel>();
         var (pk, sk) = Keys.Track(ownerUsername, normalisedId);

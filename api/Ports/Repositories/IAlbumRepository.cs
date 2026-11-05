@@ -14,6 +14,6 @@ public interface IAlbumRepository
     public Task<Album> CreateAlbumAsync(string albumId, string ownerUsername, string name, string? description,
         ImageProcessingResult? image, IReadOnlyList<string> trackIds);
     public Task<Album?> UpdateAlbumAsync(string ownerUsername, string albumId, string? name, string? description,
-        ImageProcessingResult? image, bool clearImage);
+        ImageProcessingResult? image, bool clearImage, string? slug = null);
     public Task DeleteAlbumAsync(string ownerUsername, string albumId);
 }

@@ -11,7 +11,7 @@ public interface IPlaylistRepository
     public Task<Playlist> CreatePlaylistAsync(string playlistId, string username, string name, string? description,
         ImageProcessingResult? image);
     public Task<Playlist?> UpdatePlaylistAsync(string username, string playlistId, string? name, string? description,
-        ImageProcessingResult? image, bool clearImage);
+        ImageProcessingResult? image, bool clearImage, string? slug = null);
     public Task DeletePlaylistAsync(string username, string playlistId);
     /// Appends the track at the end of the playlist. Re-adding an existing member
     /// is a no-op (position and addedAt are kept). Returns whether it was added.

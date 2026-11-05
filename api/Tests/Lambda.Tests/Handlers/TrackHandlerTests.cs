@@ -280,6 +280,62 @@ public class TrackHandlerTests
         (expiresAt - before).Should().BeCloseTo(TimeSpan.FromHours(6), TimeSpan.FromMinutes(1));
     }
 
+    // ---------------------------------------------------------------- GET /tracks/{trackId}/original
+
+    private GetOriginalTrackLambda.Function Original => new(_tracks, _audio);
+
+    [Fact]
+    public async Task Original_WithoutIdentity_Is401()
+    {
+        (await Original.FunctionHandler(Http.Anonymous(), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        await _audio.DidNotReceiveWithAnyArgs().GetOriginalDownloadAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Original_UnknownTrack_Is404()
+    {
+        (await Original.FunctionHandler(Http.As(Owner), _context, "nope")).ShouldHaveStatus(HttpStatusCode.NotFound);
+    }
+
+    // Unlike streaming, the original is the owner's alone — someone it's shared with gets the
+    // same 404 as a stranger, and no URL is ever minted
+    [Theory]
+    [InlineData("bob")] // a recipient
+    [InlineData(Stranger)]
+    public async Task Original_IsOwnerOnly(string caller)
+    {
+        _shares.IsTrackAccessibleToUser(TrackId, "bob").Returns(true);
+
+        (await Original.FunctionHandler(Http.As(caller), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.NotFound);
+        await _audio.DidNotReceiveWithAnyArgs().GetOriginalDownloadAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Original_ATrackWithNoArchivedOriginal_Is404_SayingSo()
+    {
+        _audio.GetOriginalDownloadAsync(TrackId, Arg.Any<string>(), Arg.Any<TimeSpan>()).Returns((OriginalDownload?)null);
+
+        var response = (await Original.FunctionHandler(Http.As(Owner), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.NotFound);
+
+        response.ErrorMessage().Should().Be(GetOriginalTrackLambda.Function.NotAvailableMessage);
+    }
+
+    [Fact]
+    public async Task Original_GivesTheOwnerAFiveMinuteDownloadNamedAfterTheTrack()
+    {
+        _audio.GetOriginalDownloadAsync(TrackId, "Track t1", TimeSpan.FromMinutes(5))
+            .Returns(new OriginalDownload("https://s3/original", "Track t1.wav", "audio/wav"));
+        var before = DateTimeOffset.UtcNow;
+
+        var body = (await Original.FunctionHandler(Http.As("ALICE"), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.OK).Json();
+
+        body.GetProperty("url").GetString().Should().Be("https://s3/original");
+        body.GetProperty("fileName").GetString().Should().Be("Track t1.wav");
+        body.GetProperty("contentType").GetString().Should().Be("audio/wav");
+        var expiresAt = DateTimeOffset.FromUnixTimeMilliseconds(body.GetProperty("expiresAt").GetInt64());
+        (expiresAt - before).Should().BeCloseTo(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30));
+    }
+
     // ---------------------------------------------------------------- GET /tracks/{trackId}/likes + /recipients
 
     [Fact]
@@ -358,6 +414,19 @@ public class TrackHandlerTests
         (await handler.FunctionHandler(Http.As("bob", new() { ["cursor"] = "c1" }), _context, Owner))
             .ShouldHaveStatus(HttpStatusCode.OK);
         await _shares.Received(1).GetTracksSharedFromUser(Owner, "bob", 10, "c1");
+    }
+
+    [Fact]
+    public async Task Library_IsTheCallersWholePlayableLibrary_InOneUnpagedResult()
+    {
+        var handler = new GetLibraryTracksLambda.Function(_shares);
+        _shares.GetLibraryTracksAsync("bob").Returns([]);
+
+        (await handler.FunctionHandler(Http.Anonymous(), _context)).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        var response = await handler.FunctionHandler(Http.As("bob"), _context);
+        response.ShouldHaveStatus(HttpStatusCode.OK);
+        response.Body.Should().Contain("\"nextCursor\":null");
+        await _shares.Received(1).GetLibraryTracksAsync("bob");
     }
 
     [Fact]
@@ -443,25 +512,18 @@ public class TrackHandlerTests
     }
 
     [Fact]
-    public async Task Share_PastFiftyRecipients_Is400_AndWritesNothing()
+    public async Task Share_PastFiftyRecipientsInTotal_IsAllowed()
     {
+        // The 50 cap is per request (validator); a track has no total recipient cap.
         _shares.GetTrackRecipientsAsync(TrackId).Returns(Enumerable.Range(0, 50).Select(i => $"u{i}").ToList());
         RecipientsAre("newcomer");
 
         (await ShareTrack.FunctionHandler(Http.As(Owner), _context, TrackId, new ShareTrackRequest { Add = ["newcomer"] }))
-            .ShouldHaveStatus(HttpStatusCode.BadRequest);
-        await _shares.DidNotReceiveWithAnyArgs().ShareTrackAsync(default!, default!, default!, default!, default);
-    }
-
-    [Fact]
-    public async Task Share_ReShareAtTheCap_IsAllowed()
-    {
-        var current = Enumerable.Range(0, 50).Select(i => $"u{i}").ToList();
-        _shares.GetTrackRecipientsAsync(TrackId).Returns(current);
-        RecipientsAre("u7"); // already a recipient: not a new one
-
-        (await ShareTrack.FunctionHandler(Http.As(Owner), _context, TrackId, new ShareTrackRequest { Add = ["u7"] }))
-            .ShouldHaveStatus(HttpStatusCode.OK);
+            .ShouldHaveStatus(HttpStatusCode.OK).Json()
+            .GetProperty("sharedWith").GetArrayLength().Should().Be(51);
+        await _shares.Received(1).ShareTrackAsync(TrackId, Owner,
+            Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "newcomer" })),
+            Arg.Is<IReadOnlyList<string>>(r => r.Count == 0), null);
     }
 
     // ---------------------------------------------------------------- POST /tracks/upload
@@ -537,7 +599,7 @@ public class TrackHandlerTests
 
     [Theory]
     [InlineData(null)]           // no query string at all
-    [InlineData("other")]        // a query string, but no key (used to throw outside the try)
+    [InlineData("other")]        // a query string, but no key
     public async Task Presign_WithoutAKey_Is400(string? otherParam)
     {
         var query = otherParam is null ? null : new Dictionary<string, string> { [otherParam] = "1" };

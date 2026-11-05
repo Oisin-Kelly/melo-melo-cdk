@@ -45,6 +45,18 @@ public class UserValidationServiceTests
         FluentActions.Invoking(() => Service.ValidateUsername(username)).Should().Throw<ArgumentException>();
     }
 
+    // Profiles live at the site root (/{username}), so app paths and static file names are taken
+    [Theory]
+    [InlineData("library")]
+    [InlineData("Settings")]
+    [InlineData("sw.js")]
+    [InlineData("robots.txt")]
+    public void Username_ReservedNamesAreRejected(string username)
+    {
+        FluentActions.Invoking(() => Service.ValidateUsername(username)).Should().Throw<ArgumentException>()
+            .WithMessage("That username isn't available");
+    }
+
     // --- Email (sign-up trigger) ---
 
     [Fact]

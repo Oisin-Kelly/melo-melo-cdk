@@ -70,6 +70,21 @@ public sealed class S3Service : IS3Service
         return _s3Client.GetPreSignedURLAsync(request);
     }
 
+    public Task<string> GetPresignedDownloadUrlAsync(string key, TimeSpan expiry, string contentDisposition)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(expiry),
+            // Signed into the URL: S3 sends this header back, so the browser saves the file
+            ResponseHeaderOverrides = { ContentDisposition = contentDisposition },
+        };
+
+        return _s3Client.GetPreSignedURLAsync(request);
+    }
+
     public Task DeleteObjectAsync(string key)
     {
         return _s3Client.DeleteObjectAsync(new DeleteObjectRequest

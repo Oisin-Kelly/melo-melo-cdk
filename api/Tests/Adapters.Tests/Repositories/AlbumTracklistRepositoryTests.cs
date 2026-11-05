@@ -1,5 +1,4 @@
 using Adapters.Repositories;
-using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 
 namespace Adapters.Tests.Repositories;

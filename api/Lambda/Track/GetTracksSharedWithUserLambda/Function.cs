@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.Annotations.APIGateway;

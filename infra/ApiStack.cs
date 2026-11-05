@@ -63,6 +63,15 @@ public class ApiStack : BaseStack
             Integration = CreateIntegration(functions.SearchUsers),
         });
 
+        // Readable URL → item id (/{owner}/{slug}, /{owner}/albums/{slug}, /{owner}/playlists/{slug});
+        // under /slugs/ so a slug can never collide with /users/{u}/albums/shared and friends
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/slugs/{kind}/{slug}",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.ResolveSlug),
+        });
+
         HttpApi.AddRoutes(new AddRoutesOptions
         {
             Path = "/users/{username}/shared",
@@ -140,6 +149,14 @@ public class ApiStack : BaseStack
             Integration = CreateIntegration(functions.GetTrackSegments),
         });
 
+        // Owner-only download of the original upload, in its uploaded format
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/{trackId}/original",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetOriginalTrack),
+        });
+
         HttpApi.AddRoutes(new AddRoutesOptions
         {
             Path = "/tracks/shared",
@@ -173,6 +190,13 @@ public class ApiStack : BaseStack
             Path = "/tracks",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetUserTracks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/library",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetLibraryTracks),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -278,6 +302,13 @@ public class ApiStack : BaseStack
             Path = "/albums/shared",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetAlbumsSharedWithMe),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/{username}/albums/shared",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetAlbumsSharedFromUser),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions
@@ -391,5 +422,66 @@ public class ApiStack : BaseStack
             Methods = [HttpMethod.POST],
             Integration = CreateIntegration(functions.MarkActivitySeen),
         });
+
+        // Share links
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.CreateLink),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetLinks),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links/{token}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.RevokeLink),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links/{token}/restore",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.RestoreLink),
+        });
+
+        // The one public route: whoever opens a share link may not have an account yet. It only
+        // ever reveals what the link's holder is meant to see (see GetLinkPreviewLambda).
+        var linkPreviewRoutes = HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links/{token}",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetLinkPreview),
+            Authorizer = new HttpNoneAuthorizer(),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links/{token}/viewer",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetLinkViewer),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/links/{token}/accept",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.AcceptLink),
+        });
+
+        // Throttle the public route on its own, so hammering it can't eat the account-wide limit
+        // the rest of the API shares. Across all callers — fine at this app's size.
+        // Route settings name a route key, which must exist before the stage is updated
+        var stage = (Amazon.CDK.AWS.Apigatewayv2.CfnStage)HttpApi.DefaultStage!.Node.DefaultChild!;
+        stage.Node.AddDependency(linkPreviewRoutes);
+        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingRateLimit", 20);
+        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingBurstLimit", 40);
     }
 }

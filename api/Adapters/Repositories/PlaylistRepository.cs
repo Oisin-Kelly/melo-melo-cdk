@@ -55,6 +55,7 @@ public sealed class PlaylistRepository : IPlaylistRepository
         string? description, ImageProcessingResult? image)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var slug = await SlugRecords.ClaimAsync(_dynamoDbService, username, SlugKind.Playlist, playlistId, name);
 
         var item = new PlaylistDataModel
         {
@@ -65,6 +66,7 @@ public sealed class PlaylistRepository : IPlaylistRepository
             Name = name,
             Description = description,
             Type = PlaylistType.Custom,
+            Slug = slug,
             ImageUrl = image?.ImageUrl,
             ImageBgColor = image?.ImageHex,
             CreatedAt = now,
@@ -75,7 +77,7 @@ public sealed class PlaylistRepository : IPlaylistRepository
     }
 
     public async Task<Playlist?> UpdatePlaylistAsync(string username, string playlistId, string? name,
-        string? description, ImageProcessingResult? image, bool clearImage)
+        string? description, ImageProcessingResult? image, bool clearImage, string? slug = null)
     {
         var normalisedId = playlistId.ToLowerInvariant();
 
@@ -94,11 +96,19 @@ public sealed class PlaylistRepository : IPlaylistRepository
             builder.RemoveField("imageBgColor", "ib");
         }
 
+        // A new URL: claim its slug record in the same transaction (the old record stays as a redirect)
+        if (slug is not null)
+            builder.AddValue("slug", "s", slug);
+
         if (!builder.IsEmpty)
         {
             var tx = _dynamoDbService.CreateTransactionPart<PlaylistDataModel>();
             tx.AddSaveItem($"USER#{username}", $"PLAYLIST#{normalisedId}", builder.Build());
-            await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+            if (slug is null)
+                await _dynamoDbService.ExecuteTransactWriteAsync(tx);
+            else if (!await _dynamoDbService.TryExecuteTransactWriteAsync(tx,
+                         SlugRecords.BuildClaim(_dynamoDbService, username, SlugKind.Playlist, normalisedId, slug)))
+                throw new ArgumentException(SlugRecords.TakenMessage);
         }
 
         return await GetPlaylistAsync(username, normalisedId);
@@ -122,6 +132,8 @@ public sealed class PlaylistRepository : IPlaylistRepository
 
             await _dynamoDbService.ExecuteBatchWriteAsync(membershipBatch);
         }
+
+        await SlugRecords.DeleteForTargetAsync(_dynamoDbService, username, SlugKind.Playlist, normalisedId);
 
         var metaBatch = _dynamoDbService.CreateBatchWritePart<PlaylistDataModel>();
         metaBatch.AddDeleteKey($"USER#{username}", $"PLAYLIST#{normalisedId}");
@@ -296,6 +308,7 @@ public sealed class PlaylistRepository : IPlaylistRepository
         Name = item.Name,
         Description = item.Description,
         Type = item.Type,
+        Slug = item.Slug,
         ImageUrl = item.ImageUrl,
         ImageBgColor = item.ImageBgColor,
         TrackCount = item.TrackCount,

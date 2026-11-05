@@ -54,7 +54,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var updated = await _albumRepository.UpdateAlbumAsync(
                 username, album.Id, updateRequest.Name, updateRequest.Description,
-                image, updateRequest.ClearedImage);
+                image, updateRequest.ClearedImage, updateRequest.Slug);
 
             return Ok(JsonSerializer.Serialize(updated, UpdateAlbumJsonContext.Default.Album));
         }

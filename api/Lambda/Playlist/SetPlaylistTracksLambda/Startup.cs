@@ -1,8 +1,6 @@
 using Amazon.Lambda.Annotations;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Adapters;
-using Ports.Services;
 
 namespace SetPlaylistTracksLambda;
 

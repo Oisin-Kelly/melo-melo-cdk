@@ -13,6 +13,19 @@ internal static class ConditionExpressions
 
     public static Expression ItemNotExists() => Build("attribute_not_exists(#condPk)");
 
+    // A claim on a key that is free, or already held by `targetId` — makes re-claiming the same
+    // slug for the same item (a retried upload) a no-op instead of a conflict
+    public static Expression ItemNotExistsOrTargetIs(string targetId) => new()
+    {
+        ExpressionStatement = "attribute_not_exists(#condPk) OR #condTarget = :condTarget",
+        ExpressionAttributeNames = new Dictionary<string, string>
+        {
+            { "#condPk", "PK" },
+            { "#condTarget", "targetId" },
+        },
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> { { ":condTarget", targetId } },
+    };
+
     private static Expression Build(string statement) => new()
     {
         ExpressionStatement = statement,

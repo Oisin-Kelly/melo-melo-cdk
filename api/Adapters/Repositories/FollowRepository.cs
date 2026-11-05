@@ -22,7 +22,7 @@ public sealed class FollowRepository : IFollowRepository
     public async Task FollowUser(string usernameToFollow, string followerUsername)
     {
         // Self-follow is rejected outright: both counters live on the same profile item, and a
-        // transaction can't touch one item twice (DynamoDB refuses it, which used to surface as a 500)
+        // transaction can't touch one item twice (DynamoDB would refuse it)
         if (string.Equals(followerUsername, usernameToFollow, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("You can't follow yourself.");
 

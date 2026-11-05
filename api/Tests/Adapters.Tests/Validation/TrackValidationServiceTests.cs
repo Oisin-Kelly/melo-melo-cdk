@@ -166,4 +166,16 @@ public class TrackValidationServiceTests
         FluentActions.Invoking(() => Service.ValidateShare(new ShareTrackRequest())).Should().Throw<ArgumentException>();
         Service.ValidateShare(new ShareTrackRequest { Remove = ["bob"] });
     }
+
+    [Fact]
+    public void Share_CapsEachRequestAtFiftyPeople()
+    {
+        List<string> People(int n) => Enumerable.Range(0, n).Select(i => $"user{i}").ToList();
+
+        Service.ValidateShare(new ShareTrackRequest { Add = People(50), Remove = People(50) });
+        FluentActions.Invoking(() => Service.ValidateShare(new ShareTrackRequest { Add = People(51) }))
+            .Should().Throw<ArgumentException>().WithMessage("*at most 50 people at a time*");
+        FluentActions.Invoking(() => Service.ValidateShare(new ShareTrackRequest { Remove = People(51) }))
+            .Should().Throw<ArgumentException>().WithMessage("*at most 50 people at a time*");
+    }
 }

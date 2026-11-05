@@ -51,6 +51,9 @@ public class LambdaStack : BaseStack
         var searchUsers = CreateLambdaFunction("User/SearchUsersLambda");
         table.GrantReadData(searchUsers);
 
+        var resolveSlug = CreateLambdaFunction("User/ResolveSlugLambda");
+        table.GrantReadData(resolveSlug);
+
         var getUserFollowers = CreateLambdaFunction("User/GetUserFollowersLambda");
         table.GrantReadData(getUserFollowers);
 
@@ -63,6 +66,9 @@ public class LambdaStack : BaseStack
 
         var getUserTracks = CreateLambdaFunction("Track/GetUserTracksLambda");
         table.GrantReadData(getUserTracks);
+
+        var getLibraryTracks = CreateLambdaFunction("Track/GetLibraryTracksLambda");
+        table.GrantReadData(getLibraryTracks);
 
         var getTracksSharedWithUser = CreateLambdaFunction("Track/GetTracksSharedWithUserLambda");
         table.GrantReadData(getTracksSharedWithUser);
@@ -85,6 +91,11 @@ public class LambdaStack : BaseStack
         table.GrantReadData(getTrackSegments);
         // Presigned GET URLs authorize with the signing role's permissions
         privateReadonlyBucket.GrantRead(getTrackSegments);
+
+        var getOriginalTrack = CreateLambdaFunction("Track/GetOriginalTrackLambda");
+        table.GrantReadData(getOriginalTrack);
+        // HEAD of the archived original + its presigned download URL (signed with this role)
+        privateReadonlyBucket.GrantRead(getOriginalTrack);
 
         var deleteTrack = CreateLambdaFunction("Track/DeleteTrackLambda");
         table.GrantReadWriteData(deleteTrack);
@@ -184,6 +195,9 @@ public class LambdaStack : BaseStack
         var getAlbumsSharedWithMe = CreateLambdaFunction("Album/GetAlbumsSharedWithMeLambda");
         table.GrantReadData(getAlbumsSharedWithMe);
 
+        var getAlbumsSharedFromUser = CreateLambdaFunction("Album/GetAlbumsSharedFromUserLambda");
+        table.GrantReadData(getAlbumsSharedFromUser);
+
         // Feed
         var getFeed = CreateLambdaFunction("Feed/GetFeedLambda");
         table.GrantReadData(getFeed);
@@ -205,6 +219,30 @@ public class LambdaStack : BaseStack
         var markActivitySeen = CreateLambdaFunction("Activity/MarkActivitySeenLambda");
         table.GrantReadWriteData(markActivitySeen);
 
+        // Share links
+        var createLink = CreateLambdaFunction("Link/CreateLinkLambda");
+        table.GrantReadWriteData(createLink);
+
+        var getLinks = CreateLambdaFunction("Link/GetLinksLambda");
+        table.GrantReadData(getLinks);
+
+        var revokeLink = CreateLambdaFunction("Link/RevokeLinkLambda");
+        table.GrantReadWriteData(revokeLink);
+
+        var restoreLink = CreateLambdaFunction("Link/RestoreLinkLambda");
+        table.GrantReadWriteData(restoreLink);
+
+        var getLinkPreview = CreateLambdaFunction("Link/GetLinkPreviewLambda");
+        table.GrantReadData(getLinkPreview);
+        // Presigned preview-clip / short-track URLs authorize with this role
+        privateReadonlyBucket.GrantRead(getLinkPreview);
+
+        var getLinkViewer = CreateLambdaFunction("Link/GetLinkViewerLambda");
+        table.GrantReadData(getLinkViewer);
+
+        var acceptLink = CreateLambdaFunction("Link/AcceptLinkLambda");
+        table.GrantReadWriteData(acceptLink); // claims the link + writes the share (grants, feed)
+
         // S3
         var getDropboxPresignedUrl = CreateLambdaFunction("Track/GetDropboxPresignedUrlLambda");
         dropboxBucket.GrantWrite(getDropboxPresignedUrl);
@@ -212,6 +250,7 @@ public class LambdaStack : BaseStack
         ApiFunctions = new ApiFunctions(
             GetUser: getUser,
             SearchUsers: searchUsers,
+            ResolveSlug: resolveSlug,
             GetTrack: getTrack,
             GetTracksSharedWithUser: getTracksSharedWithUser,
             GetTracksSharedFromUser: getTracksSharedFromUser,
@@ -222,12 +261,14 @@ public class LambdaStack : BaseStack
             UpdateProfile: updateProfile,
             GetDropboxPresignedUrl: getDropboxPresignedUrl,
             GetUserTracks: getUserTracks,
+            GetLibraryTracks: getLibraryTracks,
             UploadTrack: UploadTrackFunction,
             GetUploadStatus: getUploadStatus,
             UpdateTrack: updateTrack,
             ShareTrack: shareTrack,
             GetTrackRecipients: getTrackRecipients,
             GetTrackSegments: getTrackSegments,
+            GetOriginalTrack: getOriginalTrack,
             DeleteTrack: deleteTrack,
             RemoveSharedTrack: removeSharedTrack,
             CreatePlaylist: createPlaylist,
@@ -253,12 +294,20 @@ public class LambdaStack : BaseStack
             GetAlbumLikes: getAlbumLikes,
             GetLikedAlbums: getLikedAlbums,
             GetAlbumsSharedWithMe: getAlbumsSharedWithMe,
+            GetAlbumsSharedFromUser: getAlbumsSharedFromUser,
             GetFeed: getFeed,
             UpdateProgress: updateProgress,
             GetProgress: getProgress,
             MarkSeen: markSeen,
             GetActivity: getActivity,
-            MarkActivitySeen: markActivitySeen
+            MarkActivitySeen: markActivitySeen,
+            CreateLink: createLink,
+            GetLinks: getLinks,
+            RevokeLink: revokeLink,
+            RestoreLink: restoreLink,
+            GetLinkPreview: getLinkPreview,
+            GetLinkViewer: getLinkViewer,
+            AcceptLink: acceptLink
         );
     }
 

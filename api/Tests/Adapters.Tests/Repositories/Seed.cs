@@ -15,11 +15,12 @@ public sealed class Seed(IDynamoDBService db)
     public LikeRepository Likes => new(db);
     public SharedTrackRepository Shares => new(db);
     public UploadStatusRepository Uploads => new(db);
-    public TrackRepository Tracks => new(db, Users, Likes, Shares, Uploads);
+    public TrackRepository Tracks => new(db, Users, Likes, Shares, Uploads, Links);
+    public ShareLinkRepository Links => new(db);
     public AlbumTracklistRepository AlbumTracklist => new(db);
     public AlbumShareRepository AlbumShares => new(db);
     public AlbumLikeRepository AlbumLikes => new(db);
-    public AlbumRepository Albums => new(db, AlbumTracklist, AlbumShares, AlbumLikes);
+    public AlbumRepository Albums => new(db, AlbumTracklist, AlbumShares, AlbumLikes, Links);
 
     public static string NewName(string prefix = "u") => $"{prefix}{Guid.NewGuid():N}"[..20];
 

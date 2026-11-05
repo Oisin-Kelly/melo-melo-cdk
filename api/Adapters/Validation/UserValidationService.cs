@@ -45,6 +45,8 @@ public sealed partial class UserValidationService : IUserValidationService
         var isValid = !string.IsNullOrWhiteSpace(username) && UsernameRegex().IsMatch(username);
         if (!isValid)
             throw new ArgumentException("Username is invalid");
+        if (ReservedUsernames.IsReserved(username))
+            throw new ArgumentException("That username isn't available");
     }
 
     public async Task ValidateEmail(string email, string userPoolId)

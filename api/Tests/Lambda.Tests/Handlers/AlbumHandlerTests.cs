@@ -37,7 +37,7 @@ public class AlbumHandlerTests
 
     // ---------------------------------------------------------------- GET /albums/{albumId}
 
-    private GetAlbumLambda.Function GetAlbum => new(_albums, _shares, _tracklist, _likes);
+    private GetAlbumLambda.Function GetAlbum => new(_albums, _shares, _tracklist, _likes, _users);
 
     [Fact]
     public async Task Get_WithoutIdentity_Is401()
@@ -81,6 +81,18 @@ public class AlbumHandlerTests
         album.TryGetProperty("shareCount", out _).Should().BeFalse();
         album.TryGetProperty("likeCount", out _).Should().BeFalse();
         album.GetProperty("likedByMe").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Get_CarriesTheOwnersSummary()
+    {
+        _users.GetUserByUsername(Owner).Returns(Fakes.User(Owner));
+        _tracklist.GetAlbumTracksAsync(AlbumId, Owner, 10, null).Returns(Fakes.Page<TrackSummary>());
+
+        var owner = (await GetAlbum.FunctionHandler(Http.As(Owner), _context, AlbumId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json().GetProperty("album").GetProperty("owner");
+
+        owner.GetProperty("username").GetString().Should().Be(Owner);
     }
 
     // ---------------------------------------------------------------- POST /albums
@@ -242,13 +254,18 @@ public class AlbumHandlerTests
     }
 
     [Fact]
-    public async Task Share_PastFiftyRecipients_Is400()
+    public async Task Share_PastFiftyRecipientsInTotal_IsAllowed()
     {
+        // The 50 cap is per request (validator); an album has no total recipient cap.
         _shares.GetAlbumRecipientsAsync(AlbumId).Returns(Enumerable.Range(0, 50).Select(i => $"u{i}").ToList());
         _users.GetValidatedRecipientsAsync(Arg.Any<List<string>>(), Owner).Returns(["newcomer"]);
 
         (await ShareAlbum.FunctionHandler(Http.As(Owner), _context, AlbumId, new ShareAlbumRequest { Add = ["newcomer"] }))
-            .ShouldHaveStatus(HttpStatusCode.BadRequest).ErrorMessage().Should().Contain("at most 50");
+            .ShouldHaveStatus(HttpStatusCode.OK).Json()
+            .GetProperty("sharedWith").GetArrayLength().Should().Be(51);
+        await _shares.Received(1).ShareAlbumAsync(AlbumId, Owner,
+            Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "newcomer" })),
+            Arg.Is<IReadOnlyList<string>>(r => r.Count == 0), null);
     }
 
     // ---------------------------------------------------------------- likes + listings
@@ -314,12 +331,53 @@ public class AlbumHandlerTests
             .ShouldHaveStatus(HttpStatusCode.OK);
         (await new GetAlbumsSharedWithMeLambda.Function(_shares).FunctionHandler(Http.As(Owner, query), _context))
             .ShouldHaveStatus(HttpStatusCode.OK);
-        (await new GetLikedAlbumsLambda.Function(_likes).FunctionHandler(Http.As(Owner, query), _context))
+        (await new GetLikedAlbumsLambda.Function(_likes, _shares).FunctionHandler(Http.As(Owner, query), _context))
             .ShouldHaveStatus(HttpStatusCode.OK);
 
         await _albums.Received(1).GetAlbumsAsync(Owner, 20, "c1");
         await _shares.Received(1).GetAlbumsSharedWithUserAsync(Owner, 20, "c1");
         await _likes.Received(1).GetLikedAlbumsAsync(Owner, 20, "c1");
+    }
+
+    // A like outlives losing access (and is still there after a re-share), but while the album
+    // isn't yours or shared with you it's left out of your Liked albums
+    [Fact]
+    public async Task LikedAlbums_LeaveOutAlbumsNoLongerSharedWithYou_KeepingTheCursor()
+    {
+        AlbumSummary Liked(string id, string owner) => new()
+        {
+            Id = id, Name = id, TrackCount = 1, TotalDurationSeconds = 60, CreatedAt = 1, LikedByMe = true,
+            Owner = Fakes.Summary(owner),
+        };
+        _likes.GetLikedAlbumsAsync("bob", 10, null).Returns(new PaginatedResult<AlbumSummary>
+        {
+            Items = [Liked("own", "bob"), Liked("still-shared", Owner), Liked("unshared", Owner)],
+            NextCursor = "next",
+        });
+        _shares.IsAlbumSharedWithUserAsync("still-shared", "bob").Returns(true);
+        _shares.IsAlbumSharedWithUserAsync("unshared", "bob").Returns(false);
+
+        var body = (await new GetLikedAlbumsLambda.Function(_likes, _shares).FunctionHandler(Http.As("bob"), _context))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json();
+
+        body.GetProperty("items").EnumerateArray().Select(a => a.GetProperty("id").GetString())
+            .Should().Equal("own", "still-shared");
+        body.GetProperty("nextCursor").GetString().Should().Be("next");
+        await _shares.DidNotReceive().IsAlbumSharedWithUserAsync("own", Arg.Any<string>()); // your own needs no check
+    }
+
+    [Fact]
+    public async Task SharedFromUser_IsTheSendersAlbumsSharedWithTheCaller()
+    {
+        var handler = new GetAlbumsSharedFromUserLambda.Function(_shares);
+        var query = new Dictionary<string, string> { ["limit"] = "20", ["cursor"] = "c1" };
+        _shares.GetAlbumsSharedFromUserAsync(Owner, "bob", 20, "c1").Returns(Fakes.Page<SharedAlbum>());
+
+        (await handler.FunctionHandler(Http.Anonymous(), _context, Owner)).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        // the sender in the path is normalised to lowercase; the viewer is always the caller
+        (await handler.FunctionHandler(Http.As("bob", query), _context, Owner.ToUpperInvariant()))
+            .ShouldHaveStatus(HttpStatusCode.OK);
+        await _shares.Received(1).GetAlbumsSharedFromUserAsync(Owner, "bob", 20, "c1");
     }
 
     [Fact]

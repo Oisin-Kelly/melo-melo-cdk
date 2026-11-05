@@ -53,6 +53,17 @@ public class AlbumValidationServiceTests
     // --- Update / share ---
 
     [Fact]
+    public void Update_Slug_IsTrimmedAndLowercased_BlankMeansUnchanged_AndBadShapesAreRejected()
+    {
+        Service.ValidateUpdate(new UpdateAlbumRequest { Slug = "  Summer-Demos " }).Slug.Should().Be("summer-demos");
+        Service.ValidateUpdate(new UpdateAlbumRequest { Slug = "   " }).Slug.Should().BeNull();
+        FluentActions.Invoking(() => Service.ValidateUpdate(new UpdateAlbumRequest { Slug = "summer demos" }))
+            .Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => Service.ValidateUpdate(new UpdateAlbumRequest { Slug = new string('s', 61) }))
+            .Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void Update_NameIsOptional_ButStillCapped()
     {
         Service.ValidateUpdate(new UpdateAlbumRequest { Description = "only this" });
@@ -66,6 +77,18 @@ public class AlbumValidationServiceTests
         FluentActions.Invoking(() =>
             Service.ValidateShare(new ShareAlbumRequest { Add = ["bob"], Caption = new string('c', 301) })).Should().Throw<ArgumentException>();
         Service.ValidateShare(new ShareAlbumRequest { Add = ["bob"], Caption = "  " }).Caption.Should().BeNull();
+    }
+
+    [Fact]
+    public void Share_CapsEachRequestAtFiftyPeople()
+    {
+        List<string> People(int n) => Enumerable.Range(0, n).Select(i => $"user{i}").ToList();
+
+        Service.ValidateShare(new ShareAlbumRequest { Add = People(50), Remove = People(50) });
+        FluentActions.Invoking(() => Service.ValidateShare(new ShareAlbumRequest { Add = People(51) }))
+            .Should().Throw<ArgumentException>().WithMessage("*at most 50 people at a time*");
+        FluentActions.Invoking(() => Service.ValidateShare(new ShareAlbumRequest { Remove = People(51) }))
+            .Should().Throw<ArgumentException>().WithMessage("*at most 50 people at a time*");
     }
 
     // --- Set tracks (ownership) ---

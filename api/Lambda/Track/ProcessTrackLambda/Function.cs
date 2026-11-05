@@ -25,8 +25,8 @@ public sealed class Function
     [LambdaFunction]
     public async Task<ProcessTrackOutput> FunctionHandler(ProcessTrackInput input, ILambdaContext context)
     {
-        // TrackId is minted by UploadTrackLambda; fall back for in-flight legacy executions
-        var trackId = input.TrackId ?? Guid.NewGuid().ToString("N").ToLowerInvariant();
+        // Minted by UploadTrackLambda, which also wrote the upload-status record it identifies
+        var trackId = input.TrackId ?? throw new ArgumentException("trackId is required.");
 
         try
         {

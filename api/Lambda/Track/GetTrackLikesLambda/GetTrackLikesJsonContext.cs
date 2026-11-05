@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using Amazon.Lambda.APIGatewayEvents;
-using Domain;
 using Lambda.Shared;
 
 namespace GetTrackLikesLambda;

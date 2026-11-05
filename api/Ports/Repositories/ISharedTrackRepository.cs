@@ -10,8 +10,10 @@ public interface ISharedTrackRepository
     public Task<List<string>> GetTrackRecipientsAsync(string trackId);
 
     public Task<List<Recipient>> GetTrackRecipientDetailsAsync(string trackId);
+    /// notifyRecipients: false skips the "shared with you" activity — for someone adding it
+    /// themselves from a share link (the feed item is still written)
     public Task ShareTrackAsync(string trackId, string ownerUsername, IReadOnlyList<string> addRecipients,
-        IReadOnlyList<string> removeRecipients, string? caption);
+        IReadOnlyList<string> removeRecipients, string? caption, bool notifyRecipients = true);
     public Task RemoveTrackFromLibraryAsync(string trackId, string username);
 
     // Track-deletion cleanup: every direct share + leftover album grant on the track, and the feed items
@@ -20,4 +22,9 @@ public interface ISharedTrackRepository
     public Task<PaginatedResult<SharedTrack>> GetTracksSharedFromUser(string senderUserId, string receiverUserId, int pageSize, string? cursor);
 
     public Task<int> CountTracksSharedFromUser(string senderUserId, string receiverUserId);
+
+    /// Every track the user can play — their own, direct shares, and every track in every
+    /// album shared with them — deduped, unpaged (the client's search index). The access
+    /// rule (owner OR direct share OR album grant) as a listing.
+    public Task<List<TrackSummary>> GetLibraryTracksAsync(string username);
 }

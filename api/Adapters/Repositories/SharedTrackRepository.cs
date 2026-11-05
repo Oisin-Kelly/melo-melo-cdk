@@ -55,7 +55,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
     }
 
     public async Task ShareTrackAsync(string trackId, string ownerUsername, IReadOnlyList<string> addRecipients,
-        IReadOnlyList<string> removeRecipients, string? caption)
+        IReadOnlyList<string> removeRecipients, string? caption, bool notifyRecipients = true)
     {
         var normalisedTrackId = trackId.ToLowerInvariant();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -94,8 +94,9 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
             });
             feedBatch.AddPutItem(
                 FeedItems.Build(recipient, FeedItemType.Track, normalisedTrackId, ownerUsername, now, caption));
-            activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, ownerUsername,
-                FeedItemType.Track, normalisedTrackId, now));
+            if (notifyRecipients)
+                activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, ownerUsername,
+                    FeedItemType.Track, normalisedTrackId, now));
         }
 
         var toRemove = existingShares
@@ -190,6 +191,58 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
             })
             .OrderByDescending(r => r.SharedAt)
             .ToList();
+    }
+
+    public async Task<List<TrackSummary>> GetLibraryTracksAsync(string username)
+    {
+        // Own tracks (GSI3), direct shares (GSI1 SHARED#) and album shares (GSI1 ALBUMSHARED#),
+        // read in parallel; every page of each
+        var ownTask = _dynamoDbService.QueryAsync<TrackDataModel>(
+            $"USER#{username}", "DATE#", QueryOperator.BeginsWith, "GSI3");
+        var directTask = _dynamoDbService.QueryAsync<SharedTrackDataModel>(
+            $"SHARED#{username}", "DATE#", QueryOperator.BeginsWith, "GSI1");
+        var albumSharesTask = _dynamoDbService.QueryAsync<AlbumShareDataModel>(
+            $"ALBUMSHARED#{username}", "DATE#", QueryOperator.BeginsWith, "GSI1");
+        await Task.WhenAll(ownTask, directTask, albumSharesTask);
+
+        // Tracks in shared albums: each album's tracklist (memberships carry the track id;
+        // every track in an album is the album owner's)
+        var memberships = await Task.WhenAll(albumSharesTask.Result.Select(async share =>
+            (Owner: share.AlbumOwnerUsername,
+                Members: await AlbumRecords.GetMembershipsAsync(_dynamoDbService, share.AlbumId))));
+
+        var refs = new Dictionary<string, (string TrackId, string OwnerUsername)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in directTask.Result.Where(i => !string.IsNullOrEmpty(i.TrackOwnerUsername)))
+        {
+            var trackId = item.Pk.Replace("TRACK#", "");
+            refs.TryAdd(trackId, (trackId, item.TrackOwnerUsername));
+        }
+        foreach (var (owner, members) in memberships)
+            foreach (var member in members)
+                refs.TryAdd(member.TrackId, (member.TrackId, owner));
+        // Own tracks are already full rows; drop them from the lookup
+        foreach (var own in ownTask.Result)
+            refs.Remove(own.TrackId);
+
+        var sharedTask = TrackBatchLookup.GetTrackSummariesAsync(_dynamoDbService, refs.Values.ToList(), username);
+        var ownSummariesTask = OwnSummariesAsync(ownTask.Result, username);
+        await Task.WhenAll(sharedTask, ownSummariesTask);
+
+        return ownSummariesTask.Result
+            .Concat(sharedTask.Result.Values)
+            .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task<List<TrackSummary>> OwnSummariesAsync(List<TrackDataModel> tracks, string username)
+    {
+        if (tracks.Count == 0) return [];
+        var ownerTask = ProfileLookup.GetAsync(_dynamoDbService, [username]);
+        var likedTask = TrackBatchLookup.GetLikedTrackIdsAsync(
+            _dynamoDbService, username, tracks.Select(t => t.TrackId).ToList());
+        await Task.WhenAll(ownerTask, likedTask);
+        if (!ownerTask.Result.TryGetValue(username, out var owner)) return [];
+        return tracks.Select(t => TrackSummary.From(t, owner, likedTask.Result.Contains(t.TrackId))).ToList();
     }
 
     private async Task<List<SharedTrackDataModel>> GetDirectShareItemsAsync(string trackId)

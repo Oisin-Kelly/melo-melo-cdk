@@ -38,6 +38,12 @@ internal class ShareAlbumValidator : AbstractValidator<ShareAlbumRequest>
         RuleFor(x => x)
             .Must(x => x.Add.Count > 0 || x.Remove.Count > 0)
             .WithMessage("provide at least one user in add or remove");
+        RuleFor(x => x.Add)
+            .Must(x => x.Count <= AlbumValidationService.MaxRecipientsPerShare)
+            .WithMessage($"you can share with at most {AlbumValidationService.MaxRecipientsPerShare} people at a time");
+        RuleFor(x => x.Remove)
+            .Must(x => x.Count <= AlbumValidationService.MaxRecipientsPerShare)
+            .WithMessage($"you can remove at most {AlbumValidationService.MaxRecipientsPerShare} people at a time");
         RuleFor(x => x.Caption)
             .MaximumLength(300).WithMessage("caption must be at most 300 characters");
     }
@@ -46,6 +52,10 @@ internal class ShareAlbumValidator : AbstractValidator<ShareAlbumRequest>
 public sealed class AlbumValidationService : IAlbumValidationService
 {
     public const int MaxTracksPerAlbum = 50;
+
+    // Per request, not per album: an album has no total recipient cap (see the fan-out ceiling
+    // in docs/data-model/README.md).
+    public const int MaxRecipientsPerShare = 50;
 
     private static readonly CreateAlbumValidator CreateValidator = new();
     private static readonly UpdateAlbumValidator UpdateValidator = new();
@@ -75,6 +85,7 @@ public sealed class AlbumValidationService : IAlbumValidationService
     {
         request.Name = InputSanitiser.SingleLine(request.Name);
         request.Description = InputSanitiser.MultiLine(request.Description);
+        request.Slug = InputSanitiser.ValidSlug(request.Slug, SlugKind.Album);
 
         ThrowIfInvalid(UpdateValidator.Validate(request));
         return request;

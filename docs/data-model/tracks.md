@@ -10,7 +10,7 @@ Part of the [data model](README.md). Covers tracks, the upload-status record, di
 |----|-----|--------|--------|--------|--------|
 | `USER#{ownerUsername}` | `TRACK#{trackId}` | `TRACK#{trackId}` | `INFO` | `USER#{ownerUsername}` | `DATE#{createdAt}` |
 
-Attributes: `trackName`, `description`, `genre`, `imageUrl`, `imageBgColor`, `createdAt`, `duration`, `likeCount`, `shareCount` (direct-share recipient count; grants excluded — both counts owner-only in responses)
+Attributes: `trackName`, `description`, `genre`, `imageUrl`, `imageBgColor`, `createdAt`, `duration`, `slug` (canonical readable URL — [README.md](README.md#readable-urls-slugs)), `likeCount`, `shareCount` (direct-share recipient count; grants excluded — both counts owner-only in responses)
 
 Derived: `OwnerUsername` from `PK.Replace("USER#", "")`, `TrackId` from `SK.Replace("TRACK#", "")`
 
@@ -75,15 +75,21 @@ Track-side base key lets the owner query who liked; GSI1 gives the user's liked-
 1. `Query(GSI2, GSI1PK=SHARED#{requestor}, GSI2SK begins_with SENDER#{username}#, Limit=10, ScanIndexForward=false, cursor)` → paginated shared items from a specific sender newest-first
 2. Same parallel BatchGet + join as above → returns `PaginatedResult<SharedTrack>`
 
+#### `GET /tracks/library` — GetLibraryTracksLambda
+Every track the caller can play, in one unpaged `PaginatedResult<TrackSummary>` (`nextCursor` null) for the client's search index — the [access rule](README.md#track-access-rule) as a listing:
+1. In parallel: own tracks `Query(GSI3, USER#{requestor}, begins_with DATE#)`, direct shares `Query(GSI1, SHARED#{requestor}, begins_with DATE#)`, album shares `Query(GSI1, ALBUMSHARED#{requestor}, begins_with DATE#)` — every page of each
+2. Each shared album's tracklist `Query(PK=ALBUM#{id}, begins_with TRACK#)` (owner = the album's owner), in parallel
+3. Union deduped by track id (own rows win), then the shared refs through `TrackBatchLookup.GetTrackSummariesAsync` (tracks + owners + like status) → sorted by name
+
 #### `PUT /tracks/{trackId}` — UpdateTrackLambda
 Owner-only (404 otherwise)
 1. Track fetch (GSI1 by-id) → owner check
 2. Optional: `IImageService.ProcessImageAsync` (dropbox key → `tracks/{id}/cover_400x400.jpg` in the public bucket, derives `imageBgColor`)
-3. **TransactWrite** `SET`/`REMOVE` on the Track item (`trackName` required; `genre`/`description` cleared when absent; `clearedImage` removes image fields)
+3. **TransactWrite** `SET`/`REMOVE` on the Track item (`trackName` required; `genre`/`description` cleared when absent; `clearedImage` removes image fields). Renaming never touches `slug`; an explicit `slug` adds its guarded slug-record put to the same transaction — taken → 400 — [slug](README.md#readable-urls-slugs)
 4. Read back via base-table `GetItem` (not the GSI — eventual consistency) + owner profile → `Track`
 
 #### `POST /tracks/{trackId}/share` — ShareTrackLambda
-Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, max 50 direct recipients.
+Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, ≤50 people in `add` and ≤50 in `remove` per request; no total cap on direct recipients.
 1. Track fetch → owner check
 2. `Query(PK=TRACK#{id}, SK begins_with SHARED#)` **excluding `#ALBUM#` grant records** → current direct recipients
 3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users, and recipients whose `incomingShares` setting blocks the sender — `FOLLOWING` checks `Query(PK=FOLLOW#{sender}, begins_with USER#{recipient}#)` per candidate). The Lambda passes the **full** validated add list (no pre-dedup); `ShareTrackAsync` classifies each against the current direct shares (upsert)
@@ -102,6 +108,12 @@ Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered
 1. Track fetch (GSI1 by-id) → **access check** (owner OR `IsTrackAccessibleToUser`) — 404 otherwise
 2. Presign one GET URL for the processed audio (`processed/{trackId}/audio.m4a`, private bucket, 6h expiry) → `{url, expiresAt, duration}`. The client range-requests this single URL; `+faststart` on the file makes seeking work without a full download.
 
+#### `GET /tracks/{trackId}/original` — GetOriginalTrackLambda
+Owner-only: the original upload, in the format it was uploaded in.
+1. Track fetch (GSI1 by-id) → **owner check** — anyone else, recipients included, gets 404
+2. `HeadObject(processed/{trackId}/original)` in the private bucket → its Content-Type (404 "The original file isn't available for this track" if absent — tracks processed before originals were archived)
+3. Presign a 5-minute GET with `response-content-disposition: attachment; filename="…"; filename*=UTF-8''…` → `{url, fileName, contentType, expiresAt}`. `fileName` is `{track name}.{ext}` (`Domain/OriginalDownloads`: extension from the content type, filesystem-unsafe characters removed). No table writes.
+
 #### `GET /tracks/uploads/{trackId}` — GetUploadStatusLambda
 1. `GetItem(PK=USER#{requestor}, SK=UPLOAD#{trackId})` → `{trackId, status, error?, createdAt}` (404 if absent/expired)
 
@@ -109,8 +121,8 @@ Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered
 Owner-only (404 otherwise). Ordered so any mid-delete crash is retryable (track stays fetchable until the last step):
 1. Track fetch → owner check
 2. For each of the owner's albums: `GetItem(ALBUM#{albumId}, TRACK#{trackId})` → if a member, `RemoveTracksAsync` (revokes that album's per-recipient grants, then the membership)
-3. Delete S3 objects: `processed/{trackId}/audio.m4a` + the archived source `processed/{trackId}/original` (private bucket) + cover (public bucket)
-4. `Query(PK=TRACK#{trackId}, SK begins_with SHARED#)` + `begins_with LIKE#` → each like is deleted in its own transaction with its liker's likes-playlist decrement (`ADD trackCount -1, totalDurationSeconds -duration`, guarded `attribute_exists` on the like so retries/concurrent unlikes never double-decrement); then batch-delete direct shares (and their feed items), leftover grants, and the `UPLOAD#{trackId}` status record
+3. Delete S3 objects: `processed/{trackId}/audio.m4a` + the archived source `processed/{trackId}/original` + the preview clip `processed/{trackId}/preview.m4a` (private bucket) + cover (public bucket)
+4. `Query(PK=TRACK#{trackId}, SK begins_with SHARED#)` + `begins_with LIKE#` → each like is deleted in its own transaction with its liker's likes-playlist decrement (`ADD trackCount -1, totalDurationSeconds -duration`, guarded `attribute_exists` on the like so retries/concurrent unlikes never double-decrement); then batch-delete direct shares (and their feed items), leftover grants, the `UPLOAD#{trackId}` status record, every [share link](links.md) to the track, and every [slug](README.md#readable-urls-slugs) record (`USER#{owner}` / `SLUG#TRACK#…` with this `targetId`)
 5. Delete the Track item (`USER#{owner}`, `TRACK#{trackId}`) last
 
 Playlist membership records referencing the track (any user's — not enumerable by track) are left dangling; playlist reads surface them as removable placeholders (see [playlists.md](playlists.md)).

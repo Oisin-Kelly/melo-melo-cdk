@@ -56,7 +56,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             var updated = await _playlistRepository.UpdatePlaylistAsync(
                 username, playlistId, updateRequest.Name, updateRequest.Description,
-                image, updateRequest.ClearedImage);
+                image, updateRequest.ClearedImage, updateRequest.Slug);
 
             return Ok(JsonSerializer.Serialize(updated, UpdatePlaylistJsonContext.Default.Playlist));
         }

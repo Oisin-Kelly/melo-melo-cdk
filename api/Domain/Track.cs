@@ -10,6 +10,8 @@ namespace Domain
         [JsonPropertyName("description")] public string? Description { get; set; }
         [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
         [JsonPropertyName("clearedImage")] public bool ClearedImage { get; set; }
+        // New readable URL; null/omitted leaves it unchanged (renaming never changes it)
+        [JsonPropertyName("slug")] public string? Slug { get; set; }
     }
 
     public record ShareTrackRequest
@@ -47,6 +49,9 @@ namespace Domain
 
         [JsonPropertyName("owner")]
         public required UserSummary Owner { get; set; }
+
+        [JsonPropertyName("slug")]
+        public string? Slug { get; set; }
         
         // ---------------------------------------------
 
@@ -105,6 +110,9 @@ namespace Domain
 
         [DynamoDBProperty("duration")]
         public required int Duration { get; set; }
+
+        [DynamoDBProperty("slug")]
+        public string? Slug { get; set; }
 
         [DynamoDBProperty("likeCount")]
         public int LikeCount { get; set; }

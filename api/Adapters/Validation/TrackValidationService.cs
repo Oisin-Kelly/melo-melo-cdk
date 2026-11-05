@@ -25,7 +25,8 @@ internal class TrackValidator : AbstractValidator<ProcessTrackInput>
         RuleFor(x => x.Caption)
             .MaximumLength(300);
         RuleFor(x => x.SharedWith)
-            .Must(x => x.Count <= 50).WithMessage("sharedWith cannot exceed 50 recipients.");
+            .Must(x => x.Count <= TrackValidationService.MaxRecipientsPerShare)
+            .WithMessage($"sharedWith cannot exceed {TrackValidationService.MaxRecipientsPerShare} recipients.");
     }
 }
 
@@ -50,6 +51,12 @@ internal class ShareTrackValidator : AbstractValidator<ShareTrackRequest>
         RuleFor(x => x)
             .Must(x => x.Add.Count > 0 || x.Remove.Count > 0)
             .WithMessage("provide at least one user in add or remove");
+        RuleFor(x => x.Add)
+            .Must(x => x.Count <= TrackValidationService.MaxRecipientsPerShare)
+            .WithMessage($"you can share with at most {TrackValidationService.MaxRecipientsPerShare} people at a time");
+        RuleFor(x => x.Remove)
+            .Must(x => x.Count <= TrackValidationService.MaxRecipientsPerShare)
+            .WithMessage($"you can remove at most {TrackValidationService.MaxRecipientsPerShare} people at a time");
         RuleFor(x => x.Caption)
             .MaximumLength(300).WithMessage("caption must be at most 300 characters");
     }
@@ -57,6 +64,10 @@ internal class ShareTrackValidator : AbstractValidator<ShareTrackRequest>
 
 public sealed class TrackValidationService : ITrackValidationService
 {
+    // Per request, not per track: a track has no total recipient cap (see the fan-out ceiling
+    // in docs/data-model/README.md).
+    public const int MaxRecipientsPerShare = 50;
+
     private const long MaxAudioBytes = 300L * 1024 * 1024;
 
     private static readonly TrackValidator Validator = new();
@@ -91,6 +102,7 @@ public sealed class TrackValidationService : ITrackValidationService
         request.Name = InputSanitiser.SingleLine(request.Name);
         request.Genre = InputSanitiser.SingleLine(request.Genre);
         request.Description = InputSanitiser.MultiLine(request.Description);
+        request.Slug = InputSanitiser.ValidSlug(request.Slug, SlugKind.Track);
 
         var result = UpdateValidator.Validate(request);
         if (result.IsValid)

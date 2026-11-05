@@ -80,6 +80,7 @@ public sealed class ProgressRepository : IProgressRepository
                 ImageUrl = track.ImageUrl,
                 ImageBgColor = track.ImageBgColor,
                 CreatedAt = track.CreatedAt,
+                Slug = track.Slug,
                 LikedByMe = liked.Contains(record.TrackId),
                 Owner = track.Owner,
             },

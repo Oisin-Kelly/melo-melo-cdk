@@ -19,8 +19,6 @@ public record PlaylistDetailResponse
 
 public sealed class Function : BaseLambdaFunctionHandler
 {
-    private const int PageSize = 10;
-
     private readonly IPlaylistRepository _playlistRepository;
     private readonly ISharedTrackRepository _sharedTrackRepository;
     private readonly ILikeRepository _likeRepository;
@@ -45,6 +43,8 @@ public sealed class Function : BaseLambdaFunctionHandler
 
         string? cursor = null;
         request.QueryStringParameters?.TryGetValue("cursor", out cursor);
+        // The web app pulls 100 at a time so it can load a whole playlist to search/sort it
+        var limit = ParseLimit(request.QueryStringParameters);
 
         try
         {
@@ -57,7 +57,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             {
                 // Likes membership is the like record (no denormalized name), so a track
                 // that's since been deleted or had access revoked is simply dropped
-                var liked = await _likeRepository.GetLikedTracksAsync(username, PageSize, cursor);
+                var liked = await _likeRepository.GetLikedTracksAsync(username, limit, cursor);
                 var accessible = await FilterToAccessibleAsync(liked.Items, username);
                 tracks = new PaginatedResult<PlaylistTrackEntry>
                 {
@@ -67,7 +67,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             }
             else
             {
-                var page = await _playlistRepository.GetPlaylistTracksAsync(playlist.Id, username, PageSize, cursor);
+                var page = await _playlistRepository.GetPlaylistTracksAsync(playlist.Id, username, limit, cursor);
                 tracks = await MarkRevokedEntriesAsync(page, username);
             }
 

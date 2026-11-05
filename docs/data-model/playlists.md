@@ -10,7 +10,7 @@ Part of the [data model](README.md). Custom playlists and the built-in likes pla
 |----|-----|--------|--------|
 | `USER#{username}` | `PLAYLIST#{playlistId}` | `PLAYLISTS#{username}` | `DATE#{createdAt}` |
 
-Attributes: `name`, `description`, `type` (`LIKES` \| `CUSTOM`), `imageUrl`, `imageBgColor`, `trackCount`, `totalDurationSeconds`, `createdAt`. On the likes playlist (written as 0/0 at PostConfirmation) the counters are maintained by the like/unlike transaction rather than the track-editing endpoints — see [tracks.md](tracks.md).
+Attributes: `name`, `description`, `type` (`LIKES` \| `CUSTOM`), `slug` (custom playlists only — [README.md](README.md#readable-urls-slugs)), `imageUrl`, `imageBgColor`, `trackCount`, `totalDurationSeconds`, `createdAt`. On the likes playlist (written as 0/0 at PostConfirmation) the counters are maintained by the like/unlike transaction rather than the track-editing endpoints — see [tracks.md](tracks.md).
 
 The built-in likes playlist uses the reserved id `likes` (created at PostConfirmation). Custom playlist ids are server-generated lowercase GUIDs. GSI3 gives the owner's paginated listing newest-first; the likes playlist carries the sentinel sort key `DATE#9999999999999` so it always sorts first on page 1.
 
@@ -32,7 +32,8 @@ Base key gives point add/remove/dedup (re-adding an existing member is a no-op �
 
 #### `POST /playlists` — CreatePlaylistLambda
 1. Optional `imageKey` → ImageService: process staged image to `playlists/{id}/cover_400x400.jpg` (public bucket) + dominant color — before any write, so a bad image 400s cleanly
-2. `SaveAsync(PlaylistDataModel)` — `PK=USER#{requestor}, SK=PLAYLIST#{guid}`, `type=CUSTOM` (server-generated id, type never client-controlled) → 201
+2. Claim a [slug](README.md#readable-urls-slugs) from the name (`SLUG#PLAYLIST#…`, `-2`… if taken)
+3. `SaveAsync(PlaylistDataModel)` — `PK=USER#{requestor}, SK=PLAYLIST#{guid}`, `type=CUSTOM`, `slug` (server-generated id, type never client-controlled) → 201
 
 #### `GET /playlists` — GetPlaylistsLambda
 1. `Query(GSI3, GSI3PK=PLAYLISTS#{requestor}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated metas; likes' sentinel sort key puts it first, then customs newest-first
@@ -47,12 +48,12 @@ Returns `{playlist, tracks}` where `tracks.items` are `PlaylistTrackEntry` (avai
 #### `PUT /playlists/{playlistId}` — UpdatePlaylistLambda
 1. Meta get → 404 if missing, 400 if `LIKES`
 2. Optional `imageKey` → ImageService cover processing (as create); `clearedImage` → REMOVE image attributes
-3. `TransactWrite` UpdateExpression (`UpdateExpressionBuilder`) on name/description/image → returns updated playlist
+3. `TransactWrite` UpdateExpression (`UpdateExpressionBuilder`) on name/description/image (+ an explicit `slug`: its guarded slug-record put in the same transaction, 400 if taken) → returns updated playlist
 
 #### `DELETE /playlists/{playlistId}` — DeletePlaylistLambda
 1. Meta get → 404 if missing, 400 if `LIKES`
 2. Delete `playlists/{id}/cover_400x400.jpg` from the public bucket if set
-3. `Query(PK=PLAYLIST#{id}, begins_with TRACK#)` → all memberships; **BatchWrite delete** memberships first, meta last (retryable while meta exists)
+3. `Query(PK=PLAYLIST#{id}, begins_with TRACK#)` → all memberships; **BatchWrite delete** memberships, then the playlist's [slug](README.md#readable-urls-slugs) records, meta last (retryable while meta exists)
 
 #### `POST /playlists/{playlistId}/tracks/{trackId}` — AddPlaylistTrackLambda
 Adds one track (the "add to playlist" gesture). 400 for the likes playlist — use the like endpoint.

@@ -51,6 +51,35 @@ public class AlbumShareRepositoryTests(DynamoDbLocalFixture fixture)
     }
 
     [Fact]
+    public async Task SharedFromUser_IsOnlyThatSendersAlbums_NewestFirst_AndReShareMovesNotDuplicates()
+    {
+        var db = fixture.Db;
+        var seed = new Seed(db);
+        var alice = await seed.UserAsync();
+        var bob = await seed.UserAsync();
+        var viewer = await seed.UserAsync();
+        var first = await seed.AlbumAsync(alice, await seed.TrackAsync(alice));
+        var second = await seed.AlbumAsync(alice, await seed.TrackAsync(alice));
+        var bobs = await seed.AlbumAsync(bob, await seed.TrackAsync(bob));
+
+        await seed.AlbumShares.ShareAlbumAsync(first, alice, [viewer], [], null);
+        await Task.Delay(5); // shares are ordered by their millisecond timestamp
+        await seed.AlbumShares.ShareAlbumAsync(second, alice, [viewer], [], null);
+        await seed.AlbumShares.ShareAlbumAsync(bobs, bob, [viewer], [], null);
+
+        (await seed.AlbumShares.GetAlbumsSharedFromUserAsync(alice, viewer, 10, null)).Items
+            .Select(s => s.Album.Id).Should().Equal(second, first);
+        (await seed.AlbumShares.GetAlbumsSharedFromUserAsync(bob, viewer, 10, null)).Items
+            .Select(s => s.Album.Id).Should().Equal(bobs);
+
+        await Task.Delay(5);
+        await seed.AlbumShares.ShareAlbumAsync(first, alice, [viewer], [], "again");
+
+        (await seed.AlbumShares.GetAlbumsSharedFromUserAsync(alice, viewer, 10, null)).Items
+            .Select(s => s.Album.Id).Should().Equal(first, second);
+    }
+
+    [Fact]
     public async Task AddAndRemoveTheSameRecipient_RemoveWins()
     {
         var db = fixture.Db;

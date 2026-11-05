@@ -1,0 +1,52 @@
+using System.Net;
+using System.Text.Json;
+using Amazon.Lambda.Annotations;
+using Amazon.Lambda.Annotations.APIGateway;
+using Amazon.Lambda.APIGatewayEvents;
+using Amazon.Lambda.Core;
+using Domain;
+using Lambda.Shared;
+using Ports.Repositories;
+
+namespace RestoreLinkLambda;
+
+// Undoes a revoke (the Share dialog's Undo).
+// Only the link's owner; anyone else gets the same 404 as an unknown link.
+public sealed class Function : BaseLambdaFunctionHandler
+{
+    private readonly IShareLinkRepository _shareLinkRepository;
+
+    public Function(IShareLinkRepository shareLinkRepository)
+    {
+        _shareLinkRepository = shareLinkRepository;
+    }
+
+    [LambdaFunction]
+    [HttpApi(LambdaHttpMethod.Post, "/links/{token}/restore")]
+    public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(
+        APIGatewayHttpApiV2ProxyRequest request,
+        ILambdaContext context,
+        string token)
+    {
+        var (username, authError) = GetCallerUsername(request);
+        if (authError is not null) return authError;
+
+        try
+        {
+            var link = await _shareLinkRepository.GetAsync(token);
+            if (link is null || link.Owner != username)
+                return Error(HttpStatusCode.NotFound, "no link found", "Not Found");
+
+            await _shareLinkRepository.RestoreAsync(link.Token);
+
+            var updated = await _shareLinkRepository.GetAsync(link.Token) ?? link;
+            var response = ShareLinks.ToShareLink(updated, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            return Ok(JsonSerializer.Serialize(response, RestoreLinkJsonContext.Default.ShareLink));
+        }
+        catch (Exception ex)
+        {
+            context.Logger.LogError($"Error occured in RestoreLinkLambda. Error: {ex.Message}");
+            return InternalError();
+        }
+    }
+}

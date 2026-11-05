@@ -1,4 +1,3 @@
-using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 using Domain;
 using Ports.Repositories;

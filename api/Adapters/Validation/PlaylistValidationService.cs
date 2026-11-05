@@ -45,6 +45,7 @@ public sealed class PlaylistValidationService : IPlaylistValidationService
     {
         request.Name = InputSanitiser.SingleLine(request.Name);
         request.Description = InputSanitiser.MultiLine(request.Description);
+        request.Slug = InputSanitiser.ValidSlug(request.Slug, SlugKind.Playlist);
 
         ThrowIfInvalid(UpdateValidator.Validate(request));
         return request;

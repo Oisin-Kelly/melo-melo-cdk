@@ -69,13 +69,17 @@ public sealed class ActivityRepository : IActivityRepository
         await Task.WhenAll(actorsTask, tracksTask, albumsTask, liveTask);
 
         var actors = actorsTask.Result;
-        var trackNames = tracksTask.Result.ToDictionary(t => t.TrackId, t => t.TrackName, StringComparer.OrdinalIgnoreCase);
-        var albumNames = albumsTask.Result.ToDictionary(a => a.AlbumId, a => a.Name, StringComparer.OrdinalIgnoreCase);
+        var trackTargets = tracksTask.Result.ToDictionary(t => t.TrackId, t => (Name: t.TrackName, t.Slug),
+            StringComparer.OrdinalIgnoreCase);
+        var albumTargets = albumsTask.Result.ToDictionary(a => a.AlbumId, a => (a.Name, a.Slug),
+            StringComparer.OrdinalIgnoreCase);
         var liveRelAt = liveTask.Result.ToDictionary(p => (p.Pk, p.Sk), p => p.LikedAt ?? p.SharedAt);
 
-        string? TargetName(ActivityItemDataModel a) => a.TargetType == FeedItemType.Track
-            ? trackNames.GetValueOrDefault(a.TargetId)
-            : albumNames.GetValueOrDefault(a.TargetId);
+        (string Name, string? Slug)? Target(ActivityItemDataModel a) =>
+            (a.TargetType == FeedItemType.Track ? trackTargets : albumTargets)
+            .TryGetValue(a.TargetId, out var t) ? t : null;
+
+        string? TargetName(ActivityItemDataModel a) => Target(a)?.Name;
 
         // Keep a row only if: the actor resolves, and — for share/like — its underlying
         // relationship record still exists with a matching timestamp (liveness) and its target
@@ -103,6 +107,8 @@ public sealed class ActivityRepository : IActivityRepository
                 TargetType = a.TargetType,
                 TargetId = a.TargetId,
                 TargetName = TargetName(a),
+                TargetOwner = a.Type == ActivityType.UserFollowed ? null : TargetOwner(a),
+                TargetSlug = Target(a)?.Slug,
                 CreatedAt = a.CreatedAt,
             })
             .ToList();

@@ -11,13 +11,14 @@ namespace MeloMeloCdk;
 
 public abstract class BaseStack : Stack
 {
-    protected string Env { get; }
-    protected RemovalPolicy DeletionPolicy { get; }
+    protected string Env => Config.Name;
+    /// <summary>This environment's settings from cdk.json (see EnvConfig).</summary>
+    protected EnvConfig Config { get; }
+    protected RemovalPolicy DeletionPolicy => Config.Removal;
 
     protected BaseStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
-        Env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
-        DeletionPolicy = Env == "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+        Config = EnvConfig.Load(this);
     }
 
     // USE_PREBUILT=1 skips docker bundling and takes the binary that scripts/build-lambdas.sh wrote to api/.build/{Name}/bootstrap.

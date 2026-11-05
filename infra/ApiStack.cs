@@ -481,7 +481,7 @@ public class ApiStack : BaseStack
         // Route settings name a route key, which must exist before the stage is updated
         var stage = (Amazon.CDK.AWS.Apigatewayv2.CfnStage)HttpApi.DefaultStage!.Node.DefaultChild!;
         stage.Node.AddDependency(linkPreviewRoutes);
-        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingRateLimit", 20);
-        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingBurstLimit", 40);
+        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingRateLimit", Config.LinkPreviewThrottle.RateLimit);
+        stage.AddPropertyOverride("RouteSettings.GET /links/{token}.ThrottlingBurstLimit", Config.LinkPreviewThrottle.BurstLimit);
     }
 }

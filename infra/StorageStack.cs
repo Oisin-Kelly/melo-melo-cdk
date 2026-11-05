@@ -12,9 +12,9 @@ public class StorageStack : BaseStack
 
     public StorageStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
-        // Non-prod buckets must empty themselves on delete or `cdk destroy` fails
-        // once tests/dev uploads have written objects
-        var autoDelete = DeletionPolicy == RemovalPolicy.DESTROY;
+        // Destroy-policy buckets must empty themselves on delete or `cdk destroy` fails
+        // once tests/dev uploads have written objects (cdk.json autoDeleteObjects)
+        var autoDelete = Config.AutoDeleteObjects;
 
         DropboxBucket = new Bucket(this, "DropboxBucket", new BucketProps
         {
@@ -31,15 +31,15 @@ public class StorageStack : BaseStack
                 }
             ],
             // The web app PUTs uploads straight to presigned URLs, which the browser preflights.
-            // CORS isn't the access control here (the presigned signature is), so non-prod allows
+            // CORS isn't the access control here (the presigned signature is), so dev allows
             // any origin (localhost dev server + the dev CloudFront domain, which this stack can't
-            // reference without a cycle); prod is pinned to the app's domain.
+            // reference without a cycle); prod is pinned to the app's domain (cdk.json uploadCorsOrigins).
             Cors =
             [
                 new CorsRule
                 {
                     AllowedMethods = [HttpMethods.PUT],
-                    AllowedOrigins = Env == "prod" ? ["https://melomelo.app"] : ["*"],
+                    AllowedOrigins = Config.UploadCorsOrigins,
                     AllowedHeaders = ["*"],
                     MaxAge = 3000,
                 }

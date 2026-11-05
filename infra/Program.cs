@@ -7,7 +7,8 @@ namespace MeloMeloCdk
         public static void Main(string[] args)
         {
             var app = new App();
-            var env = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "dev";
+            // -c env=… or ENVIRONMENT (default dev); its settings live in cdk.json (EnvConfig)
+            var env = EnvConfig.Load(app).Name;
 
             var data = new DataStack(app, $"data-stack-{env}");
             var storage = new StorageStack(app, $"storage-stack-{env}");

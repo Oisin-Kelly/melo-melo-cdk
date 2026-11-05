@@ -77,6 +77,44 @@
     "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": true,
     "@aws-cdk/aws-lambda-nodejs:sdkV3ExcludeSmithyPackages": true,
     "@aws-cdk/aws-stepfunctions-tasks:fixRunEcsTaskPolicy": true,
-    "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": true
+    "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": true,
+    "environments": {
+      "dev": {
+        "removalPolicy": "destroy",
+        "autoDeleteObjects": true,
+        "pointInTimeRecovery": false,
+        "uploadCorsOrigins": [
+          "*"
+        ],
+        "domain": null,
+        "email": null,
+        "linkPreviewThrottle": {
+          "rateLimit": 20,
+          "burstLimit": 40
+        }
+      },
+      "prod": {
+        "removalPolicy": "retain",
+        "autoDeleteObjects": false,
+        "pointInTimeRecovery": true,
+        "uploadCorsOrigins": [
+          "https://melomelo.app"
+        ],
+        "domain": {
+          "name": "melomelo.app",
+          "hostedZoneId": "Z0203469J8GFSMPC40EQ"
+        },
+        "email": {
+          "fromEmail": "noreply@melomelo.app",
+          "fromName": "MeloMelo",
+          "sesRegion": "eu-west-1",
+          "verifiedDomain": "melomelo.app"
+        },
+        "linkPreviewThrottle": {
+          "rateLimit": 20,
+          "burstLimit": 40
+        }
+      }
+    }
   }
 }

@@ -14,15 +14,13 @@ namespace MeloMeloCdk;
 // scripts/deploy-web.sh, which builds web/dist against the deployed backend's outputs first.
 public class WebStack : BaseStack
 {
-    // Prod-only custom domain. Registrar is Namecheap, but DNS is delegated to this
-    // Route53 hosted zone (NS records already live) — that's all CDK needs to know.
-    private const string ProdDomainName = "melomelo.app";
-    private const string ProdHostedZoneId = "Z0203469J8GFSMPC40EQ";
-
     public WebStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
-        var isProd = Env == "prod";
-        var autoDelete = DeletionPolicy == RemovalPolicy.DESTROY;
+        // The custom domain (cdk.json domain — prod's melomelo.app). Registrar is Namecheap, but
+        // DNS is delegated to its Route53 hosted zone (NS records already live) — that's all CDK
+        // needs to know. Without one, the app is served on the CloudFront domain.
+        var domain = Config.Domain;
+        var autoDelete = Config.AutoDeleteObjects;
 
         var bucket = new Bucket(this, "WebBucket", new BucketProps
         {
@@ -36,12 +34,12 @@ public class WebStack : BaseStack
         // CloudFront requires the cert in us-east-1 regardless of which region this stack
         // deploys to — request/validate it there once via the ACM console, then set the ARN.
         ICertificate certificate = null;
-        if (isProd)
+        if (domain is not null)
         {
             var certificateArn = System.Environment.GetEnvironmentVariable("WEB_CERTIFICATE_ARN")
                 ?? throw new System.InvalidOperationException(
-                    "WEB_CERTIFICATE_ARN must be set for prod — request an ACM cert for " +
-                    $"{ProdDomainName} in us-east-1, validate it via DNS, then pass its ARN.");
+                    $"WEB_CERTIFICATE_ARN must be set for {Env} — request an ACM cert for " +
+                    $"{domain.Name} in us-east-1, validate it via DNS, then pass its ARN.");
             certificate = Certificate.FromCertificateArn(this, "WebCertificate", certificateArn);
         }
 
@@ -75,7 +73,7 @@ public class WebStack : BaseStack
                 },
             ],
             PriceClass = PriceClass.PRICE_CLASS_100,
-            DomainNames = isProd ? [ProdDomainName] : null,
+            DomainNames = domain is null ? null : [domain.Name],
             Certificate = certificate,
         });
 
@@ -125,25 +123,25 @@ public class WebStack : BaseStack
         // ...and its invalidation should also clear the edge's copy of any replaced icon
         deployIndex.Node.AddDependency(deployIcons);
 
-        if (isProd)
+        if (domain is not null)
         {
             var hostedZone = HostedZone.FromHostedZoneAttributes(this, "HostedZone", new HostedZoneAttributes
             {
-                HostedZoneId = ProdHostedZoneId,
-                ZoneName = ProdDomainName,
+                HostedZoneId = domain.HostedZoneId,
+                ZoneName = domain.Name,
             });
 
             new ARecord(this, "WebAliasRecord", new ARecordProps
             {
                 Zone = hostedZone,
-                RecordName = ProdDomainName,
+                RecordName = domain.Name,
                 Target = RecordTarget.FromAlias(new CloudFrontTarget(distribution)),
             });
         }
 
         new CfnOutput(this, "WebUrl", new CfnOutputProps
         {
-            Value = isProd ? $"https://{ProdDomainName}" : $"https://{distribution.DistributionDomainName}"
+            Value = domain is null ? $"https://{distribution.DistributionDomainName}" : $"https://{domain.Name}"
         });
     }
 }

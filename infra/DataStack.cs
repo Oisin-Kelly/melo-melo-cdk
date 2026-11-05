@@ -26,6 +26,10 @@ public class DataStack : BaseStack
             TableName = $"melo-melo-table-{Env}",
             RemovalPolicy = DeletionPolicy,
             TimeToLiveAttribute = "expiresAt",
+            // Only set when on: leaves environments without it exactly as they were deployed
+            PointInTimeRecoverySpecification = Config.PointInTimeRecovery
+                ? new PointInTimeRecoverySpecification { PointInTimeRecoveryEnabled = true }
+                : null,
         });
 
         table.AddGlobalSecondaryIndex(new GlobalSecondaryIndexProps()

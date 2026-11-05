@@ -38,13 +38,14 @@ public class AuthStack : BaseStack
                 EmailSubject = "Verify your MeloMelo account",
                 EmailStyle = VerificationEmailStyle.CODE
             },
-            Email = Env == "prod"
+            // cdk.json email: SES with our own sender, else Cognito's built-in one
+            Email = Config.Email is { } email
                 ? UserPoolEmail.WithSES(new UserPoolSESOptions()
                 {
-                    FromEmail = "noreply@melomelo.app",
-                    FromName = "MeloMelo",
-                    SesRegion = "eu-west-1",
-                    SesVerifiedDomain = "melomelo.app",
+                    FromEmail = email.FromEmail,
+                    FromName = email.FromName,
+                    SesRegion = email.SesRegion,
+                    SesVerifiedDomain = email.VerifiedDomain,
                 })
                 : UserPoolEmail.WithCognito(),
             LambdaTriggers = new UserPoolTriggers()

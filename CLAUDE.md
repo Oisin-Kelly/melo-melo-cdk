@@ -131,7 +131,7 @@ Full schema, key patterns, and every API's access pattern chain are documented i
 
 ## Environment Configuration
 
-The `ENVIRONMENT` env var (default: "dev") controls stack naming and deletion policies (RETAIN for prod, DESTROY for dev). `BaseStack` provides this to all stacks.
+The environment is picked by `-c env=…` or the `ENVIRONMENT` env var (default "dev") and names every stack/resource (`…-{env}`). Everything that differs per environment lives in **`cdk.json` → `context.environments.{dev|prod}`**: `removalPolicy` (`retain`/`destroy`), `autoDeleteObjects`, `pointInTimeRecovery` (prod on), `uploadCorsOrigins` (dropbox PUT CORS), `domain` (`{name, hostedZoneId}` — web-stack's custom domain + Route53 alias; null → CloudFront domain; needs `WEB_CERTIFICATE_ARN`), `email` (Cognito's SES sender; null → Cognito's built-in), `linkPreviewThrottle` (`GET /links/{token}` rate/burst). `infra/EnvConfig.cs` loads it into a typed record that `BaseStack` exposes as `Config` (`Env` = its name, `DeletionPolicy` = its removal policy) — read settings from there, never `Env == "prod"`. An environment missing from `cdk.json` (e.g. a typo'd `ENVIRONMENT=prd`) or an unknown key fails the synth rather than falling back to dev's destroy settings. Adding an environment = a new block in `cdk.json`.
 
 ## Lambda Layers
 

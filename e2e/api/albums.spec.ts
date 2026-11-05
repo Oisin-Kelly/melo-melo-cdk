@@ -103,6 +103,30 @@ test.describe('Album CRUD', () => {
   });
 });
 
+test.describe('GET /users/{username}/albums/shared', () => {
+  test("lists only that sender's albums shared with the caller", async ({ apiContext, apiContextB, user, userB, userC }) => {
+    const create = await apiContext.post('/albums', { data: { name: `E2E from-user ${Date.now()}` } });
+    expect(create.status()).toBe(201);
+    const album = await create.json();
+    await apiContext.post(`/albums/${album.id}/share`, { data: { add: [userB.username] } });
+
+    try {
+      // B sees it under A (any casing of A's username), and nothing of A's under C
+      const fromA = await apiContextB.get(`/users/${user.username.toUpperCase()}/albums/shared?limit=50`);
+      expect(fromA.status()).toBe(200);
+      const fromABody = await fromA.json();
+      expect(fromABody.items.map((i: { album: { id: string } }) => i.album.id)).toContain(album.id);
+      expect(fromABody.items.every((i: { album: { owner: { username: string } } }) => i.album.owner.username === user.username)).toBe(true);
+
+      const fromC = await apiContextB.get(`/users/${userC.username}/albums/shared?limit=50`);
+      expect(fromC.status()).toBe(200);
+      expect((await fromC.json()).items.map((i: { album: { id: string } }) => i.album.id)).not.toContain(album.id);
+    } finally {
+      await apiContext.delete(`/albums/${album.id}`);
+    }
+  });
+});
+
 test.describe('Album sharing grants track access', () => {
   test('share → derived access → unshare → delete revokes', async ({
     apiContext,

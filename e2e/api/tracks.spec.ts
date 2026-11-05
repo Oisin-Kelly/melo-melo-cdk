@@ -80,3 +80,18 @@ test.describe('GET /buckets/dropbox', () => {
     expect(res.status()).toBe(400);
   });
 });
+
+test.describe('GET /tracks/library', () => {
+  test('is one unpaged list holding every own track, with no duplicates', async ({ apiContext }) => {
+    const res = await apiContext.get('/tracks/library');
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.nextCursor).toBeNull();
+
+    const ids: string[] = body.items.map((t: { id: string }) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const own = (await (await apiContext.get('/tracks?limit=100')).json()).items as { id: string }[];
+    for (const track of own) expect(ids).toContain(track.id);
+  });
+});

@@ -2,10 +2,11 @@ name: CI
 
 # Two stages on every push to main:
 #   unit-tests — the api/ unit suite against DynamoDB Local (no AWS, fast)
+#   web-tests  — the web/ unit suite (Vitest + jsdom, network mocked; no AWS), plus lint and types
 #   e2e        — deploys the full app to an ephemeral `test` environment, provisions
 #                Cognito test users, runs the Playwright API suite, then tears it all
 #                down (destroy runs even when the tests fail)
-# e2e needs unit-tests, so a failing unit test stops the run before it spends on AWS.
+# e2e needs both, so a failing unit test stops the run before it spends on AWS.
 on:
   push:
     branches: [main]
@@ -45,8 +46,34 @@ jobs:
       - name: Lambda handler tests
         run: dotnet test --project api/Tests/Lambda.Tests
 
+  web-tests:
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # tsc -b checks the app and the tests (tsconfig.test.json)
+      - name: Types
+        run: npx tsc -b
+
+      - name: Unit tests
+        run: npm test
+
   e2e:
-    needs: unit-tests
+    needs: [unit-tests, web-tests]
 
     # arm64 runner: the lambdas are linux-arm64 native AOT, so the docker build
     # runs natively instead of under QEMU emulation

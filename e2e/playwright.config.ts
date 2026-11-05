@@ -25,8 +25,11 @@ export default defineConfig({
       use: {},
     },
     {
+      // Signing in lands on Home, which bumps the shared user's lastSeenAt (POST /me/seen)
+      // — progress/activity specs read those markers, so UI runs after the API projects
       name: 'ui',
       testDir: './ui',
+      dependencies: ['api-mutating'],
       use: {
         browserName: 'chromium',
         baseURL: process.env.WEB_BASE_URL,

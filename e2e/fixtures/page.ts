@@ -1,19 +1,16 @@
 import { Page } from '@playwright/test';
-import { test as base } from './auth';
+import { test as base, TEST_USER_A } from './auth';
 
-// Placeholder for future browser-based UI tests. Reuses the auth fixture's
-// signed-in `user`. When the React app is built, extend this fixture to:
-// 1. Navigate to the login page
-// 2. Fill in credentials
-// 3. Wait for redirect / auth token stored
-// 4. Yield the logged-in page
+// UI fixture: `authenticatedPage` is signed in as user A through the real login screen
+// (Cognito SRP via Amplify), landing on Home. Needs WEB_BASE_URL pointing at the web
+// app (local `npm run dev` or the deployed CloudFront URL).
 export const test = base.extend<{ authenticatedPage: Page }>({
-  authenticatedPage: async ({ page, user }, use) => {
-    // TODO: implement login flow once React app is available
-    // await page.goto('/login');
-    // await page.fill('[name=username]', user.username);
-    // await page.click('[type=submit]');
-    // await page.waitForURL('/home');
+  authenticatedPage: async ({ page }, use) => {
+    await page.goto('/login');
+    await page.getByLabel('Username or email').fill(TEST_USER_A.username);
+    await page.getByLabel('Password').fill(TEST_USER_A.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.waitForURL((url) => url.pathname === '/');
     await use(page);
   },
 });

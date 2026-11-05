@@ -1,0 +1,28 @@
+/* The photo is itself the picker: a reset button around the avatar with a camera
+   badge in the corner. */
+.mm-edit-profile-photo {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+.mm-edit-profile-photo:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.mm-edit-profile-photo-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
+  border-radius: var(--radius-full);
+  background: var(--color-text-primary);
+  color: var(--color-background-surface);
+  border: 2px solid var(--color-background-surface);
+}

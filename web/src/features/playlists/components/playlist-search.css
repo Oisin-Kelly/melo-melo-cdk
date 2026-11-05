@@ -1,0 +1,5 @@
+/* In the header's buttons row (wider screens): a fixed width, since the row sizes to
+   its content and 100% alone would shrink it to the placeholder. */
+.mm-inline-search {
+  width: min(16rem, 30vw);
+}

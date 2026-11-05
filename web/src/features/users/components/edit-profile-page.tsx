@@ -1,0 +1,321 @@
+import { AlertDialog } from '@astryxdesign/core/AlertDialog'
+import { Avatar } from '@astryxdesign/core/Avatar'
+import { Banner } from '@astryxdesign/core/Banner'
+import { Button } from '@astryxdesign/core/Button'
+import { Divider } from '@astryxdesign/core/Divider'
+import { Grid } from '@astryxdesign/core/Grid'
+import { Heading } from '@astryxdesign/core/Heading'
+import { HStack } from '@astryxdesign/core/HStack'
+import { Icon } from '@astryxdesign/core/Icon'
+import { RadioList, RadioListItem } from '@astryxdesign/core/RadioList'
+import { Switch } from '@astryxdesign/core/Switch'
+import { Text } from '@astryxdesign/core/Text'
+import { TextArea } from '@astryxdesign/core/TextArea'
+import { VStack } from '@astryxdesign/core/VStack'
+import { CameraIcon } from '@heroicons/react/24/outline'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useBeforeUnload, useBlocker, useNavigate } from 'react-router'
+import { sileo } from 'sileo'
+import { PageLoader } from '@/components/feedback/page-loader'
+import { CountedTextInput } from '@/components/forms/counted-text-input'
+import { lengthError } from '@/components/forms/saved-text'
+import { BackButton } from '@/components/navigation/back-button'
+import { LIMITS } from '@/config/limits'
+import { useIsMobile } from '@/hooks/use-is-mobile'
+import { ApiError } from '@/lib/api-client'
+import { IMAGE_ACCEPT, MAX_IMAGE_BYTES } from '@/lib/dropbox'
+import { useMe } from '@/lib/me'
+import { nameOf, type IncomingShares, type User } from '@/types/user'
+import { useUpdateProfile, type ProfileDraft } from '../api/update-profile'
+import './edit-profile.css'
+
+// /settings/profile: everything POST /profile/update takes — photo (change / remove),
+// display name, name, bio, location, privacy and who can share with you. Laid out like
+// Astryx's `settings` template: one scrolling form, each section's title beside its
+// fields (stacked on narrow screens), and one Save at the end since it's one request.
+export function EditProfilePage() {
+  const me = useMe()
+  const navigate = useNavigate()
+  // Back to wherever you came from (Settings, the avatar menu…), else Settings
+  const leave = () =>
+    ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0 ? navigate(-1) : navigate('/settings')
+
+  return (
+    <VStack gap={6}>
+      <VStack gap={2}>
+        <BackButton fallback="/settings" className="mm-page-back" />
+        <Heading level={1}>Edit profile</Heading>
+      </VStack>
+      {me.data ? <ProfileForm user={me.data} leave={leave} /> : <PageLoader what="settings" />}
+    </VStack>
+  )
+}
+
+// The server's limits (UserValidationService), checked here so mistakes show inline
+const FIELD_LIMITS = {
+  displayName: LIMITS.displayName,
+  firstName: LIMITS.profileField,
+  lastName: LIMITS.profileField,
+  city: LIMITS.profileField,
+  country: LIMITS.profileField,
+  bio: LIMITS.bio,
+} as const
+type TextField = keyof typeof FIELD_LIMITS
+
+// First/last name and city/country sit side by side only where each gets this much width —
+// so they stack on every phone, where two columns left labels and counters crammed together
+const PAIRED_FIELD_MIN = 220
+
+const toDraft = (user: User): Record<TextField, string> => ({
+  displayName: user.displayName ?? '',
+  firstName: user.firstName ?? '',
+  lastName: user.lastName ?? '',
+  city: user.city ?? '',
+  country: user.country ?? '',
+  bio: user.bio ?? '',
+})
+
+function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
+  const update = useUpdateProfile()
+  const initial = useMemo(() => toDraft(user), [user])
+  const [text, setText] = useState(initial)
+  const [followersPrivate, setFollowersPrivate] = useState(user.followersPrivate)
+  const [followingsPrivate, setFollowingsPrivate] = useState(user.followingsPrivate)
+  const [incomingShares, setIncomingShares] = useState<IncomingShares>(user.incomingShares ?? 'EVERYONE')
+  const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  const [isPhotoCleared, setIsPhotoCleared] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  // Free the picked photo's preview URL when it's replaced or the form closes
+  useEffect(() => () => (photo ? URL.revokeObjectURL(photo.url) : undefined), [photo])
+
+  const tooLong = (field: TextField) => lengthError(text[field], FIELD_LIMITS[field], field === 'bio' ? 'multi' : 'single') !== null
+  const hasErrors = (Object.keys(FIELD_LIMITS) as TextField[]).some(tooLong)
+  const isDirty =
+    (Object.keys(FIELD_LIMITS) as TextField[]).some((field) => text[field] !== initial[field]) ||
+    followersPrivate !== user.followersPrivate ||
+    followingsPrivate !== user.followingsPrivate ||
+    incomingShares !== (user.incomingShares ?? 'EVERYONE') ||
+    photo !== null ||
+    isPhotoCleared
+
+  // Leaving with unsaved edits asks first: in-app navigation (back, tabs, links,
+  // Cancel) through the router's blocker, closing or reloading the tab through the
+  // browser's own prompt. A successful save turns it off before navigating away.
+  const isSavedRef = useRef(false)
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty && !isSavedRef.current && currentLocation.pathname !== nextLocation.pathname,
+  )
+  useBeforeUnload(
+    useCallback(
+      (e: BeforeUnloadEvent) => {
+        if (isDirty && !isSavedRef.current) e.preventDefault()
+      },
+      [isDirty],
+    ),
+  )
+
+  const previewUrl = photo?.url ?? (isPhotoCleared ? undefined : (user.imageUrl ?? undefined))
+  const field = (name: TextField) => ({
+    maxLength: FIELD_LIMITS[name],
+    value: text[name],
+    onChange: (value: string) => {
+      setText((current) => ({ ...current, [name]: value }))
+      setError(null)
+    },
+    status: tooLong(name)
+      ? ({ type: 'error', message: `Keep it to ${FIELD_LIMITS[name]} characters.` } as const)
+      : undefined,
+  })
+
+  const pickPhoto = (file: File | undefined) => {
+    if (!file) return
+    if (!IMAGE_ACCEPT.split(',').includes(file.type)) {
+      setError('Choose a JPEG, PNG, WebP or GIF image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('That photo is over 20 MB. Choose a smaller one.')
+      return
+    }
+    setPhoto({ file, url: URL.createObjectURL(file) })
+    setIsPhotoCleared(false)
+    setError(null)
+  }
+
+  const save = async () => {
+    if (!isDirty || hasErrors) return
+    const blankToNull = (value: string) => value.trim() || null
+    const draft: ProfileDraft = {
+      displayName: blankToNull(text.displayName),
+      firstName: blankToNull(text.firstName),
+      lastName: blankToNull(text.lastName),
+      city: blankToNull(text.city),
+      country: blankToNull(text.country),
+      bio: blankToNull(text.bio),
+      followersPrivate,
+      followingsPrivate,
+      incomingShares,
+    }
+    try {
+      await update.mutateAsync({ draft, file: photo?.file ?? null, clearImage: isPhotoCleared })
+      isSavedRef.current = true
+      sileo.success({ title: 'Profile saved' })
+      leave()
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400) setError(err.message)
+      else sileo.error({ title: "Couldn't save your profile", description: 'Please try again.' })
+    }
+  }
+
+  return (
+    <VStack gap={6}>
+      {error && <Banner status="error" title={error} />}
+
+      <Section title="Photo" description="Shown on your profile and next to everything you share.">
+        <HStack gap={4} vAlign="center" wrap="wrap">
+          <button
+            type="button"
+            className="mm-edit-profile-photo"
+            aria-label={previewUrl ? 'Change photo' : 'Add photo'}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Avatar src={previewUrl} name={nameOf(user)} size={96} tooltip={false} alt="" />
+            <span className="mm-edit-profile-photo-badge" aria-hidden="true">
+              <Icon icon={CameraIcon} size="sm" color="inherit" />
+            </span>
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={IMAGE_ACCEPT}
+            hidden
+            onChange={(e) => {
+              pickPhoto(e.target.files?.[0])
+              e.target.value = '' // so picking the same file again still fires
+            }}
+          />
+          <VStack gap={1}>
+            <HStack gap={2}>
+              <Button
+                label={previewUrl ? 'Change photo' : 'Add photo'}
+                variant="secondary"
+                size="sm"
+                onClick={() => fileInput.current?.click()}
+              />
+              {previewUrl && (
+                <Button
+                  label="Remove"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPhoto(null)
+                    setIsPhotoCleared(Boolean(user.imageUrl))
+                  }}
+                />
+              )}
+            </HStack>
+            <Text type="supporting" color="secondary">
+              JPEG, PNG, WebP or GIF, up to 20 MB.
+            </Text>
+          </VStack>
+        </HStack>
+      </Section>
+
+      <Divider />
+
+      <Section title="Basic information" description="How you appear to the people you share with.">
+        <CountedTextInput
+          label="Display name"
+          placeholder={user.username}
+          description="Leave empty to show your username."
+          {...field('displayName')}
+        />
+        <Grid columns={{ minWidth: PAIRED_FIELD_MIN }} gap={4}>
+          <CountedTextInput label="First name" isOptional autoComplete="given-name" {...field('firstName')} />
+          <CountedTextInput label="Last name" isOptional autoComplete="family-name" {...field('lastName')} />
+        </Grid>
+        <TextArea label="Bio" isOptional rows={4} {...field('bio')} />
+      </Section>
+
+      <Divider />
+
+      <Section title="Location" description="Optional, shown on your profile.">
+        <Grid columns={{ minWidth: PAIRED_FIELD_MIN }} gap={4}>
+          <CountedTextInput label="City" isOptional autoComplete="address-level2" {...field('city')} />
+          <CountedTextInput label="Country" isOptional autoComplete="country-name" {...field('country')} />
+        </Grid>
+      </Section>
+
+      <Divider />
+
+      <Section title="Privacy" description="Who can see your connections, and who can send you music.">
+        <Switch
+          label="Hide my followers"
+          description="Only you can see who follows you."
+          value={followersPrivate}
+          onChange={setFollowersPrivate}
+        />
+        <Switch
+          label="Hide who I follow"
+          description="Only you can see who you follow."
+          value={followingsPrivate}
+          onChange={setFollowingsPrivate}
+        />
+        <RadioList
+          label="Who can share music with you"
+          value={incomingShares}
+          onChange={(value) => setIncomingShares(value as IncomingShares)}
+        >
+          <RadioListItem value="EVERYONE" label="Everyone" />
+          <RadioListItem value="FOLLOWING" label="People you follow" />
+          <RadioListItem value="NONE" label="No one" description="Things already shared with you stay." />
+        </RadioList>
+      </Section>
+
+      <Divider />
+
+      <HStack gap={2} hAlign="end">
+        <Button label="Cancel" variant="secondary" onClick={leave} />
+        <Button
+          label="Save changes"
+          variant="primary"
+          isDisabled={!isDirty || hasErrors}
+          isLoading={update.isPending}
+          onClick={() => void save()}
+        />
+      </HStack>
+
+      <AlertDialog
+        isOpen={blocker.state === 'blocked'}
+        onOpenChange={(open) => !open && blocker.reset?.()}
+        title="Discard changes?"
+        description="You have unsaved changes to your profile. If you leave now, they won't be saved."
+        cancelLabel="Keep editing"
+        actionLabel="Discard"
+        actionVariant="destructive"
+        onAction={() => blocker.proceed?.()}
+      />
+    </VStack>
+  )
+}
+
+// One settings section (the template's pattern): title + description beside the
+// fields, wrapping to stacked when the page is narrower than two 320px columns (then a
+// tighter gap, or the title floats away from its fields)
+function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  const isMobile = useIsMobile()
+  return (
+    <Grid columns={{ minWidth: 320 }} gap={isMobile ? 4 : 10}>
+      <VStack gap={1}>
+        <Heading level={3}>{title}</Heading>
+        <Text type="supporting" color="secondary">
+          {description}
+        </Text>
+      </VStack>
+      <VStack gap={4}>{children}</VStack>
+    </Grid>
+  )
+}

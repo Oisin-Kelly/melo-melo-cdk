@@ -1,0 +1,41 @@
+/* Phone tab bar. Sits below AppShell in a full-height column (app-shell.css), so it
+   never covers content; the bottom padding clears the iPhone home indicator
+   (needs viewport-fit=cover in index.html). */
+.mm-tabs {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+}
+
+.mm-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-0-5);
+  /* a comfortably large tap target: >= 44px tall, the full column wide */
+  padding-block: var(--spacing-2) var(--spacing-1-5);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--text-supporting-size);
+  line-height: var(--text-supporting-leading);
+  font-weight: var(--font-weight-normal);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.mm-tab[aria-current='page'] {
+  color: var(--color-text-primary);
+  /* the same weight the side nav gives its selected row */
+  font-weight: var(--font-weight-medium);
+}
+.mm-tab:active { opacity: 0.6; }
+.mm-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -4px;
+  border-radius: var(--radius-element);
+}

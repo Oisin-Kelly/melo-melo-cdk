@@ -1,0 +1,12 @@
+/* The sender's caption, edged in the shared item's cover colour (--mm-tint, set via
+   `tint()` from components/media) — matching the row below it (.mm-row). */
+.mm-feed-caption {
+  --mm-tint-base: var(--mm-tint, var(--color-accent));
+  border-inline-start: 3px solid color-mix(in oklch, var(--mm-tint-base) 45%, transparent);
+  border-radius: 0 var(--radius-element) var(--radius-element) 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--mm-tint-base) 10%, transparent),
+    color-mix(in oklch, var(--mm-tint-base) 3%, transparent)
+  );
+}

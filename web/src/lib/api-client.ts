@@ -5,13 +5,19 @@ import type { ErrorResponse } from '@/types/api'
 // JSON, attaches a bearer token when signed in, and normalises error bodies into
 // `ApiError`.
 //
-// Auth is a feature yet to be built — `getToken` is the seam it will wire into
-// via `setAuthTokenProvider`. Deliberately no assumptions here about where/how
-// the token is stored; that contract belongs to the auth feature.
-let getToken: () => string | null = () => null
+// The auth feature wires itself in through these two seams, so this file makes no
+// assumptions about where or how the token is stored. The provider is async because
+// Amplify's fetchAuthSession() refreshes an expired token before returning it.
+let getToken: () => Promise<string | null> = async () => null
+let onUnauthorized: () => void = () => {}
 
-export function setAuthTokenProvider(provider: () => string | null): void {
+export function setAuthTokenProvider(provider: () => Promise<string | null>): void {
   getToken = provider
+}
+
+/** Called on any 401 — the session is gone, so the auth feature signs out. */
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler
 }
 
 export class ApiError extends Error {
@@ -26,11 +32,14 @@ export class ApiError extends Error {
   }
 }
 
+/** 404: unknown, deleted, or not shared with you — the API doesn't say which. */
+export const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404
+
 type ApiOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { body, headers, ...rest } = options
-  const token = getToken()
+  const token = await getToken()
 
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...rest,
@@ -43,6 +52,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   })
 
   if (!response.ok) {
+    if (response.status === 401) onUnauthorized()
     const errorBody = (await response
       .json()
       .catch(() => null)) as ErrorResponse | null

@@ -1,0 +1,27 @@
+/* The avatar group as one button: no button chrome, just the faces, with a focus ring.
+   Exactly a button's height (2rem): it arrives after the page (its own query), and the
+   group's ring around each face would otherwise make the row taller then, nudging the
+   whole header up. The ring just overflows by its 2px. */
+.mm-shared-with {
+  display: inline-flex;
+  align-items: center;
+  block-size: 2rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+/* "+12" stays on one line however tight the row gets */
+.mm-shared-with * {
+  white-space: nowrap;
+}
+.mm-shared-with:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Share dialog: someone marked to lose access fades back until Undo or Save. */
+.mm-recipient[data-leaving='true'] {
+  opacity: 0.5;
+}

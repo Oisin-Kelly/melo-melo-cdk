@@ -1,0 +1,86 @@
+/* The invite screen behind a share link (/s/:token): the logo teal fading down into the page
+   background, with the invite on it — straight on the page on phones, in a card on wider screens.
+   Only what no Astryx component does lives here — the page frame, the cover-tinted wash, the play
+   button over the cover, the caption and the playing row. */
+.mm-invite {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-4);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--color-text-teal) 45%, var(--color-background-body)),
+    var(--color-background-body) 70%
+  );
+}
+
+/* Phones: no card, so start at the top (a long album scrolls) and drop the cover wash, which
+   would fight the page gradient */
+@media (max-width: 767px) {
+  .mm-invite {
+    align-items: flex-start;
+    padding-top: max(var(--spacing-4), env(safe-area-inset-top));
+  }
+  .mm-invite .mm-invite-wash {
+    background: none;
+  }
+}
+
+/* The sender's note, quoted like a caption on Home */
+.mm-invite-caption {
+  --mm-tint-base: var(--mm-tint, var(--color-accent));
+  border-inline-start: 3px solid color-mix(in oklch, var(--mm-tint-base) 45%, transparent);
+  border-radius: 0 var(--radius-element) var(--radius-element) 0;
+  background: color-mix(in oklch, var(--mm-tint-base) 10%, transparent);
+  text-align: start;
+}
+
+/* Matches a detail page's hero wash: the cover's dominant colour fading down to the card */
+.mm-invite-wash {
+  --mm-tint-base: var(--mm-tint, var(--color-accent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--mm-tint-base) 32%, transparent),
+    transparent
+  );
+}
+
+/* An expired link: no colour wash */
+.mm-invite-wash[data-plain] {
+  background: none;
+}
+
+/* The play button sits on the cover's centre */
+.mm-invite-cover {
+  position: relative;
+  display: inline-flex;
+}
+.mm-invite-cover > .mm-cover {
+  box-shadow: var(--shadow-high);
+}
+.mm-invite-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* An expired link's stand-in cover: a grey square with a lock */
+.mm-invite-locked {
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: var(--radius-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+}
+
+/* Album tracklist: the row whose preview is playing */
+.mm-invite-row-playing {
+  background: var(--color-background-muted);
+  border-radius: var(--radius-inner);
+}

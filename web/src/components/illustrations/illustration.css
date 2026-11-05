@@ -1,0 +1,16 @@
+/* Sizes follow Astryx's illustration guidance (≈120px inline, up to 240px full page). */
+.mm-illustration {
+  --mm-illustration-ink: var(--color-text-primary);
+  --mm-illustration-record: color-mix(in oklch, var(--color-text-primary) 18%, #1d1d1f);
+  --mm-illustration-soft: color-mix(in oklch, var(--color-text-teal) 22%, var(--color-background-body));
+  display: inline-block;
+  line-height: 0;
+}
+.mm-illustration[data-size='sm'] { width: 8rem; }
+.mm-illustration[data-size='md'] { width: 13rem; }
+
+.mm-illustration svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}

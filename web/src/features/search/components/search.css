@@ -1,0 +1,13 @@
+/* The header search field. An explicit width: TopNav's centre column sizes to its
+   content, so 100% alone would collapse the field to its placeholder. */
+.mm-search-field {
+  width: min(36rem, 42vw);
+  margin-inline: auto;
+}
+
+/* Results scroll inside the popover rather than running off the screen. */
+.mm-search-results {
+  max-height: min(32rem, 70dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

@@ -1,0 +1,70 @@
+/* Brand pieces Astryx has no component for: the Borel wordmark and the drifting
+   gradient blobs. Plain CSS on tokens (no hex), like the Astryx templates' own
+   <style> blocks. */
+
+.mm-wordmark {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Borel', cursive;
+  color: var(--color-text-teal);
+  /* Borel ships a single weight, so "bolder" is a thin stroke in the text colour
+     rather than a synthesised font-weight */
+  -webkit-text-stroke: 0.012em currentColor;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Borel's glyphs sit high in a very tall line box; a tight line height plus a small
+     downward nudge puts the letters on the optical centre of the header */
+  line-height: 1;
+  transform: translateY(0.4em);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.mm-wordmark:hover,
+.mm-wordmark:focus-visible { text-decoration: none; }
+.mm-wordmark[data-size='md'] { font-size: 1.5rem; }
+.mm-wordmark[data-size='lg'] { font-size: 1.75rem; }
+.mm-wordmark[data-size='xl'] { font-size: 2.5rem; }
+
+/* ---- gradient blobs ---- */
+.mm-blobs {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  background: var(--color-background-surface);
+  isolation: isolate;
+}
+/* Full page: exactly one viewport tall */
+.mm-blobs[data-full-page] { height: 100dvh; }
+
+.mm-blob {
+  position: absolute;
+  left: var(--mm-blob-x);
+  top: var(--mm-blob-y);
+  width: var(--mm-blob-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--mm-blob), transparent 70%);
+  filter: blur(48px);
+  opacity: 0.55;
+  animation: mm-blob-drift var(--mm-blob-duration) ease-in-out infinite alternate;
+  z-index: -1;
+}
+
+@keyframes mm-blob-drift {
+  0%   { transform: translate(0, 0) scale(1); border-radius: 50%; }
+  33%  { transform: translate(14%, -10%) scale(1.15); border-radius: 44% 56% 52% 48%; }
+  66%  { transform: translate(-10%, 12%) scale(0.92); border-radius: 56% 44% 46% 54%; }
+  100% { transform: translate(8%, 6%) scale(1.08); border-radius: 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-blob { animation: none; }
+}
+
+.mm-blobs-content {
+  position: relative;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-8);
+}

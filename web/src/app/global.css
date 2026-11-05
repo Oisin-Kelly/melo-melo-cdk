@@ -1,0 +1,36 @@
+/* The page canvas behind the app — what shows in overscroll and the iPhone safe areas. The
+   theme's tokens only exist inside Astryx's <Theme> wrapper, not on <html>, so these restate
+   theme-neutral's light/dark pairs (see src/themes/built/melomelo.css). It has to match what the
+   screen itself paints: the signed-in app (AppShell, the phone tab bar) is --color-background-surface;
+   the screens outside it (landing, sign-in, share-link invites) are --color-background-body.
+   color-scheme picks the half: ThemeModeProvider pins it when the user chooses light or dark;
+   "light dark" follows the OS. */
+html {
+  color-scheme: light dark;
+  background: light-dark(#f1f1f1, #1b1b1b); /* --color-background-body */
+}
+html:has(.astryx-app-shell) {
+  background: light-dark(#ffffff, #262626); /* --color-background-surface */
+}
+
+/* App-wide text rule: anything people type (captions, descriptions, bios, names) can be
+   one long unbroken run — a pasted link, "aaaa…" up to the limit — which would otherwise
+   push its box wider than the screen and scroll the page sideways. `anywhere` breaks such
+   a run only when it can't fit (normal words are untouched) and also lets flex/grid items
+   shrink past it. Inherited, so it covers every screen and dialog. */
+body {
+  overflow-wrap: anywhere;
+}
+
+/* Astryx's TextArea draws its character counter ("4010/4000") absolutely over the bottom-right
+   of the text box and relies on bottom padding to keep text clear — which WebKit doesn't honour
+   once the text scrolls, so the last lines ran under the counter. Give the counter its own row at
+   the bottom of the box instead, so text can never sit behind it. */
+.astryx-text-area .astryx-text-area-counter {
+  position: static;
+  justify-content: flex-end;
+  padding: 0 var(--spacing-2) var(--spacing-1);
+}
+.astryx-text-area:has(> .astryx-text-area-counter) > .astryx-text-area-control {
+  padding-bottom: var(--spacing-1);
+}

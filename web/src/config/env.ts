@@ -14,5 +14,9 @@ export const env = {
     'VITE_COGNITO_CLIENT_ID',
     import.meta.env.VITE_COGNITO_CLIENT_ID,
   ),
+  cognitoUserPoolId: required(
+    'VITE_COGNITO_USER_POOL_ID',
+    import.meta.env.VITE_COGNITO_USER_POOL_ID,
+  ),
   awsRegion: required('VITE_AWS_REGION', import.meta.env.VITE_AWS_REGION),
 } as const

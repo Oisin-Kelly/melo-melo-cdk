@@ -1,0 +1,30 @@
+/* CountedTextInput: the counter sits at the right end of the field's label row, on the
+   label's line (same line box height), in TextArea's counter style. */
+.mm-counted {
+  position: relative;
+}
+/* Room for the counter at the end of the label row (see counted-text-input.tsx) */
+.mm-counted .astryx-field-label {
+  padding-inline-end: calc(var(--mm-counter-ch) * 1ch + var(--spacing-3));
+}
+.mm-counter {
+  font-variant-numeric: tabular-nums;
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  font-family: var(--font-family-body);
+  font-size: var(--text-supporting-size);
+  line-height: calc(var(--text-label-size) * var(--text-label-leading));
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.mm-counter[data-over] {
+  color: var(--color-error);
+}
+
+/* SlugField's URL preview: wrap inside the dialog instead of widening it (see slug-field.tsx).
+   Astryx Text sets break-word, which still sizes the box to the run — restate anywhere. */
+.mm-slug-preview {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

@@ -28,5 +28,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Tests and their helpers are checked by tsconfig.test.json (Node + Vitest types) */
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/testing"]
 }

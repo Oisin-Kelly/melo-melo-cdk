@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Unit test coverage report (npm run test:coverage)
+coverage

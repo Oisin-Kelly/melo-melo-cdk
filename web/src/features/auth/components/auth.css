@@ -1,0 +1,20 @@
+/* The split auth screen: full viewport, form | art. Below the md breakpoint (768px)
+   the art is dropped and the form takes the full width. */
+.mm-auth {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  min-height: 100dvh;
+  background: var(--color-background-body);
+}
+
+.mm-auth-art {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  border-inline-start: 1px solid var(--color-border);
+}
+
+@media (max-width: 767px) {
+  .mm-auth { grid-template-columns: minmax(0, 1fr); }
+  .mm-auth-art { display: none; }
+}

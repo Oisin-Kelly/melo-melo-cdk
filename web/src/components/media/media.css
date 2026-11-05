@@ -1,0 +1,240 @@
+/* Cover art. --mm-cover is the server-computed dominant colour of the image (data,
+   not a design colour); without it the placeholder falls back to a neutral token. */
+.mm-cover {
+  --mm-cover-base: var(--mm-cover, var(--color-background-muted));
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    var(--mm-cover-base),
+    color-mix(in oklch, var(--mm-cover-base) 60%, black)
+  );
+  border-radius: var(--radius-element);
+}
+.mm-cover[data-size='xs'] { width: 1.25rem; height: 1.25rem; border-radius: var(--radius-inner); }
+.mm-cover[data-size='sm'] { width: 2.75rem; height: 2.75rem; }
+.mm-cover[data-size='md'] { width: 3.5rem; height: 3.5rem; }
+.mm-cover[data-size='lg'] { width: 7.5rem; height: 7.5rem; border-radius: var(--radius-container); }
+/* A detail page's cover on wider screens: as tall as the one-line column beside it at its
+   fullest (label, display title, byline, meta, buttons), so neither towers over the other */
+.mm-cover[data-size='xl'] { width: 11rem; height: 11rem; border-radius: var(--radius-container); }
+/* Only a detail page's main image — its cover, or a profile's photo in its place — lifts
+   off the hero wash with a shadow; every other cover (rows, tiles, the dialogs that
+   render inside the header) stays flat */
+.mm-hero-image {
+  display: flex;
+  flex-shrink: 0;
+}
+.mm-hero-image > .mm-cover,
+.mm-hero-image > .mm-photo {
+  box-shadow: var(--shadow-high);
+}
+.mm-photo {
+  display: inline-flex;
+  border-radius: 50%;
+}
+
+/* The likes playlist's cover (liked-cover.tsx): a heart on the accent wash, the icon
+   scaled with the cover */
+.mm-cover.mm-liked-cover {
+  display: inline-grid;
+  place-items: center;
+  background: var(--color-accent-muted);
+  color: var(--color-text-accent);
+}
+.mm-liked-cover svg {
+  width: 45%;
+  height: 45%;
+}
+.mm-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Track/album rows tinted with their own cover colour (--mm-tint = the server's
+   dominant colour for the artwork): a soft left-to-right wash. Without a cover colour
+   they stay neutral. */
+.mm-row {
+  position: relative;
+}
+
+/* card (Home's feed): outlined and washed in the cover's colour */
+.mm-row[data-variant='card'] {
+  --mm-tint-base: var(--mm-tint, transparent);
+  border: 1px solid color-mix(in oklch, var(--mm-tint-base) 22%, var(--color-border));
+  border-radius: var(--radius-page);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--mm-tint-base) 18%, var(--color-background-card)),
+    color-mix(in oklch, var(--mm-tint-base) 5%, var(--color-background-card))
+  );
+}
+
+/* flat (every other list): nothing but a soft background on hover. Pulled out by its
+   padding so the covers line up with the page's edge, the hover fill bleeding past it. */
+.mm-row[data-variant='flat'] {
+  margin-inline: calc(-1 * var(--spacing-2));
+  border-radius: var(--radius-container);
+  transition: background-color var(--duration-fast, 0.15s);
+}
+@media (hover: hover) {
+  .mm-row[data-variant='flat']:hover {
+    background: var(--color-background-muted);
+  }
+}
+.mm-row[data-variant='flat']:has(.mm-row-link:focus-visible) {
+  background: var(--color-background-muted);
+}
+
+/* A row's cover is exactly as tall as the row's title block (title line + gap + detail
+   line = 3.125rem), its tallest item, so the space above, below and left of it is the
+   row's one inset. Concentric corners: inner radius = outer radius − inset — for a card,
+   its padding (MediaRow's spacing-3) plus its 1px border; for a flat row, its spacing-2. */
+.mm-row .mm-cover {
+  width: 3.125rem;
+  height: 3.125rem;
+}
+.mm-row[data-variant='card'] .mm-cover {
+  border-radius: calc(var(--radius-page) - var(--spacing-3) - 1px);
+}
+.mm-row[data-variant='flat'] .mm-cover {
+  border-radius: max(var(--radius-inner), calc(var(--radius-container) - var(--spacing-2)));
+}
+
+/* Detail page header (hero.tsx): a top-down wash of the cover colour, full bleed — the
+   negative margins cancel the page padding (--mm-page-pad, app-shell.css) so it runs to
+   the top and side edges, then fades into the page; the same padding inside keeps its
+   content lined up with the page below. */
+.mm-hero {
+  --mm-tint-base: var(--mm-tint, var(--color-accent));
+  align-self: stretch;
+  margin: calc(-1 * var(--mm-page-pad)) calc(-1 * var(--mm-page-pad)) 0;
+  padding: var(--mm-page-pad) var(--mm-page-pad) 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--mm-tint-base) 32%, transparent),
+    transparent
+  );
+}
+/* A collapsed header (just the back button's row, e.g. while searching): no wash */
+.mm-hero-plain {
+  background: none;
+}
+/* The back button (phones only): pulled up and left so its arrow, not its hit area, lines
+   up with the cover below. */
+.mm-hero-back {
+  margin-block-start: calc(-1 * var(--spacing-2));
+  margin-inline-start: calc(-1 * var(--spacing-2));
+  margin-block-end: calc(-1 * var(--spacing-2));
+}
+
+/* Round play button: a solid circle in the primary text colour (black in light mode,
+   white in dark) with the icon in the page background colour. Two classes to beat the
+   Button's atomic variant styles; full opacity even while playback is disabled, so it
+   reads as the play affordance rather than a greyed-out control. */
+.astryx-button.mm-play {
+  --_button-radius: var(--radius-full);
+  background-color: var(--color-text-primary);
+  color: var(--color-background-surface);
+  opacity: 1;
+}
+
+/* Cover-first tiles (album-tile.tsx): as wide as a large cover, the whole tile a link. */
+.mm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1-5);
+  flex-shrink: 0;
+  width: 7.5rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-container);
+  scroll-snap-align: start;
+}
+.mm-tile:hover .mm-tile-name { text-decoration: underline; }
+.mm-tile:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* A row of tiles that scrolls sideways rather than wrapping. */
+.mm-tile-shelf {
+  display: flex;
+  gap: var(--spacing-4);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-block-end: var(--spacing-2);
+  scrollbar-width: thin;
+}
+
+/* Long text under a detail page's header (detail-section.tsx): a comfortable line length,
+   keeping the writer's own line breaks. Text sets its own overflow-wrap (break-word,
+   which still sizes the box to an unbroken run), so restate the app-wide `anywhere`. */
+.mm-expandable-text {
+  max-width: 40rem;
+  min-width: 0;
+  white-space: pre-line;
+}
+.mm-expandable-text > * {
+  overflow-wrap: anywhere;
+}
+
+/* A link inside a one-line clamped text (a row's owner): plain inline, so a long name
+   can end in "…" — Astryx's Link is inline-flex, which can't be cut with an ellipsis. */
+.mm-inline-link {
+  display: inline;
+}
+
+/* An icon inside a one-line clamped text (a phone row's "liked" heart): kept on the line —
+   Astryx's Icon is block-level, which would break the line. */
+.mm-inline-icon > * {
+  display: inline-block;
+  vertical-align: -0.1em;
+}
+
+/* CollectionHeader's compact-beside title (profiles on phones): a size down from the page
+   title, pulled up so its capitals start level with the image's top edge. The space above
+   the capitals is half the leading plus the font's ascent above cap height; Figtree's
+   ascent is 0.95em over a 1.2em content area. (text-box-trim would say this directly,
+   but it doesn't reach into a line-clamped box.) */
+.mm-beside-title {
+  font-size: var(--text-heading-2-size);
+  line-height: var(--text-heading-2-leading);
+  margin-block-start: calc((1.2em - 1lh) / 2 - (0.95em - 1cap));
+}
+
+/* Text that expands when tapped (ExpandableText isTextToggle): a button that looks like
+   the text it holds */
+.mm-text-toggle {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* The whole row opens its item: the title link (.mm-row-link) stretches an invisible layer
+   over the row, and the row's own buttons and other links sit above that layer, so they
+   still get their clicks. */
+.mm-row-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.mm-row :is(button, a):not(.mm-row-link) {
+  position: relative;
+  z-index: 1;
+}
+
+/* A profile stat ("2 following"): wraps between stats, never inside one */
+.mm-stat {
+  white-space: nowrap;
+}

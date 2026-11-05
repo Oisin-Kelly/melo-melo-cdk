@@ -1,0 +1,58 @@
+/* A person tile (person-card.tsx): no card, just the photo circle and text — a soft
+   background shows on hover/focus, marking the whole tile as the link. */
+.mm-person {
+  --mm-tint-base: var(--mm-tint, var(--color-text-teal));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-width: 0;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-page);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color var(--duration-fast, 0.15s);
+}
+@media (hover: hover) {
+  .mm-person:hover {
+    background: var(--color-background-muted);
+  }
+}
+.mm-person:focus-visible {
+  background: var(--color-background-muted);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The photo: a circle filling the tile's width. Without a photo, a gradient in the
+   person's colour (--mm-tint, from their profile) — like a cover placeholder. */
+.mm-person-photo {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--mm-tint-base) 70%, var(--color-background-card)),
+    color-mix(in oklch, var(--mm-tint-base) 70%, black)
+  );
+}
+.mm-person-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Name / @username / detail, centred and cut to one line each. */
+.mm-person-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.mm-person-text > * {
+  max-width: 100%;
+}

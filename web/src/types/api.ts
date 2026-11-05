@@ -14,3 +14,54 @@ export type PaginatedResult<T> = {
   items: T[]
   nextCursor: string | null
 }
+
+// ---- Row-level summaries (api/Domain/Summaries.cs) -------------------------------
+// Every list/row context serializes these; the full objects only appear on detail GETs.
+// Shared here because almost every feature renders a user, track or album row.
+
+export type UserSummary = {
+  username: string
+  displayName: string | null
+  imageUrl: string | null
+  imageBgColor: string | null
+}
+
+export type TrackSummary = {
+  id: string
+  name: string
+  /** Seconds. */
+  duration: number
+  imageUrl: string | null
+  imageBgColor: string | null
+  /** Epoch ms. */
+  createdAt: number
+  likedByMe: boolean
+  owner: UserSummary
+  /** Readable-URL slug; null on items made before slugs existed (links fall back to the id). */
+  slug?: string | null
+}
+
+export type AlbumSummary = {
+  id: string
+  name: string
+  imageUrl: string | null
+  imageBgColor: string | null
+  trackCount: number
+  totalDurationSeconds: number
+  /** Epoch ms. */
+  createdAt: number
+  likedByMe: boolean
+  owner: UserSummary
+  /** Readable-URL slug; null on items made before slugs existed (links fall back to the id). */
+  slug?: string | null
+}
+
+// ---- Sharing (albums and tracks share one shape) ----
+
+/** Someone a thing is shared with: GET /albums|tracks/{id}/recipients items. */
+export type Recipient = { user: UserSummary; sharedAt: number }
+
+/** POST /albums|tracks/{id}/share. `add` must hold only the people being (re)shared with
+ *  now: everyone in it is rewritten with this caption, so resending the whole list would
+ *  overwrite every existing recipient's caption. */
+export type ShareChange = { add: string[]; remove: string[]; caption?: string }

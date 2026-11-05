@@ -1,0 +1,60 @@
+/* Breathing room at the screen edge: AppShell's side nav sits its items almost flush. */
+.astryx-app-shell-sidenav .astryx-side-nav {
+  padding-inline: var(--spacing-3);
+}
+
+/* Line the logo up with the nav icons and the Playlists title below it: the side nav's
+   inline padding plus a nav item's own (the heading slot has no class of its own, so
+   target the wordmark inside the top nav). */
+@media (min-width: 768px) {
+  .astryx-top-nav .mm-wordmark {
+    margin-inline-start: calc(var(--spacing-3) + var(--spacing-2));
+  }
+}
+
+/* Phones: AppShell (normally 100dvh on its own) shares a full-height column with the
+   bottom tab bar, so the content scrolls inside AppShell and the bar never covers it. */
+.mm-phone-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.mm-phone-frame > .astryx-app-shell {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* A back button above a page title: pulled up and left so its arrow, not its hit area,
+   lines up with the title — the same pull as a detail page's (.mm-hero-back in
+   media.css), so the arrow sits in one spot on every page. */
+.mm-page-back {
+  margin-block-start: calc(-1 * var(--spacing-2));
+  margin-inline-start: calc(-1 * var(--spacing-2));
+  margin-block-end: calc(-1 * var(--spacing-2));
+}
+
+/* The header logo shrinks a little as you scroll down and grows back as you scroll up
+   (--mm-logo-scale, set by use-logo-scroll-scale.ts). Scales from its start edge on
+   desktop (where it's left-aligned) and its centre on phones (where it's centred). */
+.astryx-top-nav .mm-wordmark {
+  transform: translateY(0.4em) scale(var(--mm-logo-scale, 1));
+  transform-origin: left center;
+}
+@media (max-width: 767px) {
+  .astryx-top-nav .mm-wordmark { transform-origin: center; }
+}
+
+/* The page padding, as a variable for the CSS that needs it (the hero's full-bleed wash,
+   the header's right edge). Must equal AppShell's contentPadding in app-layout.tsx:
+   8 on desktop, 5 on phones. */
+.astryx-app-shell { --mm-page-pad: var(--spacing-8); }
+@media (max-width: 767px) {
+  .astryx-app-shell { --mm-page-pad: var(--spacing-5); }
+}
+
+/* The header's right edge matches the page padding, so the avatar lines up with the
+   content's right edge below. (Element + class, to outrank TopNav's own padding.) */
+nav.astryx-top-nav {
+  padding-inline-end: var(--mm-page-pad);
+}

@@ -47,7 +47,7 @@ public static partial class Slugs
 
     // Accented Latin letters → their plain form. An explicit table rather than string.Normalize:
     // the Lambdas run with InvariantGlobalization, where Normalize is a silent no-op ("café" would
-    // become "caf"). Mirrored in scripts/backfill-slugs.sh. Anything not here (other scripts,
+    // become "caf"). Anything not here (other scripts,
     // emoji) is dropped like punctuation.
     private static readonly Dictionary<char, string> Folds = BuildFolds(
         ("àáâãäåāăą", "a"), ("çćĉċč", "c"), ("ďđ", "d"), ("èéêëēĕėęě", "e"), ("ĝğġģ", "g"),

@@ -10,7 +10,7 @@ Part of the [data model](README.md). Covers user profiles, the follow graph, and
 |----|-----|--------|--------|--------|--------|
 | `USER#{username}` | `PROFILE` | `EMAIL#{email}` | `PROFILE` | `USERS` | `USERNAME#{lowercased username}` |
 
-GSI3 is the username search index: every profile shares the `USERS` partition so `begins_with` on the lowercased username gives case-insensitive prefix search (key format owned by `UserRepository.SearchIndexPk`/`SearchIndexSk`). Profiles created before this index existed are backfilled by `scripts/backfill-user-search-keys.sh`.
+GSI3 is the username search index: every profile shares the `USERS` partition so `begins_with` on the lowercased username gives case-insensitive prefix search (key format owned by `UserRepository.SearchIndexPk`/`SearchIndexSk`).
 
 Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city`, `bio`, `imageUrl`, `imageBgColor`, `followingCount`, `followerCount`, `followingsPrivate`, `followersPrivate`, `incomingShares` (`EVERYONE` — default, may be absent — | `FOLLOWING` | `NONE`), `lastSeenAt` / `activitySeenAt` (private new-since-last-visit and unread-activity markers), `createdAt`
 

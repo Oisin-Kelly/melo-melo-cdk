@@ -32,7 +32,7 @@ Shares the `ALBUM#{albumId}` GSI1 partition with the meta row (`INFO` vs `ORDER#
 
 Attributes: `albumOwnerUsername`, `caption` (optional, ≤300), `sharedAt`
 
-GSI1 gives the "albums shared with me" feed; GSI2 (same `GSI1PK`, sender-prefixed sort) gives "albums this person shared with me" for a profile — the album mirror of the SharedTrack `SENDER#` sort. Shares written before GSI2SK existed are backfilled by `scripts/backfill-album-share-sender-keys.sh`. `caption` surfaces on `SharedAlbum` and the album feed entry.
+GSI1 gives the "albums shared with me" feed; GSI2 (same `GSI1PK`, sender-prefixed sort) gives "albums this person shared with me" for a profile — the album mirror of the SharedTrack `SENDER#` sort. `caption` surfaces on `SharedAlbum` and the album feed entry.
 
 ### Album Track Grant (derived access, per track × recipient × album)
 

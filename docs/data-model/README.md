@@ -44,7 +44,7 @@ Tracks, albums and custom playlists have a readable URL — `/{owner}/{slug}`, `
 - **Rename never changes it.** An explicit `slug` on `PUT /tracks|albums|playlists/{id}` (null/omitted = unchanged; `^[a-z0-9]+(-[a-z0-9]+)*$`, ≤60, not reserved) puts the new slug record with the same guard **in the same transaction** as `SET slug` on the meta item — taken → the whole update cancels → 400 "That URL is already used." The old record is never deleted, so it keeps resolving (a redirect); moving back to one of your own old slugs is allowed.
 - **Delete**: each repository deletes every slug record of the item (`Query begins_with SLUG#{KIND}#`, filtered on `targetId`) before the meta item.
 - **Resolve** (`GET /users/{username}/slugs/{kind}/{slug}`) checks access before revealing anything — every miss is the same 404. Usernames therefore can't be top-level app paths or static file names (`Domain/ReservedUsernames`, enforced at PreSignUp).
-- Items made before slugs: `scripts/backfill-slugs.sh` (dry run by default); until then their links fall back to the id routes (`/tracks/{id}`, …), which still work and forward to the readable URL.
+- Items made before slugs have none; their links fall back to the id routes (`/tracks/{id}`, …), which still work.
 
 ### Pagination
 

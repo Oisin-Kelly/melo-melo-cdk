@@ -1,7 +1,13 @@
 import { Avatar } from '@astryxdesign/core/Avatar'
 import { DropdownMenu } from '@astryxdesign/core/DropdownMenu'
 import { Skeleton } from '@astryxdesign/core/Skeleton'
-import { ArrowRightStartOnRectangleIcon, KeyIcon, PencilSquareIcon, UserCircleIcon } from '@heroicons/react/24/outline'
+import {
+  ArrowRightStartOnRectangleIcon,
+  KeyIcon,
+  PencilSquareIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+} from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useUsername } from '@/lib/auth/auth-context'
 import { profilePath } from '@/lib/links'
@@ -39,6 +45,7 @@ export function UserMenu() {
           { label: 'View profile', icon: UserCircleIcon, href: profilePath(username) },
           { label: 'Edit profile', icon: PencilSquareIcon, href: '/settings/profile' },
           { label: 'Change password', icon: KeyIcon, href: '/settings/password' },
+          { label: 'Two-step verification', icon: ShieldCheckIcon, href: '/settings/two-step' },
           { type: 'divider' },
           { label: 'Sign out', icon: ArrowRightStartOnRectangleIcon, onClick: () => setIsSigningOut(true) },
         ]}

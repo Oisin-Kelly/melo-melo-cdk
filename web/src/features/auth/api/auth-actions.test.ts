@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AuthError,
   changePassword,
+  confirmSignInCode,
   createAccount,
+  finishTwoStepSetup,
+  getTwoStepStatus,
+  SignInExpiredError,
+  startTwoStepSetup,
+  turnOffTwoStep,
   requestPasswordReset,
   resendVerificationCode,
   setNewPassword,
@@ -21,6 +27,11 @@ vi.mock('aws-amplify/auth', () => ({
   resetPassword: vi.fn(),
   confirmResetPassword: vi.fn(),
   updatePassword: vi.fn(),
+  confirmSignIn: vi.fn(),
+  fetchMFAPreference: vi.fn(),
+  setUpTOTP: vi.fn(),
+  verifyTOTPSetup: vi.fn(),
+  updateMFAPreference: vi.fn(),
 }))
 
 const mocked = vi.mocked(amplify)
@@ -40,6 +51,15 @@ describe('signInWithPassword', () => {
     mocked.signIn.mockResolvedValue({ isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN_UP' } } as never)
 
     await expect(signInWithPassword('oisin', 'pw')).resolves.toBe('verify')
+  })
+
+  it('asks for the authenticator code when two-step verification is on', async () => {
+    mocked.signIn.mockResolvedValue({
+      isSignedIn: false,
+      nextStep: { signInStep: 'CONFIRM_SIGN_IN_WITH_TOTP_CODE' },
+    } as never)
+
+    await expect(signInWithPassword('oisin', 'pw')).resolves.toBe('totp')
   })
 
   it('refuses any other next step', async () => {
@@ -181,5 +201,74 @@ describe('changePassword', () => {
     mocked.updatePassword.mockRejectedValue(cognitoError('InvalidPasswordException'))
     await expect(changePassword('Old1!pass', 'weak')).rejects.toMatchObject({ field: 'password' })
     await expect(changePassword('Old1!pass', 'weak')).rejects.toBeInstanceOf(AuthError)
+  })
+})
+
+describe('confirmSignInCode', () => {
+  it('sends the trimmed code', async () => {
+    mocked.confirmSignIn.mockResolvedValue({ isSignedIn: true, nextStep: { signInStep: 'DONE' } } as never)
+
+    await confirmSignInCode(' 123456 ')
+
+    expect(mocked.confirmSignIn).toHaveBeenCalledWith({ challengeResponse: '123456' })
+  })
+
+  it('says a wrong code is wrong, next to the code field', async () => {
+    mocked.confirmSignIn.mockRejectedValue(cognitoError('CodeMismatchException'))
+
+    await expect(confirmSignInCode('000000')).rejects.toMatchObject({
+      message: "That code isn't right. Check your authenticator app.",
+      field: 'code',
+    })
+  })
+
+  it('turns an expired session into a fresh start', async () => {
+    mocked.confirmSignIn.mockRejectedValue(cognitoError('NotAuthorizedException', 'Invalid session for the user, session is expired.'))
+
+    await expect(confirmSignInCode('123456')).rejects.toBeInstanceOf(SignInExpiredError)
+  })
+})
+
+describe('two-step verification', () => {
+  it('is on when TOTP is enabled', async () => {
+    mocked.fetchMFAPreference.mockResolvedValue({ enabled: ['TOTP'], preferred: 'TOTP' } as never)
+    await expect(getTwoStepStatus()).resolves.toBe(true)
+
+    mocked.fetchMFAPreference.mockResolvedValue({} as never)
+    await expect(getTwoStepStatus()).resolves.toBe(false)
+  })
+
+  it('starts setup with an otpauth link for MeloMelo and the key as text', async () => {
+    const getSetupUri = vi.fn(() => new URL('otpauth://totp/MeloMelo:oisin?secret=ABCD&issuer=MeloMelo'))
+    mocked.setUpTOTP.mockResolvedValue({ sharedSecret: 'ABCD', getSetupUri } as never)
+
+    await expect(startTwoStepSetup('oisin')).resolves.toEqual({
+      uri: 'otpauth://totp/MeloMelo:oisin?secret=ABCD&issuer=MeloMelo',
+      key: 'ABCD',
+    })
+    expect(getSetupUri).toHaveBeenCalledWith('MeloMelo', 'oisin')
+  })
+
+  it('verifies the first code, then makes TOTP the preferred second step', async () => {
+    mocked.verifyTOTPSetup.mockResolvedValue()
+    mocked.updateMFAPreference.mockResolvedValue()
+
+    await finishTwoStepSetup(' 123456 ')
+
+    expect(mocked.verifyTOTPSetup).toHaveBeenCalledWith({ code: '123456' })
+    expect(mocked.updateMFAPreference).toHaveBeenCalledWith({ totp: 'PREFERRED' })
+  })
+
+  it('a wrong first code leaves it off', async () => {
+    mocked.verifyTOTPSetup.mockRejectedValue(cognitoError('EnableSoftwareTokenMFAException'))
+
+    await expect(finishTwoStepSetup('000000')).rejects.toMatchObject({ field: 'code' })
+    expect(mocked.updateMFAPreference).not.toHaveBeenCalled()
+  })
+
+  it('turns off', async () => {
+    mocked.updateMFAPreference.mockResolvedValue()
+    await turnOffTwoStep()
+    expect(mocked.updateMFAPreference).toHaveBeenCalledWith({ totp: 'DISABLED' })
   })
 })

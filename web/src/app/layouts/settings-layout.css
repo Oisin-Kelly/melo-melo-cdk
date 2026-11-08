@@ -1,0 +1,38 @@
+/* Desktop settings (settings-layout.tsx): fills the content area edge to edge. Astryx
+   stretches a Layout nested in a padded LayoutContent out to that content's edges by
+   itself, so this only has to make it full height — the section list's divider then runs
+   from the header to the bottom of the screen. */
+.mm-settings {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mm-settings > .astryx-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+/* Layout's own row (the panel + content) only grows to its content; stretch it so a
+   short section (Appearance) still has the divider running to the bottom */
+.mm-settings > .astryx-layout > * {
+  flex: 1;
+}
+
+/* The section list: padding from the template, its title lined up with the item labels.
+   Sticky, so it stays put while a long section (Profile) scrolls beside it; the scroll
+   area's own padding (the page padding the layout bleeds over) would otherwise push the
+   stuck list down by that much. */
+.mm-settings-nav {
+  padding: var(--spacing-6) var(--spacing-3);
+  width: 16rem;
+  position: sticky;
+  top: calc(-1 * var(--mm-page-pad));
+}
+.mm-settings-nav-title {
+  margin-inline: var(--spacing-4);
+}
+/* LayoutPanel scrolls on its own (overflow: auto), which would pin the list to the panel
+   instead of the page; the list is short, so let it overflow normally */
+.mm-settings .astryx-layout-panel {
+  overflow: visible;
+}

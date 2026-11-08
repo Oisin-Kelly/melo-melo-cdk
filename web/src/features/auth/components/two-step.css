@@ -1,0 +1,25 @@
+/* Two-step setup (two-step-page.tsx). The QR code is data, not design: uqr draws it
+   black-on-white, kept that way in dark mode too so every authenticator app can read it. */
+.mm-qr {
+  display: block;
+  width: 11rem;
+  height: 11rem;
+  border-radius: var(--radius-element);
+  overflow: hidden;
+}
+.mm-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The setup key: monospace so 0/O and 1/l read clearly when typed in by hand. Lines break
+   only between groups of four, and are balanced so the last line isn't a lone group. */
+.mm-setup-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+  text-wrap: balance;
+}
+.mm-setup-key-group {
+  white-space: nowrap;
+}

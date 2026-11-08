@@ -6,11 +6,12 @@ import { SearchPage } from '@/features/search/components/search-page'
 import { EditProfilePage } from '@/features/users/components/edit-profile-page'
 import { FollowListPage } from '@/features/users/components/follow-list-page'
 import { ProfilePage } from '@/features/users/components/profile-page'
-import { SettingsPage } from '@/features/users/components/settings-page'
+import { AppearancePage } from '@/features/users/components/appearance'
 import { ActivityPage } from '@/features/activity/components/activity-page'
 import { AppLayout } from './layouts/app-layout'
 import { GuestOnly, RequireAuth } from './layouts/guards'
 import { RootLayout } from './layouts/root-layout'
+import { SettingsIndex, SettingsLayout } from './layouts/settings-layout'
 import { ComingSoon } from './routes/coming-soon'
 import {
   AlbumIdRoute,
@@ -82,15 +83,27 @@ const router = createBrowserRouter([
           // Liked tracks: the likes playlist's page
           { path: '/liked', element: <LikedRoute /> },
           { path: '/activity', element: <ActivityPage /> },
-          // The phone Settings tab: edit profile, appearance, sign out
-          { path: '/settings', element: <SettingsPage /> },
-          // Each of these screens gets its own plan
-          { path: '/settings/profile', element: <EditProfilePage /> },
+          // Settings: phones drill down from a list, desktop is a two-pane layout (settings-layout.tsx)
           {
-            path: '/settings/password',
-            lazy: async () => ({
-              Component: (await import('@/features/auth/components/change-password-page')).ChangePasswordPage,
-            }),
+            path: '/settings',
+            element: <SettingsLayout />,
+            children: [
+              { index: true, element: <SettingsIndex /> },
+              { path: 'profile', element: <EditProfilePage /> },
+              {
+                path: 'password',
+                lazy: async () => ({
+                  Component: (await import('@/features/auth/components/change-password-page')).ChangePasswordPage,
+                }),
+              },
+              {
+                path: 'two-step',
+                lazy: async () => ({
+                  Component: (await import('@/features/auth/components/two-step-page')).TwoStepPage,
+                }),
+              },
+              { path: 'appearance', element: <AppearancePage /> },
+            ],
           },
           placeholder('/upload', 'Upload a track', true),
           // The built-in likes playlist is Liked tracks

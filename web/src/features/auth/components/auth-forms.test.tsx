@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocationProbe, renderWithProviders } from '@/testing/providers'
 import { expectMessage, expectNoMessage } from '@/testing/messages'
 import * as actions from '../api/auth-actions'
-import { AuthError } from '../api/auth-actions'
+import { AuthError, SignInExpiredError } from '../api/auth-actions'
 import { ChangePasswordPage } from './change-password-page'
 import { ForgotPasswordForm } from './forgot-password-form'
 import { SignInForm } from './sign-in-form'
@@ -16,6 +16,7 @@ import { VerifyForm } from './verify-form'
 vi.mock('../api/auth-actions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth-actions')>()),
   signInWithPassword: vi.fn(),
+  confirmSignInCode: vi.fn(),
   createAccount: vi.fn(),
   verifyAccount: vi.fn(),
   resendVerificationCode: vi.fn(),
@@ -89,6 +90,63 @@ describe('SignInForm', () => {
 
     await user.type(screen.getByLabelText('Password'), 'x')
     expectNoMessage('Incorrect username or password.')
+  })
+
+  describe('with two-step verification on', () => {
+    async function toCodeStep(route = '/login?next=%2Fliked') {
+      mocked.signInWithPassword.mockResolvedValue('totp')
+      const result = renderForm(<SignInForm />, route)
+      await result.user.type(screen.getByLabelText('Username or email'), 'oisin')
+      await result.user.type(screen.getByLabelText('Password'), 'Secret1!{Enter}')
+      await screen.findByRole('heading', { name: 'Enter your code' })
+      return result
+    }
+
+    it('asks for the app code after the password, then signs in', async () => {
+      mocked.confirmSignInCode.mockResolvedValue()
+      const { user, auth } = await toCodeStep()
+      expect(auth.refresh).not.toHaveBeenCalled()
+
+      await user.type(screen.getByLabelText('Code'), '123456{Enter}')
+
+      await waitForLocation('/liked')
+      expect(mocked.confirmSignInCode).toHaveBeenCalledWith('123456')
+      expect(auth.refresh).toHaveBeenCalled()
+    })
+
+    it('checks the code is 6 digits before calling Cognito', async () => {
+      const { user } = await toCodeStep()
+      await user.type(screen.getByLabelText('Code'), '12ab{Enter}')
+      expectMessage('Enter the 6-digit code.')
+      expect(mocked.confirmSignInCode).not.toHaveBeenCalled()
+    })
+
+    it('shows a wrong code next to the field', async () => {
+      mocked.confirmSignInCode.mockRejectedValue(new AuthError("That code isn't right. Check your authenticator app.", 'code'))
+      const { user } = await toCodeStep()
+
+      await user.type(screen.getByLabelText('Code'), '000000{Enter}')
+
+      await vi.waitFor(() => expectMessage("That code isn't right. Check your authenticator app."))
+      expect(screen.getByRole('heading', { name: 'Enter your code' })).toBeInTheDocument()
+    })
+
+    it('goes back to the password when the code step has expired', async () => {
+      mocked.confirmSignInCode.mockRejectedValue(new SignInExpiredError())
+      const { user } = await toCodeStep()
+
+      await user.type(screen.getByLabelText('Code'), '123456{Enter}')
+
+      await screen.findByRole('heading', { name: 'Welcome back' })
+      await vi.waitFor(() => expectMessage('That took too long. Sign in again.'))
+      expect(screen.getByLabelText('Password')).toHaveValue('')
+    })
+
+    it('Back returns to the password step', async () => {
+      const { user } = await toCodeStep()
+      await user.click(screen.getByText('Back'))
+      expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
+    })
   })
 })
 

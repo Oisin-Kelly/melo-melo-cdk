@@ -45,6 +45,8 @@ test.describe('app shell', () => {
   test('signing out returns to the landing page', async ({ authenticatedPage: page }) => {
     await page.getByRole('button', { name: /account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
+    // Behind a "Sign out?" confirm
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Sign out' }).click();
     await expect(page.getByRole('link', { name: 'Create an account' })).toBeVisible();
   });
 
@@ -104,6 +106,7 @@ test.describe('app shell', () => {
     test('signs out from the Settings tab', async ({ authenticatedPage: page }) => {
       await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click();
       await page.getByRole('button', { name: 'Sign out' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Sign out' }).click();
       await expect(page.getByRole('link', { name: 'Create an account' })).toBeVisible();
     });
   });

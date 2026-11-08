@@ -1,12 +1,17 @@
 import {
   autoSignIn,
   confirmResetPassword,
+  confirmSignIn,
   confirmSignUp,
+  fetchMFAPreference,
   resendSignUpCode,
   resetPassword,
+  setUpTOTP,
   signIn,
   signUp,
+  updateMFAPreference,
   updatePassword,
+  verifyTOTPSetup,
 } from 'aws-amplify/auth'
 
 // Thin wrappers over Amplify's Cognito calls. Each returns what the screen needs to
@@ -25,6 +30,17 @@ export class AuthError extends Error {
     this.field = field
   }
 }
+
+/** The sign-in's code step ran out of time (Cognito allows 3 minutes): start again from the password. */
+export class SignInExpiredError extends AuthError {
+  constructor() {
+    super('That took too long. Sign in again.')
+    this.name = 'SignInExpiredError'
+  }
+}
+
+// An authenticator-app code that doesn't match (sign-in and two-step setup alike)
+const wrongAppCode = () => new AuthError("That code isn't right. Check your authenticator app.", 'code')
 
 function toAuthError(error: unknown): AuthError {
   // Already user-safe (thrown by one of the wrappers below): keep it as it is
@@ -77,15 +93,36 @@ async function run<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** `done` → signed in; `verify` → the account exists but its email isn't confirmed yet. */
-export type SignInResult = 'done' | 'verify'
+/**
+ * `done` → signed in; `verify` → the account exists but its email isn't confirmed yet;
+ * `totp` → two-step verification is on, so it needs the authenticator app's code next.
+ */
+export type SignInResult = 'done' | 'verify' | 'totp'
 
 export function signInWithPassword(username: string, password: string): Promise<SignInResult> {
   return run(async () => {
     const { isSignedIn, nextStep } = await signIn({ username: username.trim(), password })
     if (isSignedIn) return 'done'
     if (nextStep.signInStep === 'CONFIRM_SIGN_UP') return 'verify'
+    if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE') return 'totp'
     throw new AuthError('This account needs attention before you can sign in.')
+  })
+}
+
+/** The sign-in's second step: the 6-digit code from the authenticator app. */
+export function confirmSignInCode(code: string): Promise<void> {
+  return run(async () => {
+    try {
+      const { isSignedIn } = await confirmSignIn({ challengeResponse: code.trim() })
+      if (!isSignedIn) throw new AuthError('This account needs attention before you can sign in.')
+    } catch (error) {
+      const { name, message = '' } = (error ?? {}) as { name?: string; message?: string }
+      if (name === 'CodeMismatchException') throw wrongAppCode()
+      // The challenge session has expired (or there isn't one, e.g. after a reload)
+      if (name === 'NotAuthorizedException' && /session/i.test(message)) throw new SignInExpiredError()
+      if (name === 'SignInException') throw new SignInExpiredError()
+      throw error
+    }
   })
 }
 
@@ -150,5 +187,50 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
         throw new AuthError("That's not your current password.", 'currentPassword')
       throw error
     }
+  })
+}
+
+// ---- Two-step verification (TOTP), signed in ----
+
+/** Whether two-step verification is on for the signed-in account. */
+export function getTwoStepStatus(): Promise<boolean> {
+  return run(async () => {
+    const { enabled } = await fetchMFAPreference()
+    return enabled?.includes('TOTP') ?? false
+  })
+}
+
+export type TwoStepSetup = {
+  /** The otpauth:// link authenticator apps read (as a QR code, or opened directly on a phone). */
+  uri: string
+  /** The same secret as text, to type in by hand. */
+  key: string
+}
+
+/** Starts setting up two-step verification: a new secret for the authenticator app. */
+export function startTwoStepSetup(username: string): Promise<TwoStepSetup> {
+  return run(async () => {
+    const details = await setUpTOTP()
+    return { uri: details.getSetupUri('MeloMelo', username).toString(), key: details.sharedSecret }
+  })
+}
+
+/** Checks the app's first code against the new secret, then turns two-step verification on. */
+export function finishTwoStepSetup(code: string): Promise<void> {
+  return run(async () => {
+    try {
+      await verifyTOTPSetup({ code: code.trim() })
+    } catch (error) {
+      const name = (error as { name?: string })?.name
+      if (name === 'CodeMismatchException' || name === 'EnableSoftwareTokenMFAException') throw wrongAppCode()
+      throw error
+    }
+    await updateMFAPreference({ totp: 'PREFERRED' })
+  })
+}
+
+export function turnOffTwoStep(): Promise<void> {
+  return run(async () => {
+    await updateMFAPreference({ totp: 'DISABLED' })
   })
 }

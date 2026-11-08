@@ -33,6 +33,11 @@ public class AuthStack : BaseStack
                 }
             },
             SignInCaseSensitive = false,
+            // Optional two-step verification with an authenticator app (TOTP) — each person turns
+            // it on in Settings. No SMS (per-message cost + SNS setup) and no email codes (need
+            // the Essentials tier). Lost phone: scripts/disable-two-step.sh.
+            Mfa = Mfa.OPTIONAL,
+            MfaSecondFactor = new MfaSecondFactor { Otp = true, Sms = false },
             UserVerification = new UserVerificationConfig()
             {
                 EmailSubject = "Verify your MeloMelo account",

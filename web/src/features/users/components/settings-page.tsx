@@ -2,19 +2,17 @@ import { Button } from '@astryxdesign/core/Button'
 import { Heading } from '@astryxdesign/core/Heading'
 import { Icon } from '@astryxdesign/core/Icon'
 import { List, ListItem } from '@astryxdesign/core/List'
-import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl'
 import { Text } from '@astryxdesign/core/Text'
 import { VStack } from '@astryxdesign/core/VStack'
-import { ChevronRightIcon, KeyIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { ChevronRightIcon, KeyIcon, PencilSquareIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
-import type { ThemeMode } from '@/components/theme/theme-mode'
-import { useThemeMode } from '@/components/theme/use-theme-mode'
+import { AppearanceControl } from './appearance'
 import { SignOutDialog } from './sign-out-dialog'
 
-// The phone Settings tab (also /settings on desktop, where the avatar and moon menus
-// cover the same ground): edit profile, change password, appearance, sign out.
+// The phone Settings tab: a list that drills into each screen (edit profile, change
+// password, two-step verification), with appearance and sign out inline. Desktop has the
+// two-pane settings layout instead (app/layouts/settings-layout.tsx).
 export function SettingsPage() {
-  const { mode, setMode } = useThemeMode()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   return (
@@ -35,17 +33,20 @@ export function SettingsPage() {
           label="Change password"
           endContent={<Icon icon={ChevronRightIcon} size="sm" color="secondary" />}
         />
+        <ListItem
+          href="/settings/two-step"
+          startContent={<Icon icon={ShieldCheckIcon} color="secondary" />}
+          label="Two-step verification"
+          description="A code from an app when you sign in"
+          endContent={<Icon icon={ChevronRightIcon} size="sm" color="secondary" />}
+        />
       </List>
 
       <VStack gap={2}>
         <Text type="label" weight="semibold">
           Appearance
         </Text>
-        <SegmentedControl label="Appearance" value={mode} onChange={(value) => setMode(value as ThemeMode)}>
-          <SegmentedControlItem value="light" label="Light" />
-          <SegmentedControlItem value="dark" label="Dark" />
-          <SegmentedControlItem value="system" label="Automatic" />
-        </SegmentedControl>
+        <AppearanceControl />
       </VStack>
 
       <Button label="Sign out" variant="destructive" width="100%" onClick={() => setIsSigningOut(true)} />

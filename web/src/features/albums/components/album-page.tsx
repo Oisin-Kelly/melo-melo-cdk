@@ -16,6 +16,11 @@ import { DetailSection, ExpandableText } from '@/components/media/detail-section
 import { LikeButton, TrackRow } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
+import { allPages } from '@/components/player/all-pages'
+import type { PlayContext } from '@/components/player/queue'
+import { TrackListPlayback } from '@/components/player/track-list-playback'
+import type { TrackSource } from '@/components/player/player'
+import { usePlayContext, useQueueActions } from '@/components/player/use-player'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
 import { useIsCompact } from '@/hooks/use-is-compact'
@@ -38,7 +43,20 @@ const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}
 
 // Header actions. Owners share, edit and delete; recipients can like it or take it
 // out of their library (the mirror of the owner unsharing).
-function AlbumActions({ album, isOwner, onShare }: { album: Album; isOwner: boolean; onShare: () => void }) {
+function AlbumActions({
+  album,
+  isOwner,
+  onShare,
+  playContext,
+  playTracks,
+}: {
+  album: Album
+  isOwner: boolean
+  onShare: () => void
+  playContext: PlayContext | null
+  playTracks: TrackSource
+}) {
+  const queue = useQueueActions()
   const update = useUpdateAlbum(album.id)
   const remove = useDeleteAlbum(album.id)
   const leave = useRemoveAlbumFromLibrary(album.id)
@@ -59,13 +77,23 @@ function AlbumActions({ album, isOwner, onShare }: { album: Album; isOwner: bool
     },
   })
 
+  // The whole album into the queue (with nothing playing, it just plays)
+  const queueItems: DropdownMenuOption[] =
+    queue && playContext
+      ? [
+          { label: 'Play next', onClick: () => queue.playNext(playTracks, playContext) },
+          { label: 'Add to queue', onClick: () => queue.addToQueue(playTracks, playContext) },
+          { type: 'divider' },
+        ]
+      : []
   const menu: DropdownMenuOption[] = isOwner
     ? [
+        ...queueItems,
         { label: 'Edit details', onClick: () => setIsEditing(true) },
         { type: 'divider' },
         { label: 'Delete album', variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
       ]
-    : [{ label: 'Remove from my library', variant: 'destructive', onClick: () => confirmLeave.ask('leave') }]
+    : [...queueItems, { label: 'Remove from my library', variant: 'destructive', onClick: () => confirmLeave.ask('leave') }]
 
   return (
     <>
@@ -123,6 +151,11 @@ export function AlbumPage({ albumId }: { albumId: string }) {
   // Every track is the owner's, so a track's owner stands in if `owner` is missing
   const owner = album?.owner ?? firstPage?.items[0]?.owner
   useCanonicalPath(album && owner && albumPath({ ...album, owner }))
+  // Play all, or a tapped row: the whole album, every page of it, in its own order
+  const playContext: PlayContext | null =
+    album && owner ? { type: 'ALBUM', id: albumId, name: album.name, href: albumPath({ ...album, owner }) } : null
+  const playTracks = async () => (await allPages(detail)).flatMap((page) => page.items)
+  const play = usePlayContext(playContext, playTracks)
 
   if (detail.isPending) return <PageLoader what="album" />
 
@@ -151,8 +184,16 @@ export function AlbumPage({ albumId }: { albumId: string }) {
         imageBgColor={album.imageBgColor}
         byline={owner && <OwnerByline owner={owner} detail={isOwner ? undefined : meta} />}
         meta={isOwner || !owner ? meta : undefined}
-        actions={<AlbumActions album={album} isOwner={isOwner} onShare={() => setIsSharing(true)} />}
-        play={{ label: 'Play album', text: 'Play all' }}
+        actions={
+          <AlbumActions
+            album={album}
+            isOwner={isOwner}
+            onShare={() => setIsSharing(true)}
+            playContext={playContext}
+            playTracks={playTracks}
+          />
+        }
+        play={{ label: 'Play album', text: 'Play all', ...play }}
         description={isCompact ? album.description : undefined}
         aside={isOwner && <SharedWith album={album} onManage={() => setIsSharing(true)} />}
       />
@@ -163,18 +204,20 @@ export function AlbumPage({ albumId }: { albumId: string }) {
       )}
       {isOwner && <ShareAlbumDialog album={album} isOpen={isSharing} onOpenChange={setIsSharing} initialTab={shareTab} />}
 
-      <InfiniteList
-        loadingWhat="album"
-        query={detail}
-        getKey={(track) => track.id}
-        empty={{
-          title: 'No tracks in this album yet',
-          description: isOwner ? 'Adding tracks to albums is coming soon.' : undefined,
-          icon: <Illustration name="music" />,
-        }}
-        endMessage={null}
-        renderItem={(track) => <TrackRow track={track} />}
-      />
+      <TrackListPlayback context={playContext} tracks={playTracks}>
+        <InfiniteList
+          loadingWhat="album"
+          query={detail}
+          getKey={(track) => track.id}
+          empty={{
+            title: 'No tracks in this album yet',
+            description: isOwner ? 'Adding tracks to albums is coming soon.' : undefined,
+            icon: <Illustration name="music" />,
+          }}
+          endMessage={null}
+          renderItem={(track) => <TrackRow track={track} />}
+        />
+      </TrackListPlayback>
     </VStack>
   )
 }

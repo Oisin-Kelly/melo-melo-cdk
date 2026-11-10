@@ -14,6 +14,7 @@ import './people.css'
 // photo as a big circle filling the column — or, without one, a soft gradient in their
 // colour — then their name, @username and one line of context ("Shared 2 hours ago").
 // No card around it; a background only appears on hover. The whole tile opens their profile.
+// On phones the same tile is a row: a small photo circle with the text beside it (people.css).
 export function PersonCard({ user, detail }: { user: UserSummary; detail?: ReactNode }) {
   return (
     <RouterLink to={profilePath(user.username)} className="mm-person" style={tint(user.imageBgColor)}>
@@ -35,7 +36,7 @@ export function PersonCard({ user, detail }: { user: UserSummary; detail?: React
   )
 }
 
-/** People in a grid: two across on phones, as many as fit on wider screens. */
+/** People in a grid of tiles on wider screens; a column of rows on phones. */
 export function PersonGrid({ children }: { children: ReactNode }) {
   return <div className="mm-card-grid">{children}</div>
 }

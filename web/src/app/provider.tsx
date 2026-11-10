@@ -5,6 +5,7 @@ import { Toaster } from 'sileo'
 import { ErrorBoundary } from '@/components/errors/error-boundary'
 import { MainErrorFallback } from '@/components/errors/main-error-fallback'
 import { OnlineGate } from '@/components/feedback/offline-screen'
+import { DisplayPrefsProvider } from '@/components/theme/display-prefs'
 import { ThemeModeProvider } from '@/components/theme/theme-mode'
 import { useThemeMode } from '@/components/theme/use-theme-mode'
 import { AuthProvider } from '@/lib/auth/auth-provider'
@@ -31,6 +32,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <Suspense fallback={null}>
       <ErrorBoundary fallback={<MainErrorFallback />}>
         <ThemeModeProvider>
+          <DisplayPrefsProvider>
           <ThemedApp>
             <OnlineGate>
               <QueryClientProvider client={queryClient}>
@@ -38,6 +40,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               </QueryClientProvider>
             </OnlineGate>
           </ThemedApp>
+          </DisplayPrefsProvider>
         </ThemeModeProvider>
       </ErrorBoundary>
     </Suspense>

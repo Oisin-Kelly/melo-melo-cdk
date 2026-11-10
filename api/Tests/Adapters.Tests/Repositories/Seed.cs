@@ -44,8 +44,6 @@ public sealed class Seed(IDynamoDBService db)
             DisplayName = username,
             FollowingCount = 0,
             FollowerCount = 0,
-            FollowingsPrivate = false,
-            FollowersPrivate = false,
             IncomingShares = incomingShares,
             CreatedAt = now,
         });

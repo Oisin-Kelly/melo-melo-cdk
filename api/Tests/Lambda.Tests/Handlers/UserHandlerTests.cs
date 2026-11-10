@@ -81,13 +81,14 @@ public class UserHandlerTests
     }
 
     [Fact]
-    public async Task PrivateFollowers_TheOwnerSeesThemThroughAnyCasing()
+    public async Task Followers_ReadThroughAnyCasing()
     {
         var handler = new GetUserFollowersLambda.Function(_users, _follows);
-        _users.GetUserByUsername(Them).Returns(Fakes.User(Them, followersPrivate: true));
+        _users.GetUserByUsername(Them).Returns(Fakes.User(Them));
         _follows.GetUserFollowers(Them, 10, null).Returns(Fakes.Page<UserSummary>());
 
-        (await handler.FunctionHandler(Http.As("Bob"), _context, "BOB")).ShouldHaveStatus(HttpStatusCode.OK);
+        (await handler.FunctionHandler(Http.As(Me), _context, "BOB")).ShouldHaveStatus(HttpStatusCode.OK);
+        await _follows.Received(1).GetUserFollowers(Them, 10, null);
     }
 
     // ---------------------------------------------------------------- POST /users/{username}/follow-user
@@ -140,28 +141,17 @@ public class UserHandlerTests
         body.GetProperty("followStatus").GetBoolean().Should().BeTrue();
     }
 
-    // ---------------------------------------------------------------- followers / followings privacy
+    // ---------------------------------------------------------------- followers / followings
 
     [Fact]
-    public async Task PrivateFollowers_Are403ToOthers_ButVisibleToTheOwner()
+    public async Task Followers_AreVisibleToAnyoneSignedIn()
     {
         var handler = new GetUserFollowersLambda.Function(_users, _follows);
-        _users.GetUserByUsername(Them).Returns(Fakes.User(Them, followersPrivate: true));
+        _users.GetUserByUsername(Them).Returns(Fakes.User(Them));
         _follows.GetUserFollowers(Them, 10, null).Returns(Fakes.Page<UserSummary>());
 
-        (await handler.FunctionHandler(Http.As(Me), _context, Them)).ShouldHaveStatus(HttpStatusCode.Forbidden);
-        (await handler.FunctionHandler(Http.As(Them), _context, Them)).ShouldHaveStatus(HttpStatusCode.OK);
+        (await handler.FunctionHandler(Http.As(Me), _context, Them)).ShouldHaveStatus(HttpStatusCode.OK);
         await _follows.Received(1).GetUserFollowers(Them, 10, null);
-    }
-
-    [Fact]
-    public async Task PrivateFollowings_Are403ToOthers()
-    {
-        var handler = new GetUserFollowingLambda.Function(_users, _follows);
-        _users.GetUserByUsername(Them).Returns(Fakes.User(Them, followingsPrivate: true));
-
-        (await handler.FunctionHandler(Http.As(Me), _context, Them)).ShouldHaveStatus(HttpStatusCode.Forbidden);
-        await _follows.DidNotReceiveWithAnyArgs().GetUserFollowings(default!, default, default);
     }
 
     [Fact]
@@ -215,13 +205,13 @@ public class UserHandlerTests
         (await UpdateProfile.FunctionHandler(Http.As(Me), _context,
                 new UpdateUserProfileLambda.UpdateProfileRequest
                 {
-                    DisplayName = "Alice", Bio = "hi", FollowersPrivate = true, IncomingShares = IncomingSharesSetting.Following,
+                    DisplayName = "Alice", Bio = "hi", IncomingShares = IncomingSharesSetting.Following,
                 }))
             .ShouldHaveStatus(HttpStatusCode.OK);
 
         saved!.Username.Should().Be(Me);
-        (saved.DisplayName, saved.Bio, saved.FollowersPrivate, saved.IncomingShares)
-            .Should().Be(("Alice", "hi", true, IncomingSharesSetting.Following));
+        (saved.DisplayName, saved.Bio, saved.IncomingShares)
+            .Should().Be(("Alice", "hi", IncomingSharesSetting.Following));
     }
 
     [Fact]

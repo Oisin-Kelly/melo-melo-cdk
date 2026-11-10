@@ -24,6 +24,11 @@ import { LikedCover } from '@/components/media/liked-cover'
 import { MediaRow, TrackRow } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
+import { allPages } from '@/components/player/all-pages'
+import type { PlayContext } from '@/components/player/queue'
+import { TrackListPlayback } from '@/components/player/track-list-playback'
+import type { TrackSource } from '@/components/player/player'
+import { usePlayContext, useQueueActions } from '@/components/player/use-player'
 import { useIsCompact } from '@/hooks/use-is-compact'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
@@ -83,8 +88,17 @@ function UnavailableRow({ entry, onRemove }: { entry: PlaylistTrackEntry; onRemo
   )
 }
 
-function PlaylistActions({ playlist }: { playlist: Playlist }) {
+function PlaylistActions({
+  playlist,
+  playContext,
+  playTracks,
+}: {
+  playlist: Playlist
+  playContext: PlayContext | null
+  playTracks: TrackSource
+}) {
   const me = useUsername()
+  const queue = useQueueActions()
   const update = useUpdatePlaylist(playlist.id)
   const remove = useDeletePlaylist(playlist.id)
   const [isEditing, setIsEditing] = useState(false)
@@ -103,7 +117,17 @@ function PlaylistActions({ playlist }: { playlist: Playlist }) {
         renderTrigger={(props) => (
           <IconButton {...props} label="More playlist options" variant="ghost" icon={<Icon icon={EllipsisHorizontalIcon} />} />
         )}
-        items={[{ label: 'Delete playlist', variant: 'destructive', onClick: () => confirmLeave.ask('delete') }]}
+        items={[
+          // The whole playlist into the queue (with nothing playing, it just plays)
+          ...(queue && playContext
+            ? [
+                { label: 'Play next', onClick: () => queue.playNext(playTracks, playContext) },
+                { label: 'Add to queue', onClick: () => queue.addToQueue(playTracks, playContext) },
+                { type: 'divider' as const },
+              ]
+            : []),
+          { label: 'Delete playlist', variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
+        ]}
       />
 
       <EditDetailsDialog
@@ -164,6 +188,24 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
   // The entry waiting on "Remove …?" (available tracks and gone ones alike)
   const [removing, setRemoving] = useState<PlaylistTrackEntry | null>(null)
   useCanonicalPath(playlist && playlistPath(playlist, me))
+  // Play all: every track you can still play, in the order shown (the sort, not the search)
+  const playSort = playlist?.type === 'LIKES' && view.sort === 'added' ? 'playlist' : view.sort
+  const playContext: PlayContext | null = playlist
+    ? {
+        type: 'PLAYLIST',
+        id: playlistId,
+        name: playlist.type === 'LIKES' ? 'Liked tracks' : playlist.name,
+        href: playlistPath(playlist, me),
+      }
+    : null
+  const playTracks = async () => {
+    const entries = (await allPages(detail)).flatMap((page) => page.items)
+    const compare = comparePlaylistEntries(playSort)
+    return (compare ? [...entries].sort(compare) : entries).flatMap((entry) =>
+      entry.track && !entry.unavailable ? [entry.track] : [],
+    )
+  }
+  const play = usePlayContext(playContext, playTracks)
 
   if (detail.isPending) return <PageLoader what="playlist" />
 
@@ -217,8 +259,8 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
             </Text>
           )
         }
-        actions={!isLikes && <PlaylistActions playlist={playlist} />}
-        play={{ label: 'Play playlist', text: 'Play all' }}
+        actions={!isLikes && <PlaylistActions playlist={playlist} playContext={playContext} playTracks={playTracks} />}
+        play={{ label: isLikes ? 'Play liked tracks' : 'Play playlist', text: 'Play all', ...play }}
         description={isCompact ? playlist.description : undefined}
         backEnd={
           hasTools &&
@@ -249,54 +291,57 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
         </DetailSection>
       )}
 
-      <InfiniteList
-        loadingWhat="playlist"
-        query={detail}
-        getKey={(entry) => entry.trackId}
-        loadAll={isSearching || sort !== 'playlist'}
-        filter={isSearching ? (entry) => matchesEntry(entry, view.query) : undefined}
-        sort={comparePlaylistEntries(sort)}
-        noMatch={`No tracks match “${view.query.trim()}”`}
-        empty={{
-          title: isLikes ? 'No liked tracks yet' : 'Nothing in this playlist yet',
-          description: isLikes ? 'Tap the heart on any track and it lands here.' : 'Use the menu on any track to add it here.',
-          icon: <Illustration name="music" />,
-          actions: <Button label="Browse Home" variant="secondary" href="/" />,
-        }}
-        endMessage={null}
-        renderItem={(entry) =>
-          isLikes ? (
-            // The server drops liked tracks that are gone, so every entry has its track
-            entry.track && (
+      {/* A tapped row plays the playlist from there, in the order shown */}
+      <TrackListPlayback context={playContext} tracks={playTracks}>
+        <InfiniteList
+          loadingWhat="playlist"
+          query={detail}
+          getKey={(entry) => entry.trackId}
+          loadAll={isSearching || sort !== 'playlist'}
+          filter={isSearching ? (entry) => matchesEntry(entry, view.query) : undefined}
+          sort={comparePlaylistEntries(sort)}
+          noMatch={`No tracks match “${view.query.trim()}”`}
+          empty={{
+            title: isLikes ? 'No liked tracks yet' : 'Nothing in this playlist yet',
+            description: isLikes ? 'Tap the heart on any track and it lands here.' : 'Use the menu on any track to add it here.',
+            icon: <Illustration name="music" />,
+            actions: <Button label="Browse Home" variant="secondary" href="/" />,
+          }}
+          endMessage={null}
+          renderItem={(entry) =>
+            isLikes ? (
+              // The server drops liked tracks that are gone, so every entry has its track
+              entry.track && (
+                <TrackRow
+                  track={entry.track}
+                  showOwner
+                  aside={
+                    <Text type="supporting" color="secondary">
+                      <Timestamp value={toUnixSeconds(entry.addedAt)} format="relative" />
+                    </Text>
+                  }
+                />
+              )
+            ) : entry.track && !entry.unavailable ? (
               <TrackRow
                 track={entry.track}
                 showOwner
-                aside={
-                  <Text type="supporting" color="secondary">
-                    <Timestamp value={toUnixSeconds(entry.addedAt)} format="relative" />
-                  </Text>
-                }
+                excludePlaylistId={playlist.id}
+                menuItems={[
+                  { type: 'divider' },
+                  {
+                    label: 'Remove from this playlist',
+                    variant: 'destructive',
+                    onClick: () => setRemoving(entry),
+                  },
+                ]}
               />
+            ) : (
+              <UnavailableRow entry={entry} onRemove={() => setRemoving(entry)} />
             )
-          ) : entry.track && !entry.unavailable ? (
-            <TrackRow
-              track={entry.track}
-              showOwner
-              excludePlaylistId={playlist.id}
-              menuItems={[
-                { type: 'divider' },
-                {
-                  label: 'Remove from this playlist',
-                  variant: 'destructive',
-                  onClick: () => setRemoving(entry),
-                },
-              ]}
-            />
-          ) : (
-            <UnavailableRow entry={entry} onRemove={() => setRemoving(entry)} />
-          )
-        }
-      />
+          }
+        />
+      </TrackListPlayback>
       <AlertDialog
         isOpen={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}

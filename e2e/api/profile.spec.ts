@@ -14,8 +14,6 @@ test.describe('POST /profile/update', () => {
       city: 'Dublin',
       country: 'Ireland',
       bio: `Updated by the e2e suite at ${runId}`,
-      followersPrivate: false,
-      followingsPrivate: false,
       incomingShares: 'EVERYONE',
       clearedImage: false,
     };

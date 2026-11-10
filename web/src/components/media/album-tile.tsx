@@ -7,25 +7,37 @@ import type { ReactNode } from 'react'
 import { albumPath } from '@/lib/links'
 import type { AlbumSummary, PaginatedResult } from '@/types/api'
 import { formatLength } from '@/utils/format'
+import { loadAlbum } from '@/components/player/load-context'
 import { CoverArt } from './cover-art'
+import { CoverPlay } from './cover-play'
 import './media.css'
 
 // An album as a cover-first tile (profile and library shelves): the big cover, then
-// its name and length. The whole tile is the link.
+// its name and length. The whole tile opens the album; hovering it shows play over the cover.
 export function AlbumTile({ album }: { album: AlbumSummary }) {
   return (
-    <RouterLink to={albumPath(album)} className="mm-tile">
-      <CoverArt imageUrl={album.imageUrl} imageBgColor={album.imageBgColor} size="lg" />
+    <div className="mm-tile mm-play-hover">
+      <CoverPlay
+        context={{ type: 'ALBUM', id: album.id }}
+        load={() => loadAlbum(album.id)}
+        name={album.name}
+        isEmpty={album.trackCount === 0}
+      >
+        <CoverArt imageUrl={album.imageUrl} imageBgColor={album.imageBgColor} size="lg" />
+      </CoverPlay>
       <VStack gap={0.5}>
-        <Text type="label" weight="semibold" maxLines={1} className="mm-tile-name">
-          {album.name}
-        </Text>
+        {/* The link stretches over the whole tile (::after); play sits above it */}
+        <RouterLink to={albumPath(album)} className="mm-tile-link">
+          <Text type="label" weight="semibold" maxLines={1} className="mm-tile-name">
+            {album.name}
+          </Text>
+        </RouterLink>
         <Text type="supporting" color="secondary" maxLines={1}>
           {album.trackCount} {album.trackCount === 1 ? 'track' : 'tracks'}
           {album.totalDurationSeconds > 0 && ` · ${formatLength(album.totalDurationSeconds)}`}
         </Text>
       </VStack>
-    </RouterLink>
+    </div>
   )
 }
 

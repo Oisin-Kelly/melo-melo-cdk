@@ -17,6 +17,7 @@ import { DetailSection, ExpandableText } from '@/components/media/detail-section
 import { LikeButton, TrackMenu } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
+import { usePlayContext } from '@/components/player/use-player'
 import { ShareDialog, type ShareTab } from '@/components/sharing/share-dialog'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
@@ -54,6 +55,11 @@ export function TrackPage({ trackId }: { trackId: string }) {
   const isCompact = useIsCompact()
   const [isSharing, setIsSharing, shareTab] = useSharingState()
   useCanonicalPath(detail.data && trackPath(detail.data))
+  // A track's own page plays just that track
+  const play = usePlayContext(
+    detail.data ? { type: 'TRACK', id: trackId, name: detail.data.name, href: trackPath(detail.data) } : null,
+    detail.data ? [detail.data] : [],
+  )
 
   if (detail.isPending) return <PageLoader what="track" />
 
@@ -101,7 +107,7 @@ export function TrackPage({ trackId }: { trackId: string }) {
         byline={<OwnerByline owner={track.owner} hasUsername />}
         meta={meta}
         actions={<TrackActions track={track} isOwner={isOwner} onShare={() => setIsSharing(true)} />}
-        play={{ label: `Play ${track.name}`, text: 'Play' }}
+        play={{ label: `Play ${track.name}`, text: 'Play', ...play }}
         labelEnd={
           <Text type="supporting" color="secondary">
             Posted {formatDate(track.createdAt)}

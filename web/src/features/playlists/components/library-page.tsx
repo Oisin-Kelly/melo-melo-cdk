@@ -11,7 +11,9 @@ import { useState } from 'react'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { AlbumShelf } from '@/components/media/album-tile'
 import { CoverArt } from '@/components/media/cover-art'
+import { CoverPlay } from '@/components/media/cover-play'
 import { LikedCover } from '@/components/media/liked-cover'
+import { loadPlaylist } from '@/components/player/load-context'
 import { useUsername } from '@/lib/auth/auth-context'
 import { playlistPath } from '@/lib/links'
 import { usePlaylists } from '@/lib/playlists'
@@ -50,7 +52,17 @@ export function LibraryPage() {
       <List hasDividers={false} edgeCompensation="inline">
         <ListItem
           href="/liked"
-          startContent={<LikedCover size="sm" />}
+          className="mm-play-hover"
+          startContent={
+            <CoverPlay
+              context={{ type: 'PLAYLIST', id: 'likes' }}
+              load={() => loadPlaylist('likes', me)}
+              name="Liked tracks"
+              isEmpty={likes?.trackCount === 0}
+            >
+              <LikedCover size="sm" />
+            </CoverPlay>
+          }
           label="Liked tracks"
           description={likes ? `Playlist · ${tracks(likes.trackCount)}` : 'Tracks you liked'}
         />
@@ -58,7 +70,17 @@ export function LibraryPage() {
           <ListItem
             key={playlist.id}
             href={playlistPath(playlist, me)}
-            startContent={<CoverArt imageUrl={playlist.imageUrl} imageBgColor={playlist.imageBgColor} size="sm" />}
+            className="mm-play-hover"
+            startContent={
+              <CoverPlay
+                context={{ type: 'PLAYLIST', id: playlist.id }}
+                load={() => loadPlaylist(playlist.id, me)}
+                name={playlist.name}
+                isEmpty={playlist.trackCount === 0}
+              >
+                <CoverArt imageUrl={playlist.imageUrl} imageBgColor={playlist.imageBgColor} size="sm" />
+              </CoverPlay>
+            }
             label={playlist.name}
             description={`Playlist · ${tracks(playlist.trackCount)}`}
           />

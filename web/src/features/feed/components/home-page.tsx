@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { PageHeader } from '@/components/layout/page-header'
 import { SortMenu } from '@/components/lists/sort-menu'
 import { FEED_SORT_OPTIONS, type FeedSort, type FeedType } from '../api/feed'
-import { ContinueListeningCard } from './continue-listening-card'
 import { FeedTypePicker } from './feed-filters'
 import { HomeFeed } from './home-feed'
 
@@ -20,7 +19,6 @@ export function HomePage() {
         picker={<FeedTypePicker type={type} onChange={setType} />}
         actions={<SortMenu value={sort} options={FEED_SORT_OPTIONS} onChange={setSort} />}
       />
-      <ContinueListeningCard />
       <HomeFeed type={type} sort={sort} />
     </VStack>
   )

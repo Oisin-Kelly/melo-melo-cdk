@@ -57,7 +57,7 @@ public sealed class S3Service : IS3Service
         return _s3Client.GetPreSignedURLAsync(request);
     }
 
-    public Task<string> GetPresignedGetUrlAsync(string key, TimeSpan expiry)
+    public Task<string> GetPresignedGetUrlAsync(string key, TimeSpan expiry, string? cacheControl = null)
     {
         var request = new GetPreSignedUrlRequest
         {
@@ -66,6 +66,7 @@ public sealed class S3Service : IS3Service
             Verb = HttpVerb.GET,
             Expires = DateTime.UtcNow.Add(expiry)
         };
+        if (cacheControl is not null) request.ResponseHeaderOverrides.CacheControl = cacheControl;
 
         return _s3Client.GetPreSignedURLAsync(request);
     }

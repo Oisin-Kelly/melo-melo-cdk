@@ -52,7 +52,6 @@ describe('EditProfilePage', () => {
     await user.clear(await screen.findByLabelText(/Display name/))
     await user.type(screen.getByLabelText(/Display name/), 'O. Kelly')
     await user.clear(screen.getByLabelText(/City/))
-    await user.click(screen.getByRole('switch', { name: 'Hide my followers' }))
     await user.click(screen.getByRole('radio', { name: 'People you follow' }))
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -65,8 +64,6 @@ describe('EditProfilePage', () => {
         city: null,
         country: null,
         bio: null,
-        followersPrivate: true,
-        followingsPrivate: false,
         incomingShares: 'FOLLOWING',
         clearedImage: false,
       },

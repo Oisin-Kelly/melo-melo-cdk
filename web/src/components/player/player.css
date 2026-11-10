@@ -1,0 +1,241 @@
+/* Desktop: the player bar under AppShell, in the same full-height column
+   (app-shell.css .mm-app-frame). Three columns: what's playing | controls | queue + volume.
+   Washed in the cover's colour, mixed into the page background (light and dark alike). */
+.mm-now-bar {
+  flex-shrink: 0;
+  --mm-tint-base: var(--mm-tint, transparent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spacing-6);
+  padding: var(--spacing-3) var(--mm-page-pad, var(--spacing-8));
+  border-top: 1px solid color-mix(in oklch, var(--mm-tint-base) 30%, var(--color-border));
+  background: color-mix(in oklch, var(--mm-tint-base) 22%, var(--color-background-surface));
+  transition: background-color 0.4s, border-color 0.4s;
+}
+
+/* Sliders in the text colour (black in light mode, white in dark), like the iOS player's,
+   rather than the accent */
+.mm-player-slider {
+  display: block;
+  --color-accent: var(--color-text-primary);
+}
+
+/* The times keep their width as the digits change */
+.mm-player-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+}
+.mm-player-time[data-end] { text-align: end; }
+
+/* Shuffle and repeat: lit while on, with a dot underneath (and a "1" for repeat one) */
+.astryx-button.mm-mode {
+  position: relative;
+}
+.astryx-button.mm-mode[data-on] {
+  color: var(--color-accent);
+}
+.astryx-button.mm-mode[data-on]::after {
+  content: '';
+  position: absolute;
+  inset-block-end: 2px;
+  inset-inline-start: 50%;
+  width: 4px;
+  height: 4px;
+  margin-inline-start: -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.mm-repeat {
+  position: relative;
+  display: inline-flex;
+}
+.mm-repeat[data-one]::after {
+  content: '1';
+  position: absolute;
+  inset-block-start: 22%;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  color: var(--color-accent);
+  pointer-events: none;
+}
+
+/* Queue rows: the whole row plays it (an invisible button over it, like track rows);
+   remove and the drag handle sit above that */
+.mm-queue-row {
+  position: relative;
+  padding: var(--spacing-1);
+  margin-inline: calc(-1 * var(--spacing-1));
+  border-radius: var(--radius-container);
+  background: transparent;
+}
+.mm-queue-row .mm-cover { border-radius: max(var(--radius-inner), calc(var(--radius-container) - var(--spacing-1))); }
+@media (hover: hover) {
+  .mm-queue-row:has(.mm-queue-play):hover { background: var(--color-background-muted); }
+}
+.mm-queue-row[data-dragging] {
+  background: var(--color-background-card);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.16);
+}
+.mm-queue-play {
+  all: unset;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-queue-play:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+.mm-queue-row button:not(.mm-queue-play) { position: relative; z-index: 1; }
+.mm-queue-row .mm-cover { pointer-events: none; }
+/* The drag handle: a comfortable target, and a drag on it never scrolls or swipes */
+.mm-queue-handle {
+  all: unset;
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-element);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-queue-handle:active { cursor: grabbing; }
+.mm-queue-handle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* A row never grows past the box: the text gives way (cut off with "…"), the cover and
+   the buttons at the end keep their size, so every drag handle lines up */
+.mm-queue-text { min-width: 0; }
+.mm-queue-line .mm-cover { flex-shrink: 0; }
+.mm-queue-end {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+/* The desktop queue popover scrolls on its own, and only up and down */
+.mm-queue-scroll {
+  max-height: min(60vh, 32rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* room for the rows' hover background, which reaches a little past their content */
+  padding-inline: var(--spacing-1);
+}
+
+/* Phones: a floating pill above the tab bar, in the same full-height column */
+.mm-mini-dock {
+  flex-shrink: 0;
+  padding: 0 var(--spacing-2) var(--spacing-2);
+  background: var(--color-background-surface);
+}
+.mm-mini {
+  --mm-tint-base: var(--mm-tint, transparent);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--mm-tint-base) 30%, var(--color-border));
+  /* concentric with the cover inside: outer = cover's radius + the pill's padding */
+  border-radius: calc(var(--radius-container) + var(--spacing-2));
+  background: color-mix(in oklch, var(--mm-tint-base) 26%, var(--color-background-surface));
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  transition: background-color 0.4s, border-color 0.4s;
+}
+.mm-mini .mm-cover { border-radius: var(--radius-container); }
+.mm-mini-progress {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--color-text-primary);
+  transform-origin: left;
+  transform: scaleX(var(--mm-progress, 0));
+}
+/* The title area is a button whose hit area stretches over the whole pill; the play and
+   next buttons sit above it */
+.mm-mini-open {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-mini-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.mm-mini-open:focus-visible::after {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: inherit;
+}
+.mm-mini button:not(.mm-mini-open) { position: relative; z-index: 1; }
+
+/* Now playing (phones), after the iOS app's player: the top of the sheet is a block of
+   the cover's colour, its lower corners rounded, with the cover sitting at its foot. */
+.mm-now-sheet > div { background: transparent; }
+.mm-now-art {
+  --mm-tint-base: var(--mm-tint, var(--color-accent));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  min-height: 42dvh;
+  /* clear of the grab handle at the top */
+  padding: var(--spacing-8) var(--spacing-6) var(--spacing-6);
+  border-end-start-radius: 2.5rem;
+  border-end-end-radius: 2.5rem;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--mm-tint-base) 55%, var(--color-background-surface)) 20%,
+    color-mix(in oklch, var(--mm-tint-base) 32%, var(--color-background-surface))
+  );
+}
+/* Square, as wide as the block allows, short enough on an SE to keep the controls in view;
+   its corners concentric with the block's (2.5rem − the block's 1.5rem padding) */
+.mm-now-cover {
+  display: block;
+  width: min(100%, 22rem, 27dvh);
+}
+.mm-now-cover .mm-cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+}
+.mm-now-title {
+  font-size: var(--font-size-xl);
+  line-height: 1.25;
+}
+.mm-now-owner {
+  font-size: var(--font-size-lg);
+}
+/* "Playing from": kept to one line, the name cut off before the icon is */
+.mm-now-from {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The big play button in the middle of the controls */
+.astryx-button.mm-play-hero {
+  width: 4.375rem;
+  height: 4.375rem;
+}
+.astryx-button.mm-play-hero .mm-play-hero-icon,
+.astryx-button.mm-play-hero .mm-play-hero-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}

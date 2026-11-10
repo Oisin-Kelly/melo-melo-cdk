@@ -19,14 +19,14 @@ const share = (id: string, sharedAt: number, extra: Partial<FeedEntry> = {}): Fe
 let seenPosts = 0
 let feedQueries: string[] = []
 
-function serveHome({ feed, lastSeenAt, progress }: { feed: FeedEntry[]; lastSeenAt?: number; progress?: unknown }) {
+function serveHome({ feed, lastSeenAt }: { feed: FeedEntry[]; lastSeenAt?: number }) {
   server.use(
     http.get(`${API}/users/me`, () => HttpResponse.json(user('me', { lastSeenAt }))),
     http.post(`${API}/me/seen`, () => {
       seenPosts++
       return new HttpResponse(null, { status: 204 })
     }),
-    http.get(`${API}/me/progress`, () => (progress ? HttpResponse.json(progress) : new HttpResponse(null, { status: 204 }))),
+    http.get(`${API}/me/progress`, () => new HttpResponse(null, { status: 204 })),
     http.get(`${API}/feed`, ({ request }) => {
       const url = new URL(request.url)
       feedQueries.push(url.search)
@@ -104,25 +104,5 @@ describe('Home', () => {
     expect(await screen.findByText('Nothing shared with you yet')).toBeInTheDocument()
     await u.click(screen.getByRole('radio', { name: 'Tracks' }))
     expect(await screen.findByText('No tracks shared with you yet')).toBeInTheDocument()
-  })
-
-  it('offers to continue listening when there is something to resume', async () => {
-    serveHome({
-      feed: [],
-      progress: { contextType: 'TRACK', contextId: 't9', trackId: 't9', positionSeconds: 60, updatedAt: 1, track: trackSummary('t9', { name: 'Half heard', duration: 360 }) },
-    })
-    renderWithProviders(<HomePage />)
-
-    expect(await screen.findByText('Continue listening')).toBeInTheDocument()
-    expect(screen.getByText('Half heard')).toBeInTheDocument()
-    expect(screen.getByText(/5 min left/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Resume/ })).toHaveAttribute('aria-disabled', 'true') // until playback exists
-  })
-
-  it('shows no card when there is nothing to resume', async () => {
-    serveHome({ feed: [share('1', 100)] })
-    renderWithProviders(<HomePage />)
-    await screen.findByText('Song 1')
-    expect(screen.queryByText('Continue listening')).not.toBeInTheDocument()
   })
 })

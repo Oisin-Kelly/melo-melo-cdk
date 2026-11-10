@@ -95,13 +95,14 @@
    row's one inset. Concentric corners: inner radius = outer radius − inset — for a card,
    its padding (MediaRow's spacing-3) plus its 1px border; for a flat row, its spacing-2. */
 .mm-row .mm-cover {
-  width: 3.125rem;
-  height: 3.125rem;
+  /* 3.125rem at the default text size and density (display-prefs.css) */
+  width: var(--mm-row-media);
+  height: var(--mm-row-media);
 }
-.mm-row[data-variant='card'] .mm-cover {
+.mm-row[data-variant='card'] :is(.mm-cover, .mm-equaliser) {
   border-radius: calc(var(--radius-page) - var(--spacing-3) - 1px);
 }
-.mm-row[data-variant='flat'] .mm-cover {
+.mm-row[data-variant='flat'] :is(.mm-cover, .mm-equaliser) {
   border-radius: max(var(--radius-inner), calc(var(--radius-container) - var(--spacing-2)));
 }
 
@@ -145,6 +146,7 @@
 
 /* Cover-first tiles (album-tile.tsx): as wide as a large cover, the whole tile a link. */
 .mm-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1-5);
@@ -156,7 +158,18 @@
   scroll-snap-align: start;
 }
 .mm-tile:hover .mm-tile-name { text-decoration: underline; }
-.mm-tile:focus-visible {
+.mm-tile-link {
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+}
+.mm-tile-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.mm-tile:has(.mm-tile-link:focus-visible) {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
@@ -229,12 +242,132 @@
   inset: 0;
   border-radius: inherit;
 }
-.mm-row :is(button, a):not(.mm-row-link) {
+.mm-row :is(button, a):not(.mm-row-link, .mm-row-play) {
   position: relative;
   z-index: 1;
+}
+
+/* A flat row that plays when tapped: an invisible button over the whole row (the title
+   link, like/⋯ buttons sit above it) */
+.mm-row-play {
+  all: unset;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-row[data-variant='flat']:has(.mm-row-play:focus-visible) {
+  background: var(--color-background-muted);
+}
+.mm-row-play:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Its cover dims under a little equaliser, bouncing while it plays */
+.mm-row-cover {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  /* positioned (for the equaliser), so it would sit over the row's play button: let a
+     tap on the cover through to it */
+  pointer-events: none;
+}
+.mm-equaliser {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding-block-end: 30%;
+  background: rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+.mm-equaliser span {
+  width: 3px;
+  height: 35%;
+  border-radius: 1px;
+  background: white;
+  transform-origin: bottom;
+  transform: scaleY(0.4);
+}
+.mm-equaliser span:nth-child(2) { transform: scaleY(0.8); }
+.mm-equaliser span:nth-child(3) { transform: scaleY(0.55); }
+.mm-equaliser[data-playing] span { animation: mm-eq 0.9s ease-in-out infinite alternate; }
+.mm-equaliser[data-playing] span:nth-child(2) { animation-delay: -0.3s; animation-duration: 0.7s; }
+.mm-equaliser[data-playing] span:nth-child(3) { animation-delay: -0.6s; animation-duration: 1.1s; }
+@keyframes mm-eq {
+  from { transform: scaleY(0.25); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mm-equaliser[data-playing] span { animation: none; }
+}
+
+/* Hovering a row that plays when clicked: a play icon (pause on the playing row) over its
+   cover, in place of the equaliser. Mouse only — a tap just plays. */
+.mm-row-hover-play {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  border-radius: inherit;
+  background: rgb(0 0 0 / 0.45);
+  color: white;
+}
+.mm-row[data-variant='flat'] .mm-row-hover-play {
+  border-radius: max(var(--radius-inner), calc(var(--radius-container) - var(--spacing-2)));
+}
+@media (hover: hover) {
+  .mm-row:hover .mm-row-hover-play,
+  .mm-row:has(.mm-row-play:focus-visible) .mm-row-hover-play { display: grid; }
+  .mm-row:hover .mm-equaliser,
+  .mm-row:has(.mm-row-play:focus-visible) .mm-equaliser { visibility: hidden; }
 }
 
 /* A profile stat ("2 following"): wraps between stats, never inside one */
 .mm-stat {
   white-space: nowrap;
 }
+
+/* CoverPlay (cover-play.tsx): play over an album or playlist cover on hover */
+.mm-cover-play-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.mm-cover-play {
+  all: unset;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-element);
+  background: rgb(0 0 0 / 0.45);
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.mm-cover-play[data-playing],
+.mm-cover-play:focus-visible { opacity: 1; }
+.mm-cover-play:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .mm-play-hover:hover .mm-cover-play { opacity: 1; }
+}
+@media (hover: none) {
+  /* Touch: the tile or row opens its page; the button only shows (and works) while playing */
+  .mm-cover-play:not([data-playing]) { pointer-events: none; }
+}
+/* A tile's big cover gets a bigger icon */
+.mm-tile .mm-cover-play svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.mm-tile .mm-cover-play { border-radius: var(--radius-container); }

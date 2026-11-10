@@ -13,8 +13,6 @@ export type User = {
   imageBgColor: string | null
   followingCount: number
   followerCount: number
-  followingsPrivate: boolean
-  followersPrivate: boolean
   incomingShares: IncomingShares | null
   /** Epoch ms. */
   createdAt: number

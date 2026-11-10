@@ -12,14 +12,15 @@
   }
 }
 
-/* Phones: AppShell (normally 100dvh on its own) shares a full-height column with the
-   bottom tab bar, so the content scrolls inside AppShell and the bar never covers it. */
-.mm-phone-frame {
+/* AppShell (normally 100dvh on its own) shares a full-height column with what sits
+   under it — the player bar on desktop; the mini player and tab bar on phones — so the
+   content scrolls inside AppShell and they never cover it. */
+.mm-app-frame {
   display: flex;
   flex-direction: column;
   height: 100dvh;
 }
-.mm-phone-frame > .astryx-app-shell {
+.mm-app-frame > .astryx-app-shell {
   flex: 1;
   min-height: 0;
   height: auto;

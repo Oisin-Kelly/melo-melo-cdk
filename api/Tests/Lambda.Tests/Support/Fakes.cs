@@ -52,14 +52,12 @@ public static class Fakes
         CreatedAt = 1_700_000_000_000,
     };
 
-    public static User User(string username, bool followersPrivate = false, bool followingsPrivate = false) => new()
+    public static User User(string username) => new()
     {
         Username = username,
         DisplayName = username,
         FollowerCount = 0,
         FollowingCount = 0,
-        FollowersPrivate = followersPrivate,
-        FollowingsPrivate = followingsPrivate,
         CreatedAt = 1_700_000_000_000,
     };
 

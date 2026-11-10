@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, ApiError } from '@/lib/api-client'
+import { api } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
 import { getUser, userQueryKey } from '@/lib/me'
 import type { AlbumSummary, PaginatedResult, TrackSummary, UserSummary } from '@/types/api'
@@ -114,13 +114,8 @@ export function useMyTracks(enabled: boolean) {
 
 export type FollowListKind = 'followers' | 'following'
 
-/** GET /users/{username}/followers | /followings — 403 when they've made it private. */
+/** GET /users/{username}/followers | /followings — newest first. */
 export function useFollowList(username: string, kind: FollowListKind) {
   const path = kind === 'followers' ? 'followers' : 'followings'
-  return useInfiniteQuery({
-    ...infiniteList<UserSummary>(['users', username, kind], `/users/${u(username)}/${path}`),
-    retry: (count, error) => !isForbidden(error) && count < 1,
-  })
+  return useInfiniteQuery(infiniteList<UserSummary>(['users', username, kind], `/users/${u(username)}/${path}`))
 }
-
-export const isForbidden = (error: unknown) => error instanceof ApiError && error.status === 403

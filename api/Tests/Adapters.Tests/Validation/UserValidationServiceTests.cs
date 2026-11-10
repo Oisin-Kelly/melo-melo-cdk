@@ -17,8 +17,6 @@ public class UserValidationServiceTests
             Username = "alice",
             FollowingCount = 0,
             FollowerCount = 0,
-            FollowingsPrivate = false,
-            FollowersPrivate = false,
             CreatedAt = 0,
         };
         configure?.Invoke(user);

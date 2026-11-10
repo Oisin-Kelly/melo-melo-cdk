@@ -58,14 +58,6 @@ namespace Domain
         [DynamoDBProperty("followerCount")]
         public required int FollowerCount { get; set; }
 
-        [JsonPropertyName("followingsPrivate")]
-        [DynamoDBProperty("followingsPrivate")]
-        public required bool FollowingsPrivate { get; set; }
-
-        [JsonPropertyName("followersPrivate")]
-        [DynamoDBProperty("followersPrivate")]
-        public required bool FollowersPrivate { get; set; }
-
         [JsonPropertyName("incomingShares")]
         [DynamoDBProperty("incomingShares")]
         public string? IncomingShares { get; set; }

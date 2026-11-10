@@ -149,7 +149,10 @@ public sealed class AudioService : IAudioService
 
     public Task<string> GetStreamUrlAsync(string trackId, TimeSpan expiry)
     {
-        return _privateS3Service.GetPresignedGetUrlAsync(AudioKey(trackId), expiry);
+        // The player reuses one URL per track for its lifetime, so the browser may keep the
+        // bytes it already fetched for that long (a replay or a step back needn't re-download)
+        return _privateS3Service.GetPresignedGetUrlAsync(AudioKey(trackId), expiry,
+            $"private, max-age={(int)expiry.TotalSeconds}");
     }
 
     public async Task<OriginalDownload?> GetOriginalDownloadAsync(string trackId, string trackName, TimeSpan expiry)

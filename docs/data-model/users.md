@@ -12,7 +12,7 @@ Part of the [data model](README.md). Covers user profiles, the follow graph, and
 
 GSI3 is the username search index: every profile shares the `USERS` partition so `begins_with` on the lowercased username gives case-insensitive prefix search (key format owned by `UserRepository.SearchIndexPk`/`SearchIndexSk`).
 
-Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city`, `bio`, `imageUrl`, `imageBgColor`, `followingCount`, `followerCount`, `followingsPrivate`, `followersPrivate`, `incomingShares` (`EVERYONE` — default, may be absent — | `FOLLOWING` | `NONE`), `lastSeenAt` / `activitySeenAt` (private new-since-last-visit and unread-activity markers), `createdAt`
+Attributes: `username`, `displayName`, `firstName`, `lastName`, `country`, `city`, `bio`, `imageUrl`, `imageBgColor`, `followingCount`, `followerCount`, `incomingShares` (`EVERYONE` — default, may be absent — | `FOLLOWING` | `NONE`), `lastSeenAt` / `activitySeenAt` (private new-since-last-visit and unread-activity markers), `createdAt`
 
 `lastSeenAt`/`activitySeenAt` are stored on the profile item but are transient on the `User` DTO (never mapped there), so they never serialize on the many embedded User objects (feed senders, activity actors, followers, likers). `GetUserLambda` loads them via a dedicated projection only for the owner's own profile.
 
@@ -48,7 +48,7 @@ Attributes: `targetId`, `createdAt`. One per readable URL an item has ever had �
   - User profile: `PK=USER#{username}`, `SK=PROFILE`, `GSI1PK=EMAIL#{email}`, `GSI1SK=PROFILE`
   - Likes playlist meta: `PK=USER#{username}`, `SK=PLAYLIST#likes`, `type=LIKES`, `name="Likes"`
 - `username` is saved **lowercased** whatever casing was typed (every key uses it)
-- Default values: `displayName=username`, `bio="Hey! I'm using MeloMelo!"`, counts=0, privacy=false, `incomingShares=EVERYONE`
+- Default values: `displayName=username`, `bio="Hey! I'm using MeloMelo!"`, counts=0, `incomingShares=EVERYONE`
 - Also writes the GSI3 search keys (`GSI3PK=USERS`, `GSI3SK=USERNAME#{lowercased username}`)
 
 #### CheckEmailExistenceLambda — Validate email uniqueness on pre-signup
@@ -109,13 +109,13 @@ Request body: `{newValue: true|false}`. Following (or unfollowing) yourself, in 
    - `DeleteKey` the `USER_FOLLOWED` activity: `PK=ACTIVITY#{username}, SK=DATE#{createdAt}#FOLLOW#{requestor}` — reconstructed from the follow record's `createdAt` (pre-existing records lacking it skip cleanly; a keyed delete of a missing item is a harmless no-op)
 
 #### `GET /users/{username}/followers` — GetUserFollowersLambda
-1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followersPrivate` flag
+1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists (follow lists are visible to anyone signed in)
 2. `Query(GSI3, GSI3PK=FOLLOWERS#{username}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated follow records newest-first
 3. Extract follower username from SK: `USER#{followerUsername}`
 4. `BatchGet` the (deduped) follower profiles, re-ordered to match the page → returns `PaginatedResult<UserSummary>`
 
 #### `GET /users/{username}/followings` — GetUserFollowingLambda
-1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists + `followingsPrivate` flag
+1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists (follow lists are visible to anyone signed in)
 2. `Query(GSI1, GSI1PK=FOLLOWING#{username}, GSI1SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated following records newest-first
 3. Extract followed username from GSI1SK: `DATE#{epochMs}#TARGET#{targetUsername}` → `split("#TARGET#")[1]`
 4. `BatchGet` the (deduped) followed users' profiles, re-ordered to match the page → returns `PaginatedResult<UserSummary>`

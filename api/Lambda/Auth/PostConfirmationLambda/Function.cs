@@ -68,8 +68,6 @@ public sealed class Function
             Bio = "Hey! I'm using MeloMelo!",
             FollowingCount = 0,
             FollowerCount = 0,
-            FollowingsPrivate = false,
-            FollowersPrivate = false,
             IncomingShares = IncomingSharesSetting.Everyone,
             CreatedAt = now
         };

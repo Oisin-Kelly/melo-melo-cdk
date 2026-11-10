@@ -11,6 +11,7 @@ import { Fragment, useEffect, type ReactNode } from 'react'
 import type { LoadingWhat } from '@/components/feedback/loading-phrases'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { Illustration } from '@/components/illustrations/illustration'
+import { useIsCompactDensity } from '@/components/theme/use-display-prefs'
 import { useLoadMoreOnScroll } from '@/hooks/use-load-more-on-scroll'
 import type { PaginatedResult } from '@/types/api'
 import './lists.css'
@@ -27,6 +28,7 @@ type InfiniteListProps<T> = {
   endMessage?: string | null
   /** Optional content inserted before an item (e.g. a date divider). */
   renderBefore?: (item: T, index: number) => ReactNode
+  /** Space between rows; defaults to 2 (1 at compact density, Settings → Appearance). */
   gap?: 0 | 0.5 | 1 | 1.5 | 2 | 3 | 4 | 5 | 6
   isCompact?: boolean
   /** 'grid' lays the items out as a grid of cards (.mm-card-grid) instead of a column. */
@@ -57,7 +59,7 @@ export function InfiniteList<T>({
   empty,
   endMessage = "You've reached the bottom",
   renderBefore,
-  gap = 2,
+  gap,
   isCompact,
   layout = 'list',
   filter,
@@ -65,6 +67,9 @@ export function InfiniteList<T>({
   sort,
   loadAll = false,
 }: InfiniteListProps<T>) {
+  // Space between rows: the screen's choice, else one step tighter at compact density
+  const isCompactDensity = useIsCompactDensity()
+  const rowGap = gap ?? (isCompactDensity ? 1 : 2)
   const { data, hasNextPage, isFetchingNextPage, fetchNextPage, isError, isPending, refetch } = query
   const items = data?.pages.flatMap((page) => page.items) ?? []
   const canLoadMore = Boolean(hasNextPage) && !isFetchingNextPage && !isError
@@ -119,7 +124,7 @@ export function InfiniteList<T>({
   ))
 
   return (
-    <VStack gap={gap}>
+    <VStack gap={rowGap}>
       {layout === 'grid' ? <div className="mm-card-grid">{rendered}</div> : rendered}
       {filter && shown.length === 0 && (
         <Text type="supporting" color="secondary">

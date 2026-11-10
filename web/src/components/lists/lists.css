@@ -1,5 +1,5 @@
-/* Cards in a grid (InfiniteList layout="grid", PersonGrid): at least ~9.5rem wide, so
-   two across on a phone and as many as fit on wider screens. */
+/* Cards in a grid (InfiniteList layout="grid", PersonGrid): at least ~9.5rem wide, so as
+   many as fit across. People screens switch to one-column rows on phones (people.css). */
 .mm-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));

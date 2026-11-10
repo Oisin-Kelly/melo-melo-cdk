@@ -64,6 +64,17 @@ public class AudioServiceTests
     }
 
     [Fact]
+    public async Task Stream_LetsTheBrowserCacheItForTheUrlsLifetime()
+    {
+        _private.GetPresignedGetUrlAsync("processed/t1/audio.m4a", TimeSpan.FromHours(6), "private, max-age=21600")
+            .Returns("https://s3/stream");
+
+        var url = await Service.GetStreamUrlAsync("t1", TimeSpan.FromHours(6));
+
+        url.Should().Be("https://s3/stream");
+    }
+
+    [Fact]
     public async Task Delete_RemovesTheAudioOriginalAndClip()
     {
         await Service.DeleteAudioAsync("t1");

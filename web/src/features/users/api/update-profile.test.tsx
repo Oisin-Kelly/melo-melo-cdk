@@ -14,8 +14,6 @@ const draft: ProfileDraft = {
   city: 'Dublin',
   country: null,
   bio: null,
-  followersPrivate: false,
-  followingsPrivate: true,
   incomingShares: 'FOLLOWING',
 }
 

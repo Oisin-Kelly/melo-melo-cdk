@@ -83,11 +83,12 @@ describe('ProfilePage', () => {
     expect(screen.getByText('YOUR TRACKS')).toBeInTheDocument()
   })
 
-  it('a private follower list is not a link', async () => {
-    serveProfiles({ bob: user('bob', { displayName: 'Bob', followersPrivate: true, followerCount: 4 }) })
+  it("links someone's follower and following counts to their lists", async () => {
+    serveProfiles({ bob: user('bob', { displayName: 'Bob', followerCount: 4 }) })
     renderAt('/bob')
     await screen.findByRole('heading', { name: 'Bob' })
-    expect(screen.queryByRole('link', { name: /followers/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /4 followers/ })).toHaveAttribute('href', '/bob/followers')
+    expect(screen.getByRole('link', { name: /following/ })).toHaveAttribute('href', '/bob/following')
   })
 
   it('copies the root profile link', async () => {
@@ -120,17 +121,6 @@ describe('FollowListPage', () => {
     await u.type(screen.getByLabelText('Search people'), 'gra')
     expect(screen.queryByRole('link', { name: /Ada/ })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Grace/ })).toBeInTheDocument()
-  })
-
-  it('says a private list is private (no search box)', async () => {
-    server.use(
-      http.get(`${API}/users/bob/followings`, () =>
-        HttpResponse.json({ statusCode: 403, message: 'private', error: 'Forbidden' }, { status: 403 }),
-      ),
-    )
-    renderAt('/bob/following')
-    expect(await screen.findByText('This list is private')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Search people')).not.toBeInTheDocument()
   })
 
   it('says when there is nobody yet', async () => {

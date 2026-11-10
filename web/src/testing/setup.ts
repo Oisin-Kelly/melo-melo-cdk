@@ -32,10 +32,11 @@ if (!window.matchMedia) {
     }) as MediaQueryList
 }
 
-// jsdom has <audio> but can't play it (play/pause throw "Not implemented"): the invite screen's
-// preview player only needs them to resolve
+// jsdom has <audio> but can't play it (play/pause/load throw "Not implemented"): the invite screen's
+// preview player and the app's player only need them to do nothing
 window.HTMLMediaElement.prototype.play = () => Promise.resolve()
 window.HTMLMediaElement.prototype.pause = () => {}
+window.HTMLMediaElement.prototype.load = () => {}
 
 class InertObserver {
   observe() {}

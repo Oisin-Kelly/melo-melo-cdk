@@ -26,7 +26,7 @@ type Props = {
   actions: ReactNode
   /** The play button: a "Play all"-style pill first in the buttons row on wide screens, a
    *  big round button at the row's end on compact ones (where the thumb is). */
-  play?: { label: string; text: string; onPlay?: () => void }
+  play?: { label: string; text: string; onPlay?: () => void; isPlaying?: boolean }
   /** Compact screens show it in the header, two quiet lines that expand on tap (wide
    *  screens: the page's own Description section, so pass it only when compact). */
   description?: string | null
@@ -81,7 +81,7 @@ export function CollectionHeader({
       {cover ?? <CoverArt imageUrl={imageUrl} imageBgColor={imageBgColor} size={size} />}
     </div>
   )
-  const pill = play && <PlayButton label={play.label} text={play.text} onPlay={play.onPlay} />
+  const pill = play && <PlayButton {...play} />
   const buttons = (
     <HStack gap={2} vAlign="center" hAlign="between">
       <HStack gap={2} vAlign="center" wrap="wrap">
@@ -165,7 +165,7 @@ export function CollectionHeader({
             </HStack>
           </StackItem>
           {aside}
-          {play && <PlayButton label={play.label} size="lg" onPlay={play.onPlay} />}
+          {play && <PlayButton label={play.label} size="lg" onPlay={play.onPlay} isPlaying={play.isPlaying} />}
         </HStack>
       </Hero>
     )

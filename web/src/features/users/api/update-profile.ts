@@ -15,8 +15,6 @@ export type ProfileDraft = {
   city: string | null
   country: string | null
   bio: string | null
-  followersPrivate: boolean
-  followingsPrivate: boolean
   incomingShares: IncomingShares
 }
 

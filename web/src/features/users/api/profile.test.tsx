@@ -2,13 +2,11 @@ import { act, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { sileo } from 'sileo'
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError } from '@/lib/api-client'
 import { userQueryKey } from '@/lib/me'
 import { user } from '@/testing/fixtures'
 import { createTestQueryClient, renderHookWithProviders } from '@/testing/providers'
 import { API, server } from '@/testing/server'
 import {
-  isForbidden,
   useAlbumsSharedFrom,
   useFollowList,
   useFollowStatus,
@@ -140,37 +138,5 @@ describe('profile lists', () => {
     const { result } = renderHookWithProviders(() => useMyTracks(false))
     await new Promise((r) => setTimeout(r, 20))
     expect(result.current.fetchStatus).toBe('idle')
-  })
-
-  it("doesn't retry a private follow list (403), but does retry other failures once", async () => {
-    let privateCalls = 0
-    let flakyCalls = 0
-    server.use(
-      http.get(`${API}/users/bob/followers`, () => {
-        privateCalls++
-        return HttpResponse.json({ statusCode: 403, message: 'private', error: 'Forbidden' }, { status: 403 })
-      }),
-      http.get(`${API}/users/bob/followings`, () => {
-        flakyCalls++
-        return HttpResponse.json({}, { status: 500 })
-      }),
-    )
-
-    const followers = renderHookWithProviders(() => useFollowList('bob', 'followers'))
-    const following = renderHookWithProviders(() => useFollowList('bob', 'following'))
-
-    await waitFor(() => expect(followers.result.current.isError).toBe(true))
-    await waitFor(() => expect(following.result.current.isError).toBe(true))
-    expect(isForbidden(followers.result.current.error)).toBe(true)
-    expect(privateCalls).toBe(1)
-    expect(flakyCalls).toBe(2)
-  })
-})
-
-describe('isForbidden', () => {
-  it('is true only for a 403 ApiError', () => {
-    expect(isForbidden(new ApiError(403, 'x', null))).toBe(true)
-    expect(isForbidden(new ApiError(404, 'x', null))).toBe(false)
-    expect(isForbidden(new Error('403'))).toBe(false)
   })
 })

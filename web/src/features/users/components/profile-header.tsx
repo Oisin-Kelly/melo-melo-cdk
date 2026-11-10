@@ -6,7 +6,6 @@ import { IconButton } from '@astryxdesign/core/IconButton'
 import { Link } from '@astryxdesign/core/Link'
 import { StackItem } from '@astryxdesign/core/Stack'
 import { Text } from '@astryxdesign/core/Text'
-import { Tooltip } from '@astryxdesign/core/Tooltip'
 import { CheckIcon, EllipsisHorizontalIcon, LinkIcon, PencilIcon, UserPlusIcon } from '@heroicons/react/24/outline'
 import { Fragment, type ReactNode } from 'react'
 import { sileo } from 'sileo'
@@ -35,16 +34,14 @@ export function ProfileHeader({ user, isMe }: { user: User; isMe: boolean }) {
       key="followers"
       count={user.followerCount}
       label={user.followerCount === 1 ? 'follower' : 'followers'}
-      href={isMe || !user.followersPrivate ? followListPath(user.username, 'followers') : undefined}
-      privateNote={`${name} has their followers set to private`}
+      href={followListPath(user.username, 'followers')}
       type={statType}
     />,
     <Stat
       key="following"
       count={user.followingCount}
       label="following"
-      href={isMe || !user.followingsPrivate ? followListPath(user.username, 'following') : undefined}
-      privateNote={`${name} has who they follow set to private`}
+      href={followListPath(user.username, 'following')}
       type={statType}
     />,
     !isMe && user.sharedWithYouCount !== undefined && (
@@ -164,13 +161,11 @@ function Stat({
   count,
   label,
   href,
-  privateNote,
   type = 'body',
 }: {
   count: number
   label: string
   href?: string
-  privateNote?: string
   type?: 'body' | 'supporting'
 }) {
   const content = (
@@ -188,17 +183,10 @@ function Stat({
       </Link>
     )
   }
-  const text = (
+  return (
     <Text type={type} color="secondary" className="mm-stat">
       {content}
     </Text>
-  )
-  return privateNote ? (
-    <Tooltip content={privateNote} touchTrigger="tap">
-      {text}
-    </Tooltip>
-  ) : (
-    text
   )
 }
 

@@ -8,7 +8,7 @@ import { Text } from '@astryxdesign/core/Text'
 import { StackItem } from '@astryxdesign/core/Stack'
 import { VStack } from '@astryxdesign/core/VStack'
 import { EllipsisHorizontalIcon, HeartIcon as HeartOutline } from '@heroicons/react/24/outline'
-import { HeartIcon as HeartSolid, PlayIcon } from '@heroicons/react/24/solid'
+import { HeartIcon as HeartSolid, PauseIcon, PlayIcon } from '@heroicons/react/24/solid'
 import type { ReactNode } from 'react'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { useToggleLike } from '@/lib/likes'
@@ -17,6 +17,9 @@ import { useAddToPlaylist, usePlaylists } from '@/lib/playlists'
 import type { AlbumSummary, TrackSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
 import { formatDuration, formatLength } from '@/utils/format'
+import { loadAlbum } from '@/components/player/load-context'
+import { usePlayLoaded, useQueueActions, useTrackRowPlay } from '@/components/player/use-player'
+import { useIsCompactDensity } from '@/components/theme/use-display-prefs'
 import { CoverArt } from './cover-art'
 import { tint } from './tint'
 import './media.css'
@@ -30,13 +33,15 @@ type PlayButtonProps = {
   /** Shown on the button ("Play all"): a pill instead of the round icon-only button. */
   text?: string
   size?: 'sm' | 'md' | 'lg'
-  /** Playback isn't wired yet: without a handler the button is disabled with a tooltip. */
+  /** Without a handler (not playable from here yet) the button is disabled with a tooltip. */
   onPlay?: () => void
+  /** This is what's playing: the button pauses it. */
+  isPlaying?: boolean
 }
 
 // The play button (black in light mode, white in dark): round and icon-only in rows, a
 // pill with its text in page headers.
-export function PlayButton({ label, text, size, onPlay }: PlayButtonProps) {
+export function PlayButton({ label, text, size, onPlay, isPlaying = false }: PlayButtonProps) {
   const shared = {
     className: 'mm-play',
     size,
@@ -44,9 +49,13 @@ export function PlayButton({ label, text, size, onPlay }: PlayButtonProps) {
     isDisabled: !onPlay,
     tooltip: onPlay ? undefined : 'Playback coming soon',
     onClick: onPlay,
-    icon: <Icon icon={PlayIcon} />,
+    icon: <Icon icon={isPlaying ? PauseIcon : PlayIcon} />,
   }
-  return text ? <Button {...shared} label={text} /> : <IconButton {...shared} label={label} />
+  return text ? (
+    <Button {...shared} label={isPlaying ? 'Pause' : text} />
+  ) : (
+    <IconButton {...shared} label={isPlaying ? 'Pause' : label} />
+  )
 }
 
 type LikeProps = { kind: 'TRACK' | 'ALBUM'; id: string; liked: boolean; name: string }
@@ -74,27 +83,40 @@ export type RowVariant = 'flat' | 'card'
 export function MediaRow({
   colour,
   variant = 'flat',
+  isCurrent = false,
   children,
 }: {
   colour: string | null
   variant?: RowVariant
+  /** The track playing now (marked for styling). */
+  isCurrent?: boolean
   children: ReactNode
 }) {
+  // Compact density (Settings → Appearance): one step less padding
+  const isCompact = useIsCompactDensity()
+  const padding = variant === 'card' ? (isCompact ? 2 : 3) : isCompact ? 1 : 2
   return (
-    <div className="mm-row" data-variant={variant} style={variant === 'card' ? tint(colour) : undefined}>
-      <HStack gap={3} vAlign="center" padding={variant === 'card' ? 3 : 2}>
+    <div
+      className="mm-row"
+      data-variant={variant}
+      data-current={isCurrent || undefined}
+      style={variant === 'card' ? tint(colour) : undefined}
+    >
+      <HStack gap={3} vAlign="center" padding={padding}>
         {children}
       </HStack>
     </div>
   )
 }
 
-/** The "…" menu on a track row: add to one of your playlists, plus the screen's own items. */
+/** The "…" menu on a track row: play next / add to queue, add to one of your playlists,
+ *  plus the screen's own items. */
 export function TrackMenu({
   track,
   excludePlaylistId,
   extraItems = [],
   hasLikeItem = false,
+  hasOpenItem = false,
 }: {
   track: TrackSummary
   /** The playlist being viewed, which it's already in. */
@@ -102,10 +124,13 @@ export function TrackMenu({
   extraItems?: DropdownMenuOption[]
   /** Like / Unlike as the first item — for phone rows, which have no heart button. */
   hasLikeItem?: boolean
+  /** "Go to track" — for phone rows, where tapping the row plays it rather than opening it. */
+  hasOpenItem?: boolean
 }) {
   const playlists = usePlaylists()
   const add = useAddToPlaylist()
   const toggleLike = useToggleLike()
+  const queue = useQueueActions()
 
   // The likes playlist only changes through liking
   const targets = (playlists.data ?? []).filter((p) => p.type === 'CUSTOM' && p.id !== excludePlaylistId)
@@ -131,6 +156,7 @@ export function TrackMenu({
         />
       )}
       items={[
+        ...(hasOpenItem ? [{ label: 'Go to track', href: trackPath(track) }] : []),
         ...(hasLikeItem
           ? [
               {
@@ -138,6 +164,12 @@ export function TrackMenu({
                 icon: track.likedByMe ? HeartSolid : HeartOutline,
                 onClick: () => toggleLike.mutate({ kind: 'TRACK', id: track.id, liked: !track.likedByMe }),
               },
+            ]
+          : []),
+        ...(queue
+          ? [
+              { label: 'Play next', onClick: () => queue.playNext([track]) },
+              { label: 'Add to queue', onClick: () => queue.addToQueue([track]) },
             ]
           : []),
         { label: 'Add to playlist', items: playlistItems },
@@ -162,8 +194,19 @@ type RowProps = {
    *  of the second line on phones (where it would squeeze the title). */
   aside?: ReactNode
   /** card: Home's feed look, with its own play button; flat rows play from the row itself
-   *  (once playback exists) and keep the rest in ⋯ */
+   *  and keep the rest in ⋯ */
   variant?: RowVariant
+}
+
+/** A few bars bouncing over the playing track's cover (still while paused). */
+function Equaliser({ isPlaying }: { isPlaying: boolean }) {
+  return (
+    <span className="mm-equaliser" data-playing={isPlaying || undefined} aria-hidden>
+      <span />
+      <span />
+      <span />
+    </span>
+  )
 }
 
 export function TrackRow({
@@ -181,14 +224,52 @@ export function TrackRow({
   excludePlaylistId?: string
 }) {
   const isMobile = useIsMobile()
+  const play = useTrackRowPlay(track)
+  // A flat row plays when tapped (its list from here, see TrackListPlayback); its title
+  // still opens the track on wider screens, and ⋯ → Go to track on phones, where the title
+  // is most of the row. Without a player (tests of other screens) the row opens the track.
+  const isRowPlay = variant === 'flat' && Boolean(play.onPlay)
+  // The track playing now: its title in the accent colour
+  const titleColour = play.isCurrent ? 'accent' : 'primary'
+  const title = isRowPlay && isMobile ? (
+    <Text type="body" color={titleColour} weight="bold" maxLines={1}>
+      {track.name}
+    </Text>
+  ) : (
+    <Link
+      href={trackPath(track)}
+      type="body"
+      color={titleColour}
+      weight="bold"
+      maxLines={1}
+      className={isRowPlay ? undefined : 'mm-row-link'}
+    >
+      {track.name}
+    </Link>
+  )
   return (
-    <MediaRow colour={track.imageBgColor} variant={variant}>
-      <CoverArt imageUrl={track.imageUrl} imageBgColor={track.imageBgColor} size="sm" />
+    <MediaRow colour={track.imageBgColor} variant={variant} isCurrent={play.isCurrent}>
+      {isRowPlay && (
+        <button
+          type="button"
+          className="mm-row-play"
+          aria-label={play.isPlaying ? `Pause ${track.name}` : `Play ${track.name}`}
+          onClick={play.onPlay}
+        />
+      )}
+      <span className="mm-row-cover">
+        <CoverArt imageUrl={track.imageUrl} imageBgColor={track.imageBgColor} size="sm" />
+        {play.isCurrent && <Equaliser isPlaying={play.isPlaying} />}
+        {/* Desktop: hovering the row shows what a click does, over the cover */}
+        {isRowPlay && (
+          <span className="mm-row-hover-play" aria-hidden>
+            <Icon icon={play.isPlaying ? PauseIcon : PlayIcon} />
+          </span>
+        )}
+      </span>
       <StackItem size="fill">
         <VStack gap={0.5}>
-          <Link href={trackPath(track)} type="body" color="primary" weight="bold" maxLines={1} className="mm-row-link">
-            {track.name}
-          </Link>
+          {title}
           <Text type="supporting" color="secondary" maxLines={1}>
             {/* Phones: liked shows here, first, since the heart button is in ⋯ */}
             {isMobile && track.likedByMe && (
@@ -212,14 +293,24 @@ export function TrackRow({
       {!isMobile && aside}
       {/* Phones: the heart moves into ⋯ (the row is too narrow for the title otherwise) */}
       {!isMobile && <LikeButton kind="TRACK" id={track.id} liked={track.likedByMe} name={track.name} />}
-      <TrackMenu track={track} excludePlaylistId={excludePlaylistId} extraItems={menuItems} hasLikeItem={isMobile} />
-      {variant === 'card' && <PlayButton label={`Play ${track.name}`} size="lg" />}
+      <TrackMenu
+        track={track}
+        excludePlaylistId={excludePlaylistId}
+        extraItems={menuItems}
+        hasLikeItem={isMobile}
+        hasOpenItem={isRowPlay && isMobile}
+      />
+      {variant === 'card' && (
+        <PlayButton label={`Play ${track.name}`} size="lg" onPlay={play.onPlay} isPlaying={play.isPlaying} />
+      )}
     </MediaRow>
   )
 }
 
 export function AlbumRow({ album, showOwner, aside, variant = 'flat' }: RowProps & { album: AlbumSummary }) {
   const isMobile = useIsMobile()
+  // Home's album cards play the whole album, loaded after the tap
+  const play = usePlayLoaded({ type: 'ALBUM', id: album.id }, () => loadAlbum(album.id))
   return (
     <MediaRow colour={album.imageBgColor} variant={variant}>
       <CoverArt imageUrl={album.imageUrl} imageBgColor={album.imageBgColor} size="sm" />
@@ -238,7 +329,9 @@ export function AlbumRow({ album, showOwner, aside, variant = 'flat' }: RowProps
       </StackItem>
       {!isMobile && aside}
       <LikeButton kind="ALBUM" id={album.id} liked={album.likedByMe} name={album.name} />
-      {variant === 'card' && <PlayButton label={`Play ${album.name}`} size="lg" />}
+      {variant === 'card' && (
+        <PlayButton label={`Play ${album.name}`} size="lg" onPlay={play.onPlay} isPlaying={play.isPlaying} />
+      )}
     </MediaRow>
   )
 }

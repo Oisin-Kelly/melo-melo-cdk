@@ -29,11 +29,6 @@ public record UpdateProfileRequest
 
     [JsonPropertyName("imageKey")] public string? ImageKey { get; set; }
 
-    [JsonPropertyName("followersPrivate")] public bool FollowersPrivate { get; set; }
-
-    [JsonPropertyName("followingsPrivate")]
-    public bool FollowingsPrivate { get; set; }
-
     // EVERYONE | FOLLOWING | NONE; omitted or null leaves the setting unchanged
     [JsonPropertyName("incomingShares")]
     public string? IncomingShares { get; set; }
@@ -111,8 +106,6 @@ public sealed class Function : BaseLambdaFunctionHandler
             City = updateProfileRequest.City,
             Country = updateProfileRequest.Country,
             Bio = updateProfileRequest.Bio,
-            FollowersPrivate = updateProfileRequest.FollowersPrivate,
-            FollowingsPrivate = updateProfileRequest.FollowingsPrivate,
             IncomingShares = updateProfileRequest.IncomingShares,
             CreatedAt = 0,
             FollowerCount = 0,

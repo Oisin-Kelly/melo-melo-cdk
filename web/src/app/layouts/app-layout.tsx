@@ -20,6 +20,9 @@ import {
 } from '@heroicons/react/24/solid'
 import { Outlet, useLocation } from 'react-router'
 import { Wordmark } from '@/components/brand/wordmark'
+import { MiniPlayer } from '@/components/player/mini-player'
+import { NowPlayingBar } from '@/components/player/now-playing-bar'
+import { PlayerProvider } from '@/components/player/player-provider'
 import { ThemeModeMenu } from '@/components/theme/theme-mode-menu'
 import { NotificationsPopover } from '@/features/activity/components/notifications-popover'
 import { GlobalSearch } from '@/features/search/components/global-search'
@@ -37,10 +40,12 @@ import './app-shell.css'
 // (logo, search, upload, bell, theme, avatar), nav on the left. Phones (below md):
 // no drawer — a slim header (bell, centred logo, upload + your avatar linking to your
 // profile) and a bottom tab bar, the tab bar sitting below AppShell in a full-height
-// column so it never covers content.
+// column so it never covers content. Once something has played, the player joins that
+// column: a bar along the bottom on desktop, a mini bar above the tabs on phones. The one
+// player sits above the layout switch, so resizing never interrupts the music.
 export function AppLayout() {
   const isMobile = useIsMobile()
-  return isMobile ? <PhoneLayout /> : <DesktopLayout />
+  return <PlayerProvider>{isMobile ? <PhoneLayout /> : <DesktopLayout />}</PlayerProvider>
 }
 
 function DesktopLayout() {
@@ -71,59 +76,62 @@ function DesktopLayout() {
   ]
 
   return (
-    <AppShell
-      height="fill"
-      variant="section"
-      // = --mm-page-pad in app-shell.css
-      contentPadding={8}
-      topNav={
-        <TopNav
-          label="MeloMelo"
-          heading={<Wordmark href="/" />}
-          centerContent={<GlobalSearch />}
-          endContent={
-            <HStack gap={2} vAlign="center">
-              <Button
-                label="Upload track"
-                href="/upload"
-                variant="secondary"
-                size="sm"
-                icon={<Icon icon={ArrowUpTrayIcon} />}
-              />
-              <NotificationsPopover />
-              <ThemeModeMenu />
-              <UserMenu />
-            </HStack>
-          }
-        />
-      }
-      sideNav={
-        <SideNav>
-          <SideNavSection title="Menu" isHeaderHidden>
-            {main.map((item) => (
-              <SideNavItem
-                key={item.label}
-                label={item.label}
-                href={item.href}
-                icon={item.icon}
-                selectedIcon={item.selectedIcon}
-                isSelected={item.isCurrent}
-              />
-            ))}
-          </SideNavSection>
-          <SidebarPlaylists />
-        </SideNav>
-      }
-    >
-      <Outlet />
-    </AppShell>
+    <div className="mm-app-frame">
+      <AppShell
+        height="fill"
+        variant="section"
+        // = --mm-page-pad in app-shell.css
+        contentPadding={8}
+        topNav={
+          <TopNav
+            label="MeloMelo"
+            heading={<Wordmark href="/" />}
+            centerContent={<GlobalSearch />}
+            endContent={
+              <HStack gap={2} vAlign="center">
+                <Button
+                  label="Upload track"
+                  href="/upload"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon={ArrowUpTrayIcon} />}
+                />
+                <NotificationsPopover />
+                <ThemeModeMenu />
+                <UserMenu />
+              </HStack>
+            }
+          />
+        }
+        sideNav={
+          <SideNav>
+            <SideNavSection title="Menu" isHeaderHidden>
+              {main.map((item) => (
+                <SideNavItem
+                  key={item.label}
+                  label={item.label}
+                  href={item.href}
+                  icon={item.icon}
+                  selectedIcon={item.selectedIcon}
+                  isSelected={item.isCurrent}
+                />
+              ))}
+            </SideNavSection>
+            <SidebarPlaylists />
+          </SideNav>
+        }
+      >
+        <Outlet />
+      </AppShell>
+      <NowPlayingBar />
+    </div>
   )
 }
 
 function PhoneLayout() {
   useLogoScrollScale()
   return (
-    <div className="mm-phone-frame">
+    <div className="mm-app-frame">
       <AppShell
         height="fill"
         variant="section"
@@ -152,6 +160,7 @@ function PhoneLayout() {
       >
         <Outlet />
       </AppShell>
+      <MiniPlayer />
       <BottomTabs />
     </div>
   )

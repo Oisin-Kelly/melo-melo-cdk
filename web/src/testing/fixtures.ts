@@ -50,8 +50,6 @@ export const user = (username: string, extra: Partial<User> = {}): User => ({
   imageBgColor: null,
   followingCount: 0,
   followerCount: 0,
-  followingsPrivate: false,
-  followersPrivate: false,
   incomingShares: 'EVERYONE',
   createdAt: 1_700_000_000_000,
   ...extra,

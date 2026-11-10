@@ -8,7 +8,6 @@ import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Icon } from '@astryxdesign/core/Icon'
 import { RadioList, RadioListItem } from '@astryxdesign/core/RadioList'
-import { Switch } from '@astryxdesign/core/Switch'
 import { Text } from '@astryxdesign/core/Text'
 import { TextArea } from '@astryxdesign/core/TextArea'
 import { VStack } from '@astryxdesign/core/VStack'
@@ -79,8 +78,6 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
   const update = useUpdateProfile()
   const initial = useMemo(() => toDraft(user), [user])
   const [text, setText] = useState(initial)
-  const [followersPrivate, setFollowersPrivate] = useState(user.followersPrivate)
-  const [followingsPrivate, setFollowingsPrivate] = useState(user.followingsPrivate)
   const [incomingShares, setIncomingShares] = useState<IncomingShares>(user.incomingShares ?? 'EVERYONE')
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
   const [isPhotoCleared, setIsPhotoCleared] = useState(false)
@@ -94,8 +91,6 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
   const hasErrors = (Object.keys(FIELD_LIMITS) as TextField[]).some(tooLong)
   const isDirty =
     (Object.keys(FIELD_LIMITS) as TextField[]).some((field) => text[field] !== initial[field]) ||
-    followersPrivate !== user.followersPrivate ||
-    followingsPrivate !== user.followingsPrivate ||
     incomingShares !== (user.incomingShares ?? 'EVERYONE') ||
     photo !== null ||
     isPhotoCleared
@@ -155,8 +150,6 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
       city: blankToNull(text.city),
       country: blankToNull(text.country),
       bio: blankToNull(text.bio),
-      followersPrivate,
-      followingsPrivate,
       incomingShares,
     }
     try {
@@ -251,19 +244,7 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
 
       <Divider />
 
-      <Section title="Privacy" description="Who can see your connections, and who can send you music.">
-        <Switch
-          label="Hide my followers"
-          description="Only you can see who follows you."
-          value={followersPrivate}
-          onChange={setFollowersPrivate}
-        />
-        <Switch
-          label="Hide who I follow"
-          description="Only you can see who you follow."
-          value={followingsPrivate}
-          onChange={setFollowingsPrivate}
-        />
+      <Section title="Privacy" description="Who can send you music.">
         <RadioList
           label="Who can share music with you"
           value={incomingShares}

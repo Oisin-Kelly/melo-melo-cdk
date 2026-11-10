@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import type { AlbumSummary, PaginatedResult, TrackSummary, UserSummary } from '@/types/api'
 
@@ -36,27 +36,6 @@ export function useFeed(type: FeedType, sort: FeedSort) {
     getNextPageParam: (page) => page.nextCursor,
     // Shares arrive with no push; pick them up when the user comes back to the tab
     refetchOnWindowFocus: true,
-  })
-}
-
-// ---- GET /me/progress: the single resume slot ----
-
-export type ProgressEntry = {
-  contextType: 'TRACK' | 'ALBUM' | 'PLAYLIST'
-  contextId: string
-  trackId: string
-  positionSeconds: number
-  /** Epoch ms. */
-  updatedAt: number
-  track: TrackSummary
-}
-
-// 204 (nothing to resume, or the track is gone / no longer shared) → null.
-export function useProgress() {
-  return useQuery({
-    queryKey: ['progress'],
-    queryFn: async () => (await api<ProgressEntry | undefined>('/me/progress')) ?? null,
-    retry: false, // a convenience card; never worth retrying
   })
 }
 

@@ -27,7 +27,7 @@ public sealed class Function : BaseLambdaFunctionHandler
     public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest request,
         ILambdaContext context, string username)
     {
-        var (requestorUsername, authError) = GetCallerUsername(request);
+        var (_, authError) = GetCallerUsername(request);
 
         if (authError is not null) return authError;
 
@@ -43,9 +43,6 @@ public sealed class Function : BaseLambdaFunctionHandler
             var user = await _userRepository.GetUserByUsername(username);
             if (user == null)
                 return Error(HttpStatusCode.NotFound, $"no user found by username {username}", "Not Found");
-
-            if (user.FollowingsPrivate && username != requestorUsername)
-                return Error(HttpStatusCode.Forbidden, $"{username} has their followings private", "Forbidden");
 
             var result = await _followRepository.GetUserFollowings(username, PageSize, cursor);
 

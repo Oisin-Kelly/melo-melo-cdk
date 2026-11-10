@@ -36,9 +36,6 @@ public sealed class UserRepository : IUserRepository
 
         HandleImageUpdate(builder, user, clearImage);
 
-        builder.AddValue("followersPrivate", "fp", user.FollowersPrivate);
-        builder.AddValue("followingsPrivate", "fip", user.FollowingsPrivate);
-
         if (user.IncomingShares is not null)
             builder.AddValue("incomingShares", "ish", user.IncomingShares);
 

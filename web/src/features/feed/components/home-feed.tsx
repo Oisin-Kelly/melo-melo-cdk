@@ -3,6 +3,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { useEffect, useRef, useState } from 'react'
 import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
+import { TrackListPlayback } from '@/components/player/track-list-playback'
 import { useMe } from '@/lib/me'
 import { useFeed, useMarkSeen, type FeedEntry as Entry, type FeedSort, type FeedType } from '../api/feed'
 import { FeedEntry } from './feed-entry'
@@ -48,25 +49,30 @@ export function HomeFeed({ type, sort }: Props) {
   const isNew = (entry: Entry) => showDividers && entry.sharedAt > (lastVisit as number)
   const hasNew = items.some(isNew)
 
+  // A track card plays the feed's loaded tracks from that card on (albums play on their own)
+  const feedTracks = items.flatMap((entry) => (entry.track ? [entry.track] : []))
+
   return (
-    <InfiniteList
-      loadingWhat="home"
-      query={feed}
-      getKey={(entry) => `${entry.type}:${entry.track?.id ?? entry.album?.id}`}
-      gap={5}
-      empty={{
-        title: type === 'ALL' ? 'Nothing shared with you yet' : `No ${type === 'TRACK' ? 'tracks' : 'albums'} shared with you yet`,
-        description: 'When friends share music with you, it lands here.',
-        icon: <Illustration name="new-shares" />,
-      }}
-      endMessage="You're all caught up"
-      renderBefore={(entry, index) => {
-        if (!hasNew) return null
-        if (index === 0 && isNew(entry)) return <SectionLabel isAccent>New since your last visit</SectionLabel>
-        if (index > 0 && !isNew(entry) && isNew(items[index - 1])) return <SectionLabel>Earlier</SectionLabel>
-        return null
-      }}
-      renderItem={(entry) => <FeedEntry entry={entry} />}
-    />
+    <TrackListPlayback context={{ type: 'LIST', id: `feed:${type}:${sort}`, name: 'Home', href: '/' }} tracks={feedTracks}>
+      <InfiniteList
+        loadingWhat="home"
+        query={feed}
+        getKey={(entry) => `${entry.type}:${entry.track?.id ?? entry.album?.id}`}
+        gap={5}
+        empty={{
+          title: type === 'ALL' ? 'Nothing shared with you yet' : `No ${type === 'TRACK' ? 'tracks' : 'albums'} shared with you yet`,
+          description: 'When friends share music with you, it lands here.',
+          icon: <Illustration name="new-shares" />,
+        }}
+        endMessage="You're all caught up"
+        renderBefore={(entry, index) => {
+          if (!hasNew) return null
+          if (index === 0 && isNew(entry)) return <SectionLabel isAccent>New since your last visit</SectionLabel>
+          if (index > 0 && !isNew(entry) && isNew(items[index - 1])) return <SectionLabel>Earlier</SectionLabel>
+          return null
+        }}
+        renderItem={(entry) => <FeedEntry entry={entry} />}
+      />
+    </TrackListPlayback>
   )
 }

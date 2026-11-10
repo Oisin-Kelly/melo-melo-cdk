@@ -56,3 +56,32 @@
 .mm-person-text > * {
   max-width: 100%;
 }
+
+/* Phones (the 767px useIsMobile breakpoint): a list of rows instead of a grid of tiles —
+   the photo as a small circle at the start, name / @username / detail beside it, left
+   aligned. Sized and inset like a flat track row (media.css .mm-row): a 3.125rem photo,
+   pulled out by its padding so the photos line up with the page edge. */
+@media (max-width: 767px) {
+  .mm-card-grid:has(> .mm-person) {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .mm-person {
+    flex-direction: row;
+    gap: var(--spacing-3);
+    margin-inline: calc(-1 * var(--spacing-2));
+    padding: var(--spacing-2);
+    border-radius: var(--radius-container);
+    text-align: start;
+  }
+  .mm-person-photo {
+    flex-shrink: 0;
+    width: var(--mm-row-media); /* like a row's cover: follows text size + density */
+  }
+  .mm-person-text {
+    align-items: flex-start;
+  }
+  html[data-mm-density='compact'] .mm-person {
+    padding-block: var(--spacing-1);
+  }
+}

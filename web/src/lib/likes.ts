@@ -13,6 +13,10 @@ import { playlistDetailKey } from '@/lib/playlists'
 
 export type LikeTarget = { kind: 'TRACK' | 'ALBUM'; id: string; liked: boolean }
 
+/** Every like goes through this mutation key, so things outside the query cache (the
+ *  player's queue) can follow likes too. */
+export const likeMutationKey = ['like'] as const
+
 type Likeable = { id: string; likedByMe: boolean }
 
 const isLikeable = (value: unknown): value is Likeable =>
@@ -57,6 +61,7 @@ const hasPages = (query: Query) => isPages(query.state.data)
 export function useToggleLike() {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: likeMutationKey,
     mutationFn: ({ kind, id, liked }: LikeTarget) =>
       api<{ newValue: boolean }>(`/${kind === 'TRACK' ? 'tracks' : 'albums'}/${id}/like`, {
         method: 'POST',

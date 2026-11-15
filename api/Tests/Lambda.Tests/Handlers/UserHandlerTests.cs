@@ -289,6 +289,15 @@ public class UserHandlerTests
     }
 
     [Fact]
+    public async Task UpdateProgress_AcceptsAListContext()
+    {
+        (await UpdateProgress.FunctionHandler(Http.As(Me), _context,
+                new UpdateProgressRequest { ContextType = "LIST", ContextId = "feed:all:newest", TrackId = "t1", PositionSeconds = 5 }))
+            .ShouldHaveStatus(HttpStatusCode.OK);
+        await _progress.Received(1).UpsertAsync(Me, ProgressContextType.List, "feed:all:newest", "t1", 5);
+    }
+
+    [Fact]
     public async Task UpdateProgress_Completed_ClearsTheSlot_IgnoringOtherFields()
     {
         (await UpdateProgress.FunctionHandler(Http.As(Me), _context, new UpdateProgressRequest { Completed = true }))

@@ -9,7 +9,11 @@ public static class ProgressContextType
     public const string Album = "ALBUM";
     public const string Playlist = "PLAYLIST";
 
-    public static readonly string[] All = [Track, Album, Playlist];
+    // A list the web app rebuilds itself (Home, a profile's tracks): contextId is its own
+    // list id, which the server only stores
+    public const string List = "LIST";
+
+    public static readonly string[] All = [Track, Album, Playlist, List];
 }
 
 public record UpdateProgressRequest

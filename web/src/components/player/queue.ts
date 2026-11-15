@@ -88,15 +88,10 @@ export function start(
   const order = state.isShuffled
     ? [first, ...shuffled(identity(tracks.length).filter((i) => i !== first), random)]
     : identity(tracks.length)
-  return {
-    ...state,
-    context,
-    tracks,
-    order,
-    orderPos: order.indexOf(first),
-    timeline: [tracks[first]],
-    cursor: 0,
-  }
+  // In order, the tracks above the one tapped count as already played, so Back walks up
+  // the list from it (Next then comes forward again); shuffled, there's no "above"
+  const timeline = state.isShuffled ? [tracks[first]] : tracks.slice(0, first + 1)
+  return withTimeline({ ...state, context, tracks, order, orderPos: order.indexOf(first) }, timeline, timeline.length - 1)
 }
 
 /** The state after Next, or null when there's nothing left (playback stops). */
@@ -133,6 +128,18 @@ export function peekNext(state: QueueState): TrackSummary | null {
   const pos = state.orderPos + 1
   if (pos < state.order.length) return state.tracks[state.order[pos]]
   return state.repeat === 'all' && !state.isShuffled ? (state.tracks[0] ?? null) : null
+}
+
+/** A track liked or unliked: its copies in the queue say so (the heart in Now playing). */
+export function setLiked(state: QueueState, trackId: string, liked: boolean): QueueState {
+  const patch = (tracks: TrackSummary[]) =>
+    tracks.some((t) => t.id === trackId && t.likedByMe !== liked)
+      ? tracks.map((t) => (t.id === trackId ? { ...t, likedByMe: liked } : t))
+      : tracks
+  const [tracks, timeline, upNext] = [patch(state.tracks), patch(state.timeline), patch(state.upNext)]
+  return tracks === state.tracks && timeline === state.timeline && upNext === state.upNext
+    ? state
+    : { ...state, tracks, timeline, upNext }
 }
 
 /** What's coming, for the queue view: the listener's own queue, then the rest of the

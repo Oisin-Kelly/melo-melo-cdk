@@ -8,7 +8,15 @@ import { StackItem } from '@astryxdesign/core/Stack'
 import { Text } from '@astryxdesign/core/Text'
 import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
-import { EllipsisHorizontalIcon, PencilIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  EllipsisHorizontalIcon,
+  ForwardIcon,
+  MinusCircleIcon,
+  PencilIcon,
+  QueueListIcon,
+  TrashIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageLoader } from '@/components/feedback/page-loader'
@@ -121,12 +129,12 @@ function PlaylistActions({
           // The whole playlist into the queue (with nothing playing, it just plays)
           ...(queue && playContext
             ? [
-                { label: 'Play next', onClick: () => queue.playNext(playTracks, playContext) },
-                { label: 'Add to queue', onClick: () => queue.addToQueue(playTracks, playContext) },
+                { label: 'Play next', icon: ForwardIcon, onClick: () => queue.playNext(playTracks, playContext) },
+                { label: 'Add to queue', icon: QueueListIcon, onClick: () => queue.addToQueue(playTracks, playContext) },
                 { type: 'divider' as const },
               ]
             : []),
-          { label: 'Delete playlist', variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
+          { label: 'Delete playlist', icon: TrashIcon, variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
         ]}
       />
 
@@ -331,6 +339,7 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
                   { type: 'divider' },
                   {
                     label: 'Remove from this playlist',
+                    icon: MinusCircleIcon,
                     variant: 'destructive',
                     onClick: () => setRemoving(entry),
                   },

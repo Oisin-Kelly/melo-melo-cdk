@@ -34,7 +34,7 @@ public sealed class Function : BaseLambdaFunctionHandler
         {
             contextType = progressRequest.ContextType?.Trim().ToUpperInvariant();
             if (contextType is null || !ProgressContextType.All.Contains(contextType))
-                return Error(HttpStatusCode.BadRequest, "contextType must be TRACK, ALBUM or PLAYLIST", "Bad Request");
+                return Error(HttpStatusCode.BadRequest, "contextType must be TRACK, ALBUM, PLAYLIST or LIST", "Bad Request");
             if (string.IsNullOrWhiteSpace(progressRequest.ContextId) || string.IsNullOrWhiteSpace(progressRequest.TrackId))
                 return Error(HttpStatusCode.BadRequest, "contextId and trackId are required", "Bad Request");
             if (progressRequest.PositionSeconds is null or < 0)

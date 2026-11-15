@@ -3,45 +3,39 @@ import { Divider } from '@astryxdesign/core/Divider'
 import type { DropdownMenuOption } from '@astryxdesign/core/DropdownMenu'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Icon } from '@astryxdesign/core/Icon'
-import { Link } from '@astryxdesign/core/Link'
 import { Text } from '@astryxdesign/core/Text'
 import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
-import { ArrowDownTrayIcon, UserPlusIcon } from '@heroicons/react/24/outline'
-import { Fragment, useState, type ReactNode } from 'react'
+import { ArrowDownTrayIcon, MinusCircleIcon, PencilIcon, TrashIcon, UserPlusIcon } from '@heroicons/react/24/outline'
+import { Fragment, type ReactNode } from 'react'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
-import { EditDetailsDialog } from '@/components/forms/edit-details-dialog'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
 import { LikeButton, TrackMenu } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
-import { usePlayContext } from '@/components/player/use-player'
-import { ShareDialog, type ShareTab } from '@/components/sharing/share-dialog'
+import { usePlayTrack } from '@/components/player/use-player'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
-import { LIMITS } from '@/config/limits'
 import { useIsCompact } from '@/hooks/use-is-compact'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
-import { trackPath, trackPeoplePath, useCanonicalPath } from '@/lib/links'
-import { PREVIEW_CLIP_SECONDS } from '@/lib/share-links'
+import { trackEditPath, trackPath, trackPeoplePath, useCanonicalPath } from '@/lib/links'
 import { formatDate, formatDuration, toUnixSeconds } from '@/utils/format'
 import {
   trackDetailKey,
   useDeleteTrack,
   useDownloadOriginal,
   useRemoveTrackFromLibrary,
-  useShareTrack,
   useTrack,
   useTrackLikers,
   useTrackRecipients,
-  useUpdateTrack,
   type Track,
 } from '../api/tracks'
 import { PersonRow } from './person-row'
+import { PREVIEW, SeeAll, SharedWith, TrackShareDialog } from './track-sharing'
 
 const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`
 
@@ -55,11 +49,8 @@ export function TrackPage({ trackId }: { trackId: string }) {
   const isCompact = useIsCompact()
   const [isSharing, setIsSharing, shareTab] = useSharingState()
   useCanonicalPath(detail.data && trackPath(detail.data))
-  // A track's own page plays just that track
-  const play = usePlayContext(
-    detail.data ? { type: 'TRACK', id: trackId, name: detail.data.name, href: trackPath(detail.data) } : null,
-    detail.data ? [detail.data] : [],
-  )
+  // A track's own page plays just that track (or pauses it, wherever it's playing from)
+  const play = usePlayTrack(detail.data)
 
   if (detail.isPending) return <PageLoader what="track" />
 
@@ -157,11 +148,10 @@ function Placeholder({ children }: { children: ReactNode }) {
 // Header actions. Everyone: play, like, add to a playlist. Owners also share, edit and
 // delete; recipients can take it out of their library (the mirror of the owner unsharing).
 function TrackActions({ track, isOwner, onShare }: { track: Track; isOwner: boolean; onShare: () => void }) {
-  const update = useUpdateTrack(track.id)
   const remove = useDeleteTrack(track.id)
   const leave = useRemoveTrackFromLibrary(track.id)
   const download = useDownloadOriginal(track.id)
-  const [isEditing, setIsEditing] = useState(false)
+  const isMobile = useIsMobile()
   const confirmLeave = useConfirmLeave({
     what: 'track',
     name: track.name,
@@ -180,115 +170,36 @@ function TrackActions({ track, isOwner, onShare }: { track: Track; isOwner: bool
 
   const menuItems: DropdownMenuOption[] = isOwner
     ? [
-        { label: 'Edit details', onClick: () => setIsEditing(true) },
+        { label: 'Edit track', icon: PencilIcon, href: trackEditPath(track) },
         // The file exactly as uploaded (wav, flac…), not the streaming copy
         { label: 'Download original', icon: ArrowDownTrayIcon, onClick: () => download.mutate() },
         { type: 'divider' },
-        { label: 'Delete track', variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
+        { label: 'Delete track', icon: TrashIcon, variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
       ]
     : [
         { type: 'divider' },
-        { label: 'Remove from my library', variant: 'destructive', onClick: () => confirmLeave.ask('leave') },
+        { label: 'Remove from my library', icon: MinusCircleIcon, variant: 'destructive', onClick: () => confirmLeave.ask('leave') },
       ]
 
   return (
     <>
       {isOwner && <Button label="Share" variant="secondary" icon={<Icon icon={UserPlusIcon} />} onClick={onShare} />}
+      {/* Everything about the track (details, its file, who has it) on its own page */}
+      {/* (phones: just the pencil, or ⋯ wraps onto its own line on an SE) */}
+      {isOwner && (
+        <Button
+          label="Edit"
+          variant="secondary"
+          icon={<Icon icon={PencilIcon} />}
+          isIconOnly={isMobile}
+          href={trackEditPath(track)}
+        />
+      )}
       <LikeButton kind="TRACK" id={track.id} liked={track.likedByMe} name={track.name} />
       <TrackMenu track={track} extraItems={menuItems} />
 
-      {isOwner && (
-        <EditDetailsDialog
-          isOpen={isEditing}
-          onOpenChange={setIsEditing}
-          title="Edit track"
-          initial={{ name: track.name, genre: track.genre ?? '', description: track.description ?? '' }}
-          descriptionLimit={LIMITS.trackDescription}
-          cover={{ imageUrl: track.imageUrl, imageBgColor: track.imageBgColor }}
-          url={track.slug ? { pathPrefix: `/${track.owner.username}/`, slug: track.slug } : undefined}
-          isSaving={update.isPending}
-          onSave={({ name, genre, description, cover, slug }) =>
-            update.mutateAsync({ name, genre: genre ?? '', description, cover: cover.file, clearCover: cover.clear, slug })
-          }
-        />
-      )}
       {confirmLeave.dialog}
     </>
-  )
-}
-
-function TrackShareDialog({ track, isOpen, onOpenChange, initialTab }: {
-  track: Track
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
-  initialTab: ShareTab
-}) {
-  const recipients = useTrackRecipients(track.id, isOpen)
-  const share = useShareTrack(track.id)
-  return (
-    <ShareDialog
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      name={track.name}
-      kind="track"
-      subtitle="They can listen to it and add it to their playlists."
-      recipients={recipients}
-      share={share}
-      links={{ kind: 'TRACK', id: track.id, isShortTrack: track.duration <= PREVIEW_CLIP_SECONDS }}
-      initialTab={initialTab}
-    />
-  )
-}
-
-/** How many people the Shared with / Liked by sections show before "See all". */
-const PREVIEW = 3
-
-// "See all (24)" under a section that has more than it shows, to the full list's screen
-function SeeAll({ href, count }: { href: string; count: number }) {
-  return (
-    <Link href={href} type="supporting" weight="semibold" color="primary">
-      See all ({count.toLocaleString()})
-    </Link>
-  )
-}
-
-// Owner-only: the first few people it's shared with directly (album shares grant access
-// too, but are managed on the album), "See all" for the rest, and Manage access
-function SharedWith({ track, onManage }: { track: Track; onManage: () => void }) {
-  const recipients = useTrackRecipients(track.id, true)
-
-  if (recipients.isPending) return <PageLoader compact what="sharedWith" />
-  if (recipients.isError) {
-    return (
-      <Text type="supporting" color="secondary">
-        Couldn't load who it's shared with.
-      </Text>
-    )
-  }
-  if (recipients.data.length === 0) {
-    return (
-      <Text type="supporting" color="secondary">
-        Not shared with anyone yet.
-      </Text>
-    )
-  }
-  return (
-    <VStack gap={2}>
-      <VStack gap={0}>
-        {recipients.data.slice(0, PREVIEW).map((recipient) => (
-          <PersonRow key={recipient.user.username} user={recipient.user}>
-            Shared <Timestamp value={toUnixSeconds(recipient.sharedAt)} format="relative" />
-          </PersonRow>
-        ))}
-      </VStack>
-      <HStack gap={4} vAlign="center">
-        {/* Sharing with someone new is the header's Share; this is for the people listed */}
-        <Button label="Manage access" variant="secondary" size="sm" onClick={onManage} />
-        {recipients.data.length > PREVIEW && (
-          <SeeAll href={trackPeoplePath(track, 'shared-with')} count={recipients.data.length} />
-        )}
-      </HStack>
-    </VStack>
   )
 }
 

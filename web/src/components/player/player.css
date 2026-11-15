@@ -191,10 +191,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-4);
-  min-height: 42dvh;
-  /* clear of the grab handle at the top */
-  padding: var(--spacing-8) var(--spacing-6) var(--spacing-6);
+  gap: var(--spacing-2);
+  /* clear of the grab handle at the top; the cover the same distance from the sides and
+     the foot */
+  padding: var(--spacing-6) var(--spacing-6) var(--spacing-6);
   border-end-start-radius: 2.5rem;
   border-end-end-radius: 2.5rem;
   background: linear-gradient(
@@ -203,11 +203,16 @@
     color-mix(in oklch, var(--mm-tint-base) 32%, var(--color-background-surface))
   );
 }
-/* Square, as wide as the block allows, short enough on an SE to keep the controls in view;
-   its corners concentric with the block's (2.5rem − the block's 1.5rem padding) */
+/* Square and as wide as the block allows, so its padding is even on three sides; when
+   the screen is too short for that (Safari with its toolbars out), the height left once
+   everything else in view is counted (26.25rem: the sheet's top gap, the playing-from row,
+   the block's padding, the title, the scrubber, the controls and a little room under
+   them), but never smaller than 11rem (an SE scrolls a little instead). Its corners
+   concentric with the block's (2.5rem − the block's 1.5rem padding) */
 .mm-now-cover {
   display: block;
-  width: min(100%, 22rem, 27dvh);
+  width: min(100%, 26rem, max(11rem, calc(100dvh - 26.25rem)));
+  line-height: 0;
 }
 .mm-now-cover .mm-cover {
   width: 100%;
@@ -222,11 +227,16 @@
 }
 .mm-now-owner {
   font-size: var(--font-size-lg);
+  line-height: 1.3;
+}
+.mm-now-heading {
+  min-height: calc(var(--font-size-xl) * 1.25 * 2 + var(--font-size-lg) * 1.3 + var(--spacing-0-5));
 }
 /* "Playing from": kept to one line, the name cut off before the icon is */
 .mm-now-from {
   max-width: 100%;
   min-width: 0;
+  min-height: 1.5rem;
 }
 
 /* The big play button in the middle of the controls */

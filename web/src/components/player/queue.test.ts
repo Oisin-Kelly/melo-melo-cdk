@@ -73,6 +73,26 @@ describe('queue', () => {
     expect(now(next(playNext(backOnA, [d])))).toBe('d')
   })
 
+  it('started mid-list, Back walks up the list from there and Next comes forward again', () => {
+    const state = start(emptyQueue, album, [a, b, c, d], 2)
+    expect(now(state)).toBe('c')
+    expect(ids(upcoming(state).fromContext)).toEqual(['d'])
+    const up = back(state)!
+    expect(now(up)).toBe('b')
+    // The queue view: c again, then the rest of the list, nothing twice
+    expect(ids(upcoming(up).replay)).toEqual(['c'])
+    expect(ids(upcoming(up).fromContext)).toEqual(['d'])
+    expect(now(back(up))).toBe('a')
+    expect(back(back(up)!)).toBeNull()
+    expect(now(skip(up, 2))).toBe('d')
+    expect(skip(up, 3)).toBeNull()
+  })
+
+  it('started mid-list while shuffled, Back has nothing above it', () => {
+    const state = start(setShuffle(emptyQueue, true), album, [a, b, c, d], 2, keep)
+    expect(back(state)).toBeNull()
+  })
+
   it('Back at the first track has nowhere to go (the player restarts it)', () => {
     expect(back(start(emptyQueue, album, [a, b]))).toBeNull()
   })

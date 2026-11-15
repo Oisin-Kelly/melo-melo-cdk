@@ -4,7 +4,15 @@ import { HStack } from '@astryxdesign/core/HStack'
 import { Icon } from '@astryxdesign/core/Icon'
 import { IconButton } from '@astryxdesign/core/IconButton'
 import { VStack } from '@astryxdesign/core/VStack'
-import { EllipsisHorizontalIcon, UserPlusIcon } from '@heroicons/react/24/outline'
+import {
+  EllipsisHorizontalIcon,
+  ForwardIcon,
+  MinusCircleIcon,
+  PencilIcon,
+  QueueListIcon,
+  TrashIcon,
+  UserPlusIcon,
+} from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
@@ -81,19 +89,19 @@ function AlbumActions({
   const queueItems: DropdownMenuOption[] =
     queue && playContext
       ? [
-          { label: 'Play next', onClick: () => queue.playNext(playTracks, playContext) },
-          { label: 'Add to queue', onClick: () => queue.addToQueue(playTracks, playContext) },
+          { label: 'Play next', icon: ForwardIcon, onClick: () => queue.playNext(playTracks, playContext) },
+          { label: 'Add to queue', icon: QueueListIcon, onClick: () => queue.addToQueue(playTracks, playContext) },
           { type: 'divider' },
         ]
       : []
   const menu: DropdownMenuOption[] = isOwner
     ? [
         ...queueItems,
-        { label: 'Edit details', onClick: () => setIsEditing(true) },
+        { label: 'Edit details', icon: PencilIcon, onClick: () => setIsEditing(true) },
         { type: 'divider' },
-        { label: 'Delete album', variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
+        { label: 'Delete album', icon: TrashIcon, variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
       ]
-    : [...queueItems, { label: 'Remove from my library', variant: 'destructive', onClick: () => confirmLeave.ask('leave') }]
+    : [...queueItems, { label: 'Remove from my library', icon: MinusCircleIcon, variant: 'destructive', onClick: () => confirmLeave.ask('leave') }]
 
   return (
     <>

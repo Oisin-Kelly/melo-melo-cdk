@@ -14,6 +14,9 @@ export type TrackStream = {
   duration: number
 }
 
+/** What the player needs: the URL, and when it stops working. */
+export type StreamUrl = Pick<TrackStream, 'url' | 'expiresAt'>
+
 // Not under ['tracks', …]: invalidating tracks (after an edit, say) mustn't throw away a
 // URL that still works
 export const streamKey = (trackId: string) => ['stream', trackId] as const
@@ -21,7 +24,7 @@ export const streamKey = (trackId: string) => ['stream', trackId] as const
 /** Swap for a new URL this long before the old one expires, so it never runs out mid-play. */
 const EXPIRY_MARGIN_MS = 10 * 60_000
 
-export async function fetchStreamUrl(queryClient: QueryClient, trackId: string, fresh = false): Promise<string> {
+export async function fetchStreamUrl(queryClient: QueryClient, trackId: string, fresh = false): Promise<StreamUrl> {
   const stream = await queryClient.fetchQuery({
     queryKey: streamKey(trackId),
     queryFn: () => api<TrackStream>(`/tracks/${trackId}/stream`),
@@ -31,5 +34,5 @@ export async function fetchStreamUrl(queryClient: QueryClient, trackId: string, 
     gcTime: 6 * 60 * 60_000,
     retry: false,
   })
-  return stream.url
+  return { url: stream.url, expiresAt: stream.expiresAt }
 }

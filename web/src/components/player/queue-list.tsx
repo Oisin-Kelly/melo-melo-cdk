@@ -9,6 +9,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { CoverArt } from '@/components/media/cover-art'
 import type { TrackSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
+import { ownTouches } from './own-touches'
 import { currentTrack, upcoming } from './queue'
 import { useDragReorder } from './use-drag-reorder'
 import { usePlayer, usePlayerState } from './use-player'
@@ -71,7 +72,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 function DragHandle({ name, ...props }: { name: string } & ReturnType<ReturnType<typeof useDragReorder>['handleProps']>) {
   return (
-    <button type="button" className="mm-queue-handle" aria-label={`Move ${name} (or use the arrow keys)`} {...props}>
+    <button type="button" className="mm-queue-handle" ref={ownTouches} aria-label={`Move ${name} (or use the arrow keys)`} {...props}>
       <Icon icon={Bars2Icon} color="secondary" />
     </button>
   )

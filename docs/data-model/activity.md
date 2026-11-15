@@ -20,7 +20,7 @@ Recipient-perspective, written in the triggering operation's batch/transaction (
 |----|-----|
 | `USER#{username}` | `PROGRESS#LATEST` |
 
-Attributes: `contextType`, `contextId`, `trackId`, `positionSeconds`, `updatedAt`, `expiresAt` (table TTL — 30-day self-expiry, shares the attribute with upload status). No GSI — a single resume slot per user, overwritten by every heartbeat regardless of context and deleted on `completed`, so both reads and writes are keyed point operations.
+Attributes: `contextType` (`TRACK`/`ALBUM`/`PLAYLIST`, or `LIST` — a list the web app rebuilds itself, such as Home or a profile's tracks, whose `contextId` is the app's own list id), `contextId`, `trackId`, `positionSeconds`, `updatedAt`, `expiresAt` (table TTL — 30-day self-expiry, shares the attribute with upload status). No GSI — a single resume slot per user, overwritten by every heartbeat regardless of context and deleted on `completed`, so both reads and writes are keyed point operations.
 
 ---
 

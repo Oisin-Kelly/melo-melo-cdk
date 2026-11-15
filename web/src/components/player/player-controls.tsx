@@ -13,6 +13,7 @@ import { profilePath } from '@/lib/links'
 import type { TrackSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
 import { formatDuration } from '@/utils/format'
+import { ownTouches } from './own-touches'
 import { useCurrentTrack, usePlaybackPosition, usePlayer, usePlayerState, usePlayingFrom } from './use-player'
 
 // The pieces the desktop bar and the phone's Now playing sheet are made of.
@@ -188,7 +189,7 @@ export function Scrubber({ layout = 'beside' }: { layout?: 'beside' | 'below' })
     </Text>
   )
   const slider = (
-    <span className="mm-player-slider">
+    <span className="mm-player-slider" ref={ownTouches}>
       <Slider
         label="Seek"
         isLabelHidden

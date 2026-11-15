@@ -1,5 +1,6 @@
 import type { TrackSummary } from '@/types/api'
 import { PlayerEngine, type EngineSnapshot } from './player-engine'
+import type { StreamUrl } from './stream'
 import {
   addToQueue,
   back,
@@ -13,6 +14,7 @@ import {
   peekNext,
   playNext,
   removeFromQueue,
+  setLiked,
   setShuffle,
   start,
   type PlayContext,
@@ -22,11 +24,11 @@ import {
 
 /** What PUT /me/progress takes: where to resume, or that there's nothing to resume. */
 export type ProgressReport =
-  | { contextType: 'TRACK' | 'ALBUM' | 'PLAYLIST'; contextId: string; trackId: string; positionSeconds: number }
+  | { contextType: PlayContext['type']; contextId: string; trackId: string; positionSeconds: number }
   | { completed: true }
 
 type Options = {
-  getStreamUrl: (trackId: string, fresh: boolean) => Promise<string>
+  getStreamUrl: (trackId: string, fresh: boolean) => Promise<StreamUrl>
   /** A track couldn't be played; the player has already moved on if it could. */
   onTrackError: (track: TrackSummary) => void
   /** Play was pressed on something whose tracks couldn't be loaded. */
@@ -75,6 +77,10 @@ export class Player {
   private failures = 0
   private heartbeat: ReturnType<typeof setInterval> | null = null
   private lastStatus: EngineSnapshot['status'] = 'idle'
+  /** Whether this tab has played anything: one that only holds a restored or cued queue
+   *  never saves the resume point, or hiding it would overwrite what another tab or
+   *  device has played since. */
+  private hasPlayed = false
 
   constructor(options: Options, audio?: HTMLAudioElement) {
     this.options = options
@@ -114,6 +120,7 @@ export class Player {
     const was = this.lastStatus
     this.lastStatus = status
     if (status === 'playing') {
+      this.hasPlayed = true
       this.failures = 0
       this.heartbeat ??= setInterval(() => this.saveProgress(), PROGRESS_EVERY_MS)
     } else if (this.heartbeat) {
@@ -128,6 +135,7 @@ export class Player {
   private loadCurrent(startAt = 0, autoplay = true) {
     const track = currentTrack(this.queue)
     if (!track) return
+    if (autoplay) this.hasPlayed = true
     void this.engine.load(track.id, { startAt, autoplay })
     this.saveProgress(startAt)
     const upcoming = peekNext(this.queue)
@@ -163,14 +171,12 @@ export class Player {
     const track = currentTrack(this.queue)
     const { context } = this.queue
     this.save(position)
-    if (!track || !context) return
-    // A track from the listener's own queue isn't part of the context, and a list (a
-    // profile's tracks) can't be reopened by the server: those resume as the track alone
+    if (!track || !context || !this.hasPlayed) return
+    // A track from the listener's own queue isn't part of the context: it resumes alone
     const isInContext = this.queue.tracks.some((t) => t.id === track.id)
-    const reopenable = isInContext && context.type !== 'LIST' ? context.type : null
     this.options.reportProgress?.({
-      contextType: reopenable ?? 'TRACK',
-      contextId: reopenable ? context.id : track.id,
+      contextType: isInContext ? context.type : 'TRACK',
+      contextId: isInContext ? context.id : track.id,
       trackId: track.id,
       positionSeconds: Math.floor(position),
     })
@@ -292,6 +298,12 @@ export class Player {
 
   addToQueue(tracks: TrackSummary[]) {
     this.setQueue(addToQueue(this.queue, tracks))
+  }
+
+  /** A track was liked or unliked somewhere in the app. */
+  setLiked(trackId: string, liked: boolean) {
+    const queue = setLiked(this.queue, trackId, liked)
+    if (queue !== this.queue) this.setQueue(queue)
   }
 
   /** A row tapped in the queue view: play it now. */

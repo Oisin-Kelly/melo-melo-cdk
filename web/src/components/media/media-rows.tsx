@@ -7,7 +7,14 @@ import { Link } from '@astryxdesign/core/Link'
 import { Text } from '@astryxdesign/core/Text'
 import { StackItem } from '@astryxdesign/core/Stack'
 import { VStack } from '@astryxdesign/core/VStack'
-import { EllipsisHorizontalIcon, HeartIcon as HeartOutline } from '@heroicons/react/24/outline'
+import {
+  EllipsisHorizontalIcon,
+  ForwardIcon,
+  HeartIcon as HeartOutline,
+  MusicalNoteIcon,
+  PlusCircleIcon,
+  QueueListIcon,
+} from '@heroicons/react/24/outline'
 import { HeartIcon as HeartSolid, PauseIcon, PlayIcon } from '@heroicons/react/24/solid'
 import type { ReactNode } from 'react'
 import { useIsMobile } from '@/hooks/use-is-mobile'
@@ -156,7 +163,7 @@ export function TrackMenu({
         />
       )}
       items={[
-        ...(hasOpenItem ? [{ label: 'Go to track', href: trackPath(track) }] : []),
+        ...(hasOpenItem ? [{ label: 'Go to track', icon: MusicalNoteIcon, href: trackPath(track) }] : []),
         ...(hasLikeItem
           ? [
               {
@@ -168,11 +175,11 @@ export function TrackMenu({
           : []),
         ...(queue
           ? [
-              { label: 'Play next', onClick: () => queue.playNext([track]) },
-              { label: 'Add to queue', onClick: () => queue.addToQueue([track]) },
+              { label: 'Play next', icon: ForwardIcon, onClick: () => queue.playNext([track]) },
+              { label: 'Add to queue', icon: QueueListIcon, onClick: () => queue.addToQueue([track]) },
             ]
           : []),
-        { label: 'Add to playlist', items: playlistItems },
+        { label: 'Add to playlist', icon: PlusCircleIcon, items: playlistItems },
         ...extraItems,
       ]}
     />

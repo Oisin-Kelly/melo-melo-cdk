@@ -4,13 +4,16 @@
 // catches up with the download ('waiting') and carries on when data arrives ('playing'),
 // and a seek into a part it hasn't fetched just opens a new range request there. All
 // this class adds is the stream URL, status for the UI, and one recovery: a presigned URL
-// that has expired (a tab left paused for hours) is fetched afresh and playback picks up
-// at the same second.
+// that has expired is fetched afresh and playback picks up at the same second, both when
+// the file fails and, before it can, when Play resumes a track paused past its URL's
+// expiry (a tab left overnight). The status only says playing once the element does.
 //
 // iOS only lets audio start from a tap, and only on an element a tap has started. So
 // every play from a tap calls unlock() first, synchronously, before any network wait,
 // and the app swaps the src of this one element rather than making new ones, which is
 // also what lets the next track start by itself with the screen locked.
+
+import type { StreamUrl } from './stream'
 
 export type EngineStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'ended' | 'error'
 
@@ -24,12 +27,15 @@ export type EngineSnapshot = {
 
 type Options = {
   /** The track's stream URL; `fresh` skips any cached one (after the old one failed). */
-  getStreamUrl: (trackId: string, fresh: boolean) => Promise<string>
+  getStreamUrl: (trackId: string, fresh: boolean) => Promise<StreamUrl>
   /** The track played to its end by itself. */
   onEnded: () => void
   /** The track couldn't be played (gone, no access, or the network failed twice). */
   onError: (trackId: string) => void
 }
+
+/** A URL this close to expiring isn't resumed on: S3 would refuse the rest of the file. */
+const EXPIRY_MARGIN_MS = 60_000
 
 export class PlayerEngine {
   readonly audio: HTMLAudioElement
@@ -41,6 +47,12 @@ export class PlayerEngine {
   private loadToken = 0
   private hasRetried = false
   private isUnlocked = false
+  /** The current track's stream URL, and where it was when unlock() swapped in the silent
+   *  clip (a track restored paused, then Play as the first tap): play() puts it back. */
+  private source: StreamUrl | null = null
+  private sourceAt = 0
+  /** Where a just-set source starts, until its index has loaded. */
+  private pendingStartAt = 0
   /** The stream URL is on its way (no src to play yet). */
   private isFetching = false
   /** Whether the listener wants it playing: a pause while the URL is on its way sticks. */
@@ -117,6 +129,8 @@ export class PlayerEngine {
   unlock() {
     if (this.isUnlocked) return
     this.isUnlocked = true
+    // A track already loaded (restored paused): remember where, for play() to go back to it
+    if (this.isOwnSource()) this.sourceAt = this.audio.readyState > 0 ? this.audio.currentTime : this.pendingStartAt
     this.audio.src = silentClip()
     this.audio.play().catch(() => {})
   }
@@ -128,10 +142,10 @@ export class PlayerEngine {
     this.hasRetried = false
     this.wantsToPlay = autoplay
     this.set({ status: autoplay ? 'loading' : 'paused', isBuffering: false, duration: 0 })
-    let url: string
+    let stream: StreamUrl
     this.isFetching = true
     try {
-      url = await this.options.getStreamUrl(trackId, false)
+      stream = await this.options.getStreamUrl(trackId, false)
     } catch {
       if (token !== this.loadToken) return
       this.isFetching = false
@@ -142,15 +156,22 @@ export class PlayerEngine {
     if (token !== this.loadToken) return
     this.isFetching = false
     // Paused while the URL was on its way: load it, but don't start
-    this.setSource(url, startAt, this.wantsToPlay)
+    this.setSource(stream, startAt, this.wantsToPlay)
   }
 
-  private setSource(url: string, startAt: number, autoplay: boolean) {
+  private setSource(stream: StreamUrl, startAt: number, autoplay: boolean) {
     const audio = this.audio
-    audio.src = url
-    if (startAt > 0) {
-      audio.addEventListener('loadedmetadata', () => (audio.currentTime = startAt), { once: true })
-    }
+    this.source = stream
+    this.pendingStartAt = startAt
+    audio.src = stream.url
+    audio.addEventListener(
+      'loadedmetadata',
+      () => {
+        if (startAt > 0) audio.currentTime = startAt
+        this.pendingStartAt = 0
+      },
+      { once: true },
+    )
     if (autoplay) void this.play()
     else this.set({ status: 'paused' })
   }
@@ -161,13 +182,44 @@ export class PlayerEngine {
     // Play again before the URL arrived (after a pause): load() starts it when it does
     if (this.isFetching) return this.set({ status: 'loading' })
     if (this.snapshot.status === 'ended') this.audio.currentTime = 0
-    if (this.snapshot.status !== 'loading') this.set({ status: 'playing' })
+    // Waiting on the element: its 'playing' event says when it really has started
+    if (this.snapshot.status !== 'playing') this.set({ status: 'loading' })
+    // unlock() swapped the loaded track for the silent clip: back to it, where it was
+    const isSwapped = !this.isOwnSource()
+    const at = isSwapped ? this.sourceAt : this.audio.currentTime
+    if (this.source && this.source.expiresAt - Date.now() < EXPIRY_MARGIN_MS) return void this.refresh(at)
+    if (isSwapped && this.source) {
+      this.audio.src = this.source.url
+      if (at > 0) this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = at), { once: true })
+    }
     try {
       await this.audio.play()
     } catch (error) {
-      // AbortError: a newer load replaced this one. NotAllowedError: the browser wants a
-      // tap first (e.g. resuming after a reload) — show it as paused, ready for that tap.
-      if ((error as Error).name === 'NotAllowedError') this.set({ status: 'paused', isBuffering: false })
+      const { name } = error as Error
+      // A newer load replaced this one: that one has its own status
+      if (name === 'AbortError') return
+      // The browser wants a tap first (e.g. resuming after a reload): paused, ready for it
+      if (name === 'NotAllowedError') return this.set({ status: 'paused', isBuffering: false })
+      // Anything else: the file can't be played as it is
+      void this.recover()
+    }
+  }
+
+  /** Resuming on a URL that has expired (or is about to): carry on at `at` from a fresh one. */
+  private async refresh(at: number) {
+    const token = this.loadToken
+    const trackId = this.trackId!
+    this.isFetching = true
+    try {
+      const stream = await this.options.getStreamUrl(trackId, true)
+      if (token !== this.loadToken) return
+      this.isFetching = false
+      this.setSource(stream, at, this.wantsToPlay)
+    } catch {
+      if (token !== this.loadToken) return
+      this.isFetching = false
+      this.set({ status: 'error' })
+      this.options.onError(trackId)
     }
   }
 
@@ -201,6 +253,7 @@ export class PlayerEngine {
     this.loadToken++
     this.isFetching = false
     this.trackId = null
+    this.source = null
     this.audio.pause()
     this.audio.removeAttribute('src')
     this.audio.load()
@@ -218,9 +271,9 @@ export class PlayerEngine {
     if (!this.hasRetried) {
       this.hasRetried = true
       try {
-        const url = await this.options.getStreamUrl(trackId, true)
+        const stream = await this.options.getStreamUrl(trackId, true)
         if (token !== this.loadToken) return
-        this.setSource(url, at, wasPlaying)
+        this.setSource(stream, at, wasPlaying)
         return
       } catch {
         if (token !== this.loadToken) return

@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { sileo } from 'sileo'
 import { api } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
+import { likeMutationKey, type LikeTarget } from '@/lib/likes'
 import { fetchResumePoint, loadResumeContext } from './load-context'
 import { useMediaSession } from './media-session'
 import { Player } from './player'
@@ -69,6 +70,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       player.stop()
     }
   }, [player, username])
+
+  // The queue holds its own copies of the tracks: a like anywhere (a row's heart, the
+  // track page, Now playing's) flips them too, and back if it fails
+  useEffect(
+    () =>
+      queryClient.getMutationCache().subscribe((event) => {
+        if (event.type !== 'updated' || event.mutation.options.mutationKey?.[0] !== likeMutationKey[0]) return
+        const target = event.mutation.state.variables as LikeTarget | undefined
+        if (target?.kind !== 'TRACK') return
+        if (event.action.type === 'pending') player.setLiked(target.id, target.liked)
+        if (event.action.type === 'error') player.setLiked(target.id, !target.liked)
+      }),
+    [player, queryClient],
+  )
 
   return (
     <PlayerContext.Provider value={player}>

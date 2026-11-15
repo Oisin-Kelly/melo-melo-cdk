@@ -3,6 +3,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { useEffect, useRef, useState } from 'react'
 import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
+import { feedContext } from '@/components/player/load-context'
 import { TrackListPlayback } from '@/components/player/track-list-playback'
 import { useMe } from '@/lib/me'
 import { useFeed, useMarkSeen, type FeedEntry as Entry, type FeedSort, type FeedType } from '../api/feed'
@@ -53,7 +54,7 @@ export function HomeFeed({ type, sort }: Props) {
   const feedTracks = items.flatMap((entry) => (entry.track ? [entry.track] : []))
 
   return (
-    <TrackListPlayback context={{ type: 'LIST', id: `feed:${type}:${sort}`, name: 'Home', href: '/' }} tracks={feedTracks}>
+    <TrackListPlayback context={feedContext(type, sort)} tracks={feedTracks}>
       <InfiniteList
         loadingWhat="home"
         query={feed}

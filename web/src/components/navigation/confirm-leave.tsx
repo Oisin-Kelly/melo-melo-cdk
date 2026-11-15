@@ -20,6 +20,8 @@ type Options = {
   detailKey: QueryKey
   /** Where to land when there's no previous page (opened from a link). */
   fallback?: string
+  /** Go here instead of back (the page behind is the item's own, e.g. from its edit page). */
+  leaveTo?: string
   /** Owner: delete it for good. */
   delete: LeaveOption
   /** Recipient: take it out of your library. */
@@ -28,8 +30,8 @@ type Options = {
 
 // "Delete X?" / "Remove X?" for a page's own item: confirm, run the mutation, toast, then
 // go back like the ← button. `ask('delete' | 'leave')` opens it; render `dialog` once.
-export function useConfirmLeave({ what, name, detailKey, fallback, delete: deleting, leave }: Options) {
-  const goAway = useLeaveAfterDelete(detailKey, fallback)
+export function useConfirmLeave({ what, name, detailKey, fallback, leaveTo, delete: deleting, leave }: Options) {
+  const goAway = useLeaveAfterDelete(detailKey, fallback, leaveTo)
   const [kind, setKind] = useState<LeaveKind | null>(null)
   // A failed delete/remove: said in the dialog itself (it stays open, and a toast would sit behind it)
   const [didFail, setDidFail] = useState(false)

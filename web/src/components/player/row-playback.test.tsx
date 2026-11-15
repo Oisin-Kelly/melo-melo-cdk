@@ -8,9 +8,11 @@ import { trackPath } from '@/lib/links'
 import { trackSummary, userSummary } from '@/testing/fixtures'
 import { renderWithProviders } from '@/testing/providers'
 import { API, server } from '@/testing/server'
+import type { TrackSummary } from '@/types/api'
 import { NowPlayingBar } from './now-playing-bar'
 import { PlayerProvider } from './player-provider'
 import { TrackListPlayback } from './track-list-playback'
+import { usePlayTrack } from './use-player'
 
 vi.mock('@/hooks/use-is-mobile', () => ({ useIsMobile: vi.fn(() => false) }))
 
@@ -60,6 +62,49 @@ describe('playing from track rows', () => {
     await waitFor(() => expect(streams[0]).toBe('t2'))
     // The row's own button now pauses it
     expect(screen.getByRole('button', { name: 'Pause Two' })).toBeInTheDocument()
+  })
+
+  it('tapping the track that is cued from somewhere else starts this list from it', async () => {
+    // Signed in with Two as the resume point, on its own
+    server.use(
+      http.get(`${API}/me/progress`, () =>
+        HttpResponse.json({ contextType: 'TRACK', contextId: 't2', trackId: 't2', positionSeconds: 5, updatedAt: 1, track: tracks[1] }),
+      ),
+    )
+    renderList()
+    await waitFor(() => expect(bar()).toHaveTextContent('Two'))
+    expect(bar()).not.toHaveTextContent('Late Shift')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Play Two' }))
+    await waitFor(() => expect(bar()).toHaveTextContent('Bob · Late Shift'))
+  })
+
+  it('a track page’s Play pauses that track wherever it plays from, keeping its queue', async () => {
+    function TrackPagePlay({ track }: { track: TrackSummary }) {
+      const { isPlaying, onPlay } = usePlayTrack(track)
+      return <button onClick={onPlay}>{`${isPlaying ? 'Pause' : 'Play'} page ${track.name}`}</button>
+    }
+    renderWithProviders(
+      <PlayerProvider>
+        <TrackListPlayback context={album} tracks={tracks}>
+          <TrackRow track={tracks[1]} />
+        </TrackListPlayback>
+        <TrackPagePlay track={tracks[1]} />
+        <TrackPagePlay track={tracks[2]} />
+        <NowPlayingBar />
+      </PlayerProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Play Two' }))
+    await waitFor(() => expect(bar()).toHaveTextContent('Bob · Late Shift'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pause page Two' }))
+    expect(await screen.findByRole('button', { name: 'Play page Two' })).toBeInTheDocument()
+    expect(bar()).toHaveTextContent('Bob · Late Shift')
+
+    // Another track's page plays that track on its own
+    await userEvent.click(screen.getByRole('button', { name: 'Play page Three' }))
+    await waitFor(() => expect(bar()).toHaveTextContent('Three'))
+    expect(bar()).not.toHaveTextContent('Late Shift')
   })
 
   it('the title still opens the track on wider screens', () => {

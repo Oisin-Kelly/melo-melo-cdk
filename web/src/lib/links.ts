@@ -41,6 +41,8 @@ export function trackPath(track: Owned): string {
 
 export const trackPeoplePath = (track: Owned, kind: 'shared-with' | 'likes') => `${trackPath(track)}/${kind}`
 
+export const trackEditPath = (track: Owned) => `${trackPath(track)}/edit`
+
 export function albumPath(album: Owned): string {
   if (!album.slug) return `/albums/${album.id}`
   remember('albums', album.owner.username, album.slug, album.id)

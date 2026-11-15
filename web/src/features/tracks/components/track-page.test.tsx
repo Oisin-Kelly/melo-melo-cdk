@@ -8,7 +8,6 @@ import { startDownload } from '@/lib/download'
 import { trackSummary, userSummary } from '@/testing/fixtures'
 import { LocationProbe, renderRoutes } from '@/testing/providers'
 import { API, server } from '@/testing/server'
-import { captureBodies } from '@/testing/stage-upload'
 import type { Track } from '../api/tracks'
 import { TrackPage } from './track-page'
 
@@ -109,50 +108,19 @@ describe('TrackPage', () => {
     expect(sileo.success).toHaveBeenCalledWith({ title: 'Track deleted', description: 'My Song' })
   })
 
-  describe('Edit details (owner)', () => {
-    async function openEdit() {
-      const rendered = renderAt('/me/my-song')
-      await screen.findByRole('heading', { name: 'My Song' })
-      await rendered.user.click(screen.getByRole('button', { name: 'More options for My Song' }))
-      await rendered.user.click(await screen.findByRole('menuitem', { name: 'Edit details' }))
-      return { ...rendered, dialog: await screen.findByRole('dialog', { name: 'Edit track' }) }
-    }
+  it('gives its owner an Edit button, to the Edit track page', async () => {
+    const { user } = renderAt('/me/my-song')
+    await screen.findByRole('heading', { name: 'My Song' })
+    expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', '/me/my-song/edit')
+    await user.click(screen.getByRole('button', { name: 'More options for My Song' }))
+    expect(await screen.findByRole('menuitem', { name: 'Edit track' })).toHaveAttribute('href', '/me/my-song/edit')
+  })
 
-    it('starts from the track, with its genre, and saves name, genre and description', async () => {
-      const bodies = captureBodies('put', '/tracks/t1', { ...mine, name: 'New Name' })
-      const { user, dialog } = await openEdit()
-      const field = (label: string | RegExp) => within(dialog).getByLabelText(label)
-      expect(field(/Genre/)).toHaveValue('Indie')
-      expect(field('URL')).toHaveValue('my-song')
-
-      await user.clear(field('Name'))
-      await user.type(field('Name'), 'New Name')
-      await user.clear(field(/Description/))
-      await user.type(field(/Description/), 'Some words')
-      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-
-      await vi.waitFor(() =>
-        expect(bodies).toEqual([{ name: 'New Name', genre: 'Indie', description: 'Some words', clearedImage: false }]),
-      )
-      expect(sileo.success).toHaveBeenCalledWith({ title: 'Saved', description: 'New Name' })
-    })
-
-    it('sends a changed URL', async () => {
-      const bodies = captureBodies('put', '/tracks/t1', mine)
-      const { user, dialog } = await openEdit()
-
-      await user.clear(within(dialog).getByLabelText('URL'))
-      await user.type(within(dialog).getByLabelText('URL'), 'Better Name')
-      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-
-      await vi.waitFor(() => expect(bodies[0]?.slug).toBe('better-name'))
-    })
-
-    it('has no URL field for a track made before readable URLs', async () => {
-      serveTrack({ ...mine, slug: null })
-      const { dialog } = await openEdit()
-      expect(within(dialog).queryByLabelText('URL')).not.toBeInTheDocument()
-    })
+  it('has no Edit for someone it was shared with', async () => {
+    serveTrack(theirs)
+    renderAt('/bob/their-song')
+    await screen.findByRole('heading', { name: 'My Song' })
+    expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument()
   })
 
   it('stays put and says so when deleting fails', async () => {

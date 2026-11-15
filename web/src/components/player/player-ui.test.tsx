@@ -2,10 +2,11 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PlayButton } from '@/components/media/media-rows'
+import { LikeButton, PlayButton } from '@/components/media/media-rows'
 import { trackSummary, userSummary } from '@/testing/fixtures'
 import { renderWithProviders } from '@/testing/providers'
 import { API, server } from '@/testing/server'
+import { MiniPlayer } from './mini-player'
 import { NowPlayingBar } from './now-playing-bar'
 import { PlayerProvider } from './player-provider'
 import { usePlayContext } from './use-player'
@@ -81,5 +82,37 @@ describe('player UI', () => {
     await screen.findByRole('region', { name: 'Now playing' })
     await userEvent.click(screen.getAllByRole('button', { name: 'Pause' })[0])
     expect(screen.getByRole('button', { name: 'Play all' })).toBeInTheDocument()
+  })
+
+  it('Now playing has a heart beside the title, and follows likes made elsewhere', async () => {
+    const likes: boolean[] = []
+    server.use(
+      http.get(`${API}/tracks/:id/stream`, () => HttpResponse.json({ url: 'https://s3/t1', expiresAt: Date.now() + 6 * 3600_000, duration: 185 })),
+      http.put(`${API}/me/progress`, () => HttpResponse.json({})),
+      http.get(`${API}/me/progress`, () => new HttpResponse(null, { status: 204 })),
+      http.post(`${API}/tracks/:id/like`, async ({ request }) => {
+        const { newValue } = (await request.json()) as { newValue: boolean }
+        likes.push(newValue)
+        return HttpResponse.json({ newValue })
+      }),
+    )
+    renderWithProviders(
+      <PlayerProvider>
+        <AlbumPlay />
+        <MiniPlayer />
+        {/* a row's heart somewhere else on the page */}
+        <LikeButton kind="TRACK" id="t1" liked name="the row" />
+      </PlayerProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Play all' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Night Drive/ }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Like Night Drive' }))
+    expect(await screen.findByRole('button', { name: 'Unlike Night Drive' })).toBeInTheDocument()
+    await waitFor(() => expect(likes).toEqual([true]))
+
+    // Unliked from the row: the sheet's heart follows
+    await userEvent.click(screen.getByRole('button', { name: 'Unlike the row' }))
+    expect(await screen.findByRole('button', { name: 'Like Night Drive' })).toBeInTheDocument()
   })
 })

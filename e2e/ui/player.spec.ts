@@ -15,17 +15,23 @@ test.describe('player', () => {
     test.skip(!track, 'user A needs two tracks');
 
     await page.goto(`/tracks/${track.id}`);
-    // The header has a "Play" pill on wide screens (its round twin is hidden)
-    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    // The header has a "Play" pill on wide screens (its round twin is hidden); the page's,
+    // not the bar's, which can already hold the resume point from signing in
+    const main = page.getByRole('main');
+    await main.getByRole('button', { name: 'Play', exact: true }).first().click();
 
     const bar = page.getByRole('region', { name: 'Now playing' });
     await expect(bar).toContainText(track.name);
-    // The playhead moves: it's really playing, not just showing
-    await expect(bar.getByText(/^0:0[1-9]$/)).toBeVisible({ timeout: 15_000 });
+    // The playhead moves: it's really playing, not just showing. (It may not start at 0:00:
+    // when this track is the resume point from signing in, Play carries on from there.)
+    const playhead = bar.locator('.mm-player-time:not([data-end])');
+    await expect(bar.getByRole('button', { name: 'Pause' })).toBeVisible();
+    const startedAt = await playhead.textContent();
+    await expect.poll(() => playhead.textContent(), { timeout: 15_000 }).not.toBe(startedAt);
 
     await bar.getByRole('button', { name: 'Pause' }).click();
     await expect(bar.getByRole('button', { name: 'Play' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Play', exact: true }).first()).toBeVisible();
+    await expect(main.getByRole('button', { name: 'Play', exact: true }).first()).toBeVisible();
   });
 
   test('tapping a row in a list plays from that row, and Next moves on', async ({ authenticatedPage: page }) => {

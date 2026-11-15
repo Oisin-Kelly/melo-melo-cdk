@@ -5,6 +5,7 @@ import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { AlbumPage } from '@/features/albums/components/album-page'
 import { PlaylistPage } from '@/features/playlists/components/playlist-page'
 import { TrackPage } from '@/features/tracks/components/track-page'
+import { TrackEditPage } from '@/features/tracks/components/track-edit-page'
 import { TrackPeoplePage, type TrackPeopleKind } from '@/features/tracks/components/track-people-page'
 import { isNotFound } from '@/lib/api-client'
 import { useResolveSlug, type SlugKind } from '@/lib/links'
@@ -35,6 +36,10 @@ export const TrackPeopleSlugRoute = ({ kind }: { kind: TrackPeopleKind }) => (
   <SlugRoute kind="tracks">{(id) => <TrackPeoplePage key={id} trackId={id} kind={kind} />}</SlugRoute>
 )
 
+export const TrackEditSlugRoute = () => (
+  <SlugRoute kind="tracks">{(id) => <TrackEditPage key={id} trackId={id} />}</SlugRoute>
+)
+
 export const AlbumSlugRoute = () => <SlugRoute kind="albums">{(id) => <AlbumPage key={id} albumId={id} />}</SlugRoute>
 
 export const PlaylistSlugRoute = () => (
@@ -51,6 +56,11 @@ export function TrackIdRoute() {
 export function TrackPeopleIdRoute({ kind }: { kind: TrackPeopleKind }) {
   const { trackId = '' } = useParams()
   return <TrackPeoplePage key={trackId} trackId={trackId} kind={kind} />
+}
+
+export function TrackEditIdRoute() {
+  const { trackId = '' } = useParams()
+  return <TrackEditPage key={trackId} trackId={trackId} />
 }
 
 export function AlbumIdRoute() {

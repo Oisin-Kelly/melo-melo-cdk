@@ -12,11 +12,13 @@ export function useGoBack(fallback = '/') {
   }
 }
 
-/** After deleting (or removing) the page's own item: go back like the ← button, then drop
+/** After deleting (or removing) the page's own item: go back like the ← button (or to
+ *  `leaveTo`, when the page behind is the item's own — e.g. from its edit page), then drop
  *  the item's detail cache once this page has unmounted — dropping it while still mounted
  *  would refetch it into a 404, and stepping back finishes asynchronously. */
-export function useLeaveAfterDelete(detailKey: QueryKey, fallback = '/') {
+export function useLeaveAfterDelete(detailKey: QueryKey, fallback = '/', leaveTo?: string) {
   const goBack = useGoBack(fallback)
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const hasLeft = useRef(false)
   // A string, so a fresh-but-equal key array each render doesn't re-run the effect
@@ -31,6 +33,7 @@ export function useLeaveAfterDelete(detailKey: QueryKey, fallback = '/') {
 
   return () => {
     hasLeft.current = true
-    goBack()
+    if (leaveTo) void navigate(leaveTo, { replace: true })
+    else goBack()
   }
 }

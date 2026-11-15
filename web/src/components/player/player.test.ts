@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { trackSummary } from '@/testing/fixtures'
 import { Player } from './player'
+import { upcoming } from './queue'
 
 // A stand-in <audio>: events fire only when a test says so, like a real file loading
 class FakeAudio extends EventTarget {
@@ -8,6 +9,7 @@ class FakeAudio extends EventTarget {
   paused = true
   currentTime = 0
   duration = NaN
+  readyState = 0
   volume = 1
   preload = ''
   play = vi.fn(async () => {
@@ -58,7 +60,7 @@ function setup(storage = memoryStorage()) {
   let urlVersion = 0
   const getStreamUrl = vi.fn(async (trackId: string, fresh: boolean) => {
     if (fresh) urlVersion++
-    return `https://s3/${trackId}?v=${urlVersion}`
+    return { url: `https://s3/${trackId}?v=${urlVersion}`, expiresAt: Date.now() + 6 * 3600_000 }
   })
   const onTrackError = vi.fn()
   const onLoadError = vi.fn()
@@ -247,10 +249,60 @@ describe('Player', () => {
     expect(reportProgress).toHaveBeenLastCalledWith({ completed: true })
   })
 
-  it('a list (a profile’s tracks) resumes as the track alone, since the server can’t reopen it', () => {
+  it('a list (a profile’s tracks) is saved by its own id, for the app to rebuild', () => {
     const { player, reportProgress } = setup()
     player.play({ type: 'LIST', id: 'my-tracks', name: 'Your tracks', href: '/me' }, [a, b])
-    expect(reportProgress).toHaveBeenLastCalledWith({ contextType: 'TRACK', contextId: 'a', trackId: 'a', positionSeconds: 0 })
+    expect(reportProgress).toHaveBeenLastCalledWith({ contextType: 'LIST', contextId: 'my-tracks', trackId: 'a', positionSeconds: 0 })
+  })
+
+  it('a track from Up next resumes alone, since it isn’t part of the context', async () => {
+    const { audio, player, reportProgress } = setup()
+    player.play(album, [a, b])
+    await flush()
+    audio.start()
+    player.playNext([c])
+    player.next()
+    expect(reportProgress).toHaveBeenLastCalledWith({ contextType: 'TRACK', contextId: 'c', trackId: 'c', positionSeconds: 0 })
+  })
+
+  it('a tab that has only been handed a queue never saves the resume point, so hiding it can’t overwrite another device’s', async () => {
+    const storage = memoryStorage()
+    const first = setup(storage)
+    first.player.play(album, [a, b])
+    await flush()
+    first.audio.start()
+    first.player.toggle()
+
+    // A reload: restored, paused
+    const restored = setup(storage)
+    restored.player.restore()
+    restored.player.saveProgress()
+    expect(restored.reportProgress).not.toHaveBeenCalled()
+
+    // A fresh tab: cued from the server, paused
+    const cued = setup()
+    cued.player.cue(async () => ({ context: album, tracks: [a, b] }), { startTrackId: 'b', startAt: 30 })
+    await flush()
+    cued.player.saveProgress()
+    expect(cued.reportProgress).not.toHaveBeenCalled()
+
+    // Until it plays: then it saves as usual
+    cued.player.toggle()
+    await flush()
+    cued.audio.start()
+    cued.audio.currentTime = 31
+    cued.player.saveProgress()
+    expect(cued.reportProgress).toHaveBeenLastCalledWith({ contextType: 'ALBUM', contextId: 'al1', trackId: 'b', positionSeconds: 31 })
+  })
+
+  it('cues the server’s resume point with the rest of its list after it', async () => {
+    const { player } = setup()
+    player.cue(async () => ({ context: album, tracks: [a, b, c] }), { startTrackId: 'b', startAt: 40 })
+    await flush()
+    const queue = player.getQueue()
+    expect(queue.context).toEqual(album)
+    expect(queue.timeline[queue.cursor].id).toBe('b')
+    expect(upcoming(queue).fromContext.map((t) => t.id)).toEqual(['c'])
   })
 
   it('saves the resume point every 15 seconds while playing', async () => {
@@ -287,5 +339,64 @@ describe('Player', () => {
     expect(second.audio.play).not.toHaveBeenCalled()
     second.audio.fire('loadedmetadata')
     expect(second.audio.currentTime).toBe(20)
+  })
+
+  it('Play as the first tap after a restore plays that track from where it was, not the silent clip', async () => {
+    const storage = memoryStorage()
+    const first = setup(storage)
+    first.player.play(album, [a, b], { startTrackId: 'b' })
+    await flush()
+    first.audio.start()
+    first.audio.currentTime = 20
+    first.player.toggle()
+
+    const second = setup(storage)
+    second.player.restore()
+    await flush()
+    second.audio.fire('loadedmetadata') // the paused track's index has loaded, at 0:20
+    second.audio.readyState = 1
+    second.player.toggle() // the first tap: unlock() plays the silent clip on this element first
+
+    expect(second.audio.src).toBe('https://s3/b?v=0')
+    expect(second.audio.play).toHaveBeenCalled()
+    second.audio.currentTime = 0 // a new src starts over…
+    second.audio.fire('loadedmetadata')
+    expect(second.audio.currentTime).toBe(20) // …and is put back where it was
+  })
+
+  it('Play on a track paused past its URL’s expiry carries on from the same second on a fresh URL', async () => {
+    vi.useFakeTimers()
+    try {
+      const { audio, player, getStreamUrl } = setup()
+      player.play(album, [a, b])
+      await vi.advanceTimersByTimeAsync(0)
+      audio.start()
+      audio.currentTime = 42
+      player.toggle()
+      vi.setSystemTime(Date.now() + 7 * 3600_000) // left overnight
+
+      player.toggle()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getStreamUrl).toHaveBeenCalledWith('a', true)
+      expect(audio.src).toBe('https://s3/a?v=1')
+      audio.currentTime = 0
+      audio.fire('loadedmetadata')
+      expect(audio.currentTime).toBe(42)
+      expect(audio.play).toHaveBeenCalledTimes(3) // the silent clip, the track, and again here
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says playing only once the audio really is', async () => {
+    const { audio, player, status } = setup()
+    player.play(album, [a])
+    await flush()
+    audio.start()
+    player.toggle()
+    player.toggle()
+    expect(status()).toBe('loading')
+    audio.fire('playing')
+    expect(status()).toBe('playing')
   })
 })

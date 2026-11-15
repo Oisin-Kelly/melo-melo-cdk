@@ -1,4 +1,3 @@
-import { AlertDialog } from '@astryxdesign/core/AlertDialog'
 import { Avatar } from '@astryxdesign/core/Avatar'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
@@ -12,15 +11,16 @@ import { Text } from '@astryxdesign/core/Text'
 import { TextArea } from '@astryxdesign/core/TextArea'
 import { VStack } from '@astryxdesign/core/VStack'
 import { CameraIcon } from '@heroicons/react/24/outline'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useBeforeUnload, useBlocker, useNavigate } from 'react-router'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { sileo } from 'sileo'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { CountedTextInput } from '@/components/forms/counted-text-input'
+import { FormSection } from '@/components/forms/form-section'
 import { lengthError } from '@/components/forms/saved-text'
+import { useUnsavedChanges } from '@/components/forms/use-unsaved-changes'
 import { BackButton } from '@/components/navigation/back-button'
 import { LIMITS } from '@/config/limits'
-import { useIsMobile } from '@/hooks/use-is-mobile'
 import { ApiError } from '@/lib/api-client'
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES } from '@/lib/dropbox'
 import { useMe } from '@/lib/me'
@@ -95,21 +95,9 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
     photo !== null ||
     isPhotoCleared
 
-  // Leaving with unsaved edits asks first: in-app navigation (back, tabs, links,
-  // Cancel) through the router's blocker, closing or reloading the tab through the
-  // browser's own prompt. A successful save turns it off before navigating away.
-  const isSavedRef = useRef(false)
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      isDirty && !isSavedRef.current && currentLocation.pathname !== nextLocation.pathname,
-  )
-  useBeforeUnload(
-    useCallback(
-      (e: BeforeUnloadEvent) => {
-        if (isDirty && !isSavedRef.current) e.preventDefault()
-      },
-      [isDirty],
-    ),
+  const unsaved = useUnsavedChanges(
+    isDirty,
+    "You have unsaved changes to your profile. If you leave now, they won't be saved.",
   )
 
   const previewUrl = photo?.url ?? (isPhotoCleared ? undefined : (user.imageUrl ?? undefined))
@@ -154,7 +142,7 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
     }
     try {
       await update.mutateAsync({ draft, file: photo?.file ?? null, clearImage: isPhotoCleared })
-      isSavedRef.current = true
+      unsaved.markSaved()
       sileo.success({ title: 'Profile saved' })
       leave()
     } catch (err) {
@@ -167,7 +155,7 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
     <VStack gap={6}>
       {error && <Banner status="error" title={error} />}
 
-      <Section title="Photo" description="Shown on your profile and next to everything you share.">
+      <FormSection title="Photo" description="Shown on your profile and next to everything you share.">
         <HStack gap={4} vAlign="center" wrap="wrap">
           <button
             type="button"
@@ -215,11 +203,11 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
             </Text>
           </VStack>
         </HStack>
-      </Section>
+      </FormSection>
 
       <Divider />
 
-      <Section title="Basic information" description="How you appear to the people you share with.">
+      <FormSection title="Basic information" description="How you appear to the people you share with.">
         <CountedTextInput
           label="Display name"
           placeholder={user.username}
@@ -231,20 +219,20 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
           <CountedTextInput label="Last name" isOptional autoComplete="family-name" {...field('lastName')} />
         </Grid>
         <TextArea label="Bio" isOptional rows={4} {...field('bio')} />
-      </Section>
+      </FormSection>
 
       <Divider />
 
-      <Section title="Location" description="Optional, shown on your profile.">
+      <FormSection title="Location" description="Optional, shown on your profile.">
         <Grid columns={{ minWidth: PAIRED_FIELD_MIN }} gap={4}>
           <CountedTextInput label="City" isOptional autoComplete="address-level2" {...field('city')} />
           <CountedTextInput label="Country" isOptional autoComplete="country-name" {...field('country')} />
         </Grid>
-      </Section>
+      </FormSection>
 
       <Divider />
 
-      <Section title="Privacy" description="Who can send you music.">
+      <FormSection title="Privacy" description="Who can send you music.">
         <RadioList
           label="Who can share music with you"
           value={incomingShares}
@@ -254,7 +242,7 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
           <RadioListItem value="FOLLOWING" label="People you follow" />
           <RadioListItem value="NONE" label="No one" description="Things already shared with you stay." />
         </RadioList>
-      </Section>
+      </FormSection>
 
       <Divider />
 
@@ -269,34 +257,7 @@ function ProfileForm({ user, leave }: { user: User; leave: () => void }) {
         />
       </HStack>
 
-      <AlertDialog
-        isOpen={blocker.state === 'blocked'}
-        onOpenChange={(open) => !open && blocker.reset?.()}
-        title="Discard changes?"
-        description="You have unsaved changes to your profile. If you leave now, they won't be saved."
-        cancelLabel="Keep editing"
-        actionLabel="Discard"
-        actionVariant="destructive"
-        onAction={() => blocker.proceed?.()}
-      />
+      {unsaved.dialog}
     </VStack>
-  )
-}
-
-// One settings section (the template's pattern): title + description beside the
-// fields, wrapping to stacked when the page is narrower than two 320px columns (then a
-// tighter gap, or the title floats away from its fields)
-function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
-  const isMobile = useIsMobile()
-  return (
-    <Grid columns={{ minWidth: 320 }} gap={isMobile ? 4 : 10}>
-      <VStack gap={1}>
-        <Heading level={3}>{title}</Heading>
-        <Text type="supporting" color="secondary">
-          {description}
-        </Text>
-      </VStack>
-      <VStack gap={4}>{children}</VStack>
-    </Grid>
   )
 }

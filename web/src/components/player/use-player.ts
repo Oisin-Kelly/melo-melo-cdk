@@ -73,6 +73,18 @@ export function usePlayLoaded(contextKey: { type: PlayContext['type']; id: strin
   return { isPlaying, onPlay }
 }
 
+/** A track's own page: plays just that track, or pauses/resumes it when it's what's
+ *  playing — from wherever (an album, a playlist), keeping that queue. */
+export function usePlayTrack(track: TrackSummary | undefined) {
+  const player = usePlayer()
+  const { queue, status } = usePlayerState()
+  const isActive = !!track && currentTrack(queue)?.id === track.id && isLive(status.status)
+  const isPlaying = isActive && (status.status === 'playing' || status.status === 'loading')
+  const onPlay =
+    player && track ? () => (isActive ? player.toggle() : player.play(trackContext(track), [track])) : undefined
+  return { isPlaying, onPlay }
+}
+
 /** A track row: whether it's the one playing, and what tapping it does — play its list
  *  from here (or just it, outside a list), or pause/resume it if it's already playing. */
 export function useTrackRowPlay(track: TrackSummary) {
@@ -80,7 +92,10 @@ export function useTrackRowPlay(track: TrackSummary) {
   const list = useContext(TrackListContext)
   const { queue, status } = usePlayerState()
   const isCurrent = currentTrack(queue)?.id === track.id
-  const isActive = isCurrent && isLive(status.status)
+  // Pause/resume only when it's playing from this same list: the same track playing from
+  // somewhere else (another list, on its own) starts this list from it instead
+  const isSameList = !list || (queue.context?.type === list.context.type && queue.context.id === list.context.id)
+  const isActive = isCurrent && isSameList && isLive(status.status)
   const isPlaying = isActive && (status.status === 'playing' || status.status === 'loading')
   const onPlay = player
     ? () => {

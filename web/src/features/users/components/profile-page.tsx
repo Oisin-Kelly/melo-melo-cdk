@@ -11,10 +11,10 @@ import { InfiniteList } from '@/components/lists/infinite-list'
 import { AlbumShelf } from '@/components/media/album-tile'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
 import { TrackRow } from '@/components/media/media-rows'
+import { myTracksContext, sharedFromContext } from '@/components/player/load-context'
 import { TrackListPlayback } from '@/components/player/track-list-playback'
 import { isNotFound } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
-import { profilePath } from '@/lib/links'
 import { nameOf, type User } from '@/types/user'
 import { toUnixSeconds } from '@/utils/format'
 import {
@@ -79,7 +79,7 @@ function SharedWithYouSections({ user }: { user: User }) {
       />
       <Section title="Tracks shared with you">
         <TrackListPlayback
-          context={{ type: 'LIST', id: `shared-from:${user.username}`, name: `Shared by ${name}`, href: profilePath(user.username) }}
+          context={sharedFromContext(user)}
           tracks={tracks.data?.pages.flatMap((page) => page.items.map((row) => row.track)) ?? []}
         >
           <InfiniteList
@@ -123,7 +123,7 @@ function OwnSections() {
       <AlbumShelf title="Your albums" query={albums} toAlbum={(album) => album} />
       <Section title="Your tracks">
         <TrackListPlayback
-          context={{ type: 'LIST', id: 'my-tracks', name: 'Your tracks', href: profilePath(me) }}
+          context={myTracksContext(me)}
           tracks={tracks.data?.pages.flatMap((page) => page.items) ?? []}
         >
           <InfiniteList

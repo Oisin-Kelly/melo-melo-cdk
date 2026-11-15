@@ -5,7 +5,7 @@ import { signIn } from '../fixtures/cognito';
 import { pickPersistentTrack, uploadTrack } from '../fixtures/upload';
 
 // The track screen (/{owner}/{slug}; the old /tracks/:trackId moves there), as the owner (user A
-// owns the persistent "E2E upload …" tracks). The edit round trip restores the name; nothing is deleted.
+// owns the persistent "E2E upload …" tracks). The Edit track round trip restores the name; nothing is deleted.
 test.describe('track', () => {
   test.skip(!process.env.WEB_BASE_URL, 'set WEB_BASE_URL to run the UI tests');
 
@@ -25,15 +25,15 @@ test.describe('track', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
   });
 
-  test('edit details renames it, and back again', async ({ authenticatedPage: page, apiContext }) => {
+  test('Edit track renames it, and back again', async ({ authenticatedPage: page, apiContext }) => {
     const track = (await (await apiContext.get('/tracks?limit=1')).json()).items[0];
     test.skip(!track, 'user A has no tracks');
     const rename = async (name: string) => {
-      await page.getByRole('button', { name: /^More options for/ }).click();
-      await page.getByRole('menuitem', { name: 'Edit details' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Edit track' });
-      await dialog.getByLabel('Name').fill(name);
-      await dialog.getByRole('button', { name: 'Save' }).click();
+      await page.getByRole('link', { name: 'Edit', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Edit track' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      // Back on the track's page
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
     };
 
@@ -88,6 +88,14 @@ test.describe('track', () => {
     expect(fileName.startsWith(name)).toBe(true);
     // The download doesn't navigate the app away
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+
+    // The Edit track page has it too
+    await page.goto(`/tracks/${trackId}/edit`);
+    const [again] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download original' }).click(),
+    ]);
+    expect(again.suggestedFilename()).toBe(fileName);
   });
 
   test("someone it's shared with isn't offered the original", async ({ authenticatedPage: page, playwright }) => {

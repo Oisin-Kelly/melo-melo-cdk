@@ -150,6 +150,9 @@ public class LambdaStack : BaseStack
         var getTrackLikes = CreateLambdaFunction("Track/GetTrackLikesLambda");
         table.GrantReadData(getTrackLikes);
 
+        var getTrackAppearsIn = CreateLambdaFunction("Track/GetTrackAppearsInLambda");
+        table.GrantReadData(getTrackAppearsIn);
+
         // Albums
         var createAlbum = CreateLambdaFunction("Album/CreateAlbumLambda");
         table.GrantReadWriteData(createAlbum);
@@ -281,6 +284,7 @@ public class LambdaStack : BaseStack
             SetPlaylistTracks: setPlaylistTracks,
             LikeTrack: likeTrack,
             GetTrackLikes: getTrackLikes,
+            GetTrackAppearsIn: getTrackAppearsIn,
             CreateAlbum: createAlbum,
             GetAlbums: getAlbums,
             GetAlbum: getAlbum,

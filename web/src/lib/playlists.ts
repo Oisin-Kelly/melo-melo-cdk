@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
 import { api } from '@/lib/api-client'
+import { invalidateAppearsIn } from '@/lib/appears-in'
 import type { PaginatedResult, TrackSummary } from '@/types/api'
 
 // The user's playlists, shared because several features need them: the sidebar lists
@@ -64,6 +65,7 @@ export function useAddToPlaylist() {
     onSettled: (_data, _error, { playlist }) => {
       void queryClient.invalidateQueries({ queryKey: playlistsQueryKey, exact: true })
       void queryClient.invalidateQueries({ queryKey: playlistDetailKey(playlist.id) })
+      invalidateAppearsIn(queryClient)
     },
   })
 }

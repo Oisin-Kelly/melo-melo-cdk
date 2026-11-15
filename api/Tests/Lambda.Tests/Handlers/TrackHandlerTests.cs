@@ -26,6 +26,7 @@ public class TrackHandlerTests
     private readonly IUserRepository _users = Substitute.For<IUserRepository>();
     private readonly IUploadStatusRepository _uploads = Substitute.For<IUploadStatusRepository>();
     private readonly IAlbumTracklistRepository _albumTracklist = Substitute.For<IAlbumTracklistRepository>();
+    private readonly IPlaylistRepository _playlists = Substitute.For<IPlaylistRepository>();
     private readonly IAudioService _audio = Substitute.For<IAudioService>();
     private readonly IImageService _images = Substitute.For<IImageService>();
     private readonly IS3Service _dropbox = Substitute.For<IS3Service>();
@@ -348,6 +349,59 @@ public class TrackHandlerTests
         body.GetProperty("contentType").GetString().Should().Be("audio/wav");
         var expiresAt = DateTimeOffset.FromUnixTimeMilliseconds(body.GetProperty("expiresAt").GetInt64());
         (expiresAt - before).Should().BeCloseTo(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30));
+    }
+
+    // ---------------------------------------------------------------- GET /tracks/{trackId}/appears-in
+
+    private GetTrackAppearsInLambda.Function AppearsIn => new(_tracks, _shares, _albumTracklist, _playlists);
+
+    private static AlbumSummary AlbumRow(string id) => new()
+    {
+        Id = id, Name = $"Album {id}", TrackCount = 1, TotalDurationSeconds = 180, CreatedAt = 1,
+        LikedByMe = false, Owner = Fakes.Summary(Owner),
+    };
+
+    [Fact]
+    public async Task AppearsIn_WithoutIdentity_Is401()
+    {
+        (await AppearsIn.FunctionHandler(Http.Anonymous(), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        await _tracks.DidNotReceiveWithAnyArgs().GetTrackAsync(default!);
+    }
+
+    [Fact]
+    public async Task AppearsIn_UnknownOrNotShared_Is404_AndLooksNothingUp()
+    {
+        (await AppearsIn.FunctionHandler(Http.As(Owner), _context, "nope")).ShouldHaveStatus(HttpStatusCode.NotFound);
+        (await AppearsIn.FunctionHandler(Http.As(Stranger), _context, TrackId)).ShouldHaveStatus(HttpStatusCode.NotFound);
+        await _albumTracklist.DidNotReceiveWithAnyArgs().GetAlbumsContainingTrackAsync(default!, default!, default!);
+        await _playlists.DidNotReceiveWithAnyArgs().GetPlaylistsContainingTrackAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task AppearsIn_ReturnsTheViewersAlbumsAndOwnPlaylists()
+    {
+        _shares.IsTrackAccessibleToUser(TrackId, "bob").Returns(true);
+        _albumTracklist.GetAlbumsContainingTrackAsync(TrackId, Owner, "bob").Returns([AlbumRow("a1")]);
+        _playlists.GetPlaylistsContainingTrackAsync("bob", TrackId).Returns([Fakes.Playlist("p1")]);
+
+        var body = (await AppearsIn.FunctionHandler(Http.As("bob"), _context, TrackId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json();
+
+        body.GetProperty("albums")[0].GetProperty("id").GetString().Should().Be("a1");
+        body.GetProperty("playlists")[0].GetProperty("id").GetString().Should().Be("p1");
+    }
+
+    [Fact]
+    public async Task AppearsIn_Owner_SkipsTheAccessCheck()
+    {
+        _albumTracklist.GetAlbumsContainingTrackAsync(TrackId, Owner, Owner).Returns([]);
+        _playlists.GetPlaylistsContainingTrackAsync(Owner, TrackId).Returns([]);
+
+        var body = (await AppearsIn.FunctionHandler(Http.As(Owner), _context, TrackId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json();
+
+        body.GetProperty("albums").GetArrayLength().Should().Be(0);
+        await _shares.DidNotReceiveWithAnyArgs().IsTrackAccessibleToUser(default!, default!);
     }
 
     // ---------------------------------------------------------------- GET /tracks/{trackId}/likes + /recipients

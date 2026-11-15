@@ -41,6 +41,29 @@ public sealed class PlaylistRepository : IPlaylistRepository
         };
     }
 
+    public async Task<List<Playlist>> GetPlaylistsContainingTrackAsync(string username, string trackId)
+    {
+        // Memberships are keyed by playlist, so: every playlist of theirs (the base-table
+        // metas, unpaged), then one BatchGet probing each one's TRACK#{id} key
+        var playlists = (await _dynamoDbService.QueryAsync<PlaylistDataModel>(
+                $"USER#{username}", "PLAYLIST#", QueryOperator.BeginsWith))
+            .Where(p => p.Type == PlaylistType.Custom)
+            .ToList();
+        if (playlists.Count == 0)
+            return [];
+
+        var normalisedTrackId = trackId.ToLowerInvariant();
+        var memberships = await _dynamoDbService.BatchGetAsync<PlaylistTrackDataModel>(
+            playlists.Select(p => (pk: $"PLAYLIST#{p.PlaylistId}", sk: $"TRACK#{normalisedTrackId}")));
+        var containing = memberships.Select(m => m.Pk.Replace("PLAYLIST#", "")).ToHashSet();
+
+        return playlists
+            .Where(p => containing.Contains(p.PlaylistId))
+            .OrderByDescending(p => p.CreatedAt)
+            .Select(ToPlaylist)
+            .ToList();
+    }
+
     public async Task<Playlist?> GetPlaylistAsync(string username, string playlistId)
     {
         var normalisedId = playlistId.ToLowerInvariant();

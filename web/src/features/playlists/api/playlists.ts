@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { sileo } from 'sileo'
 import type { Details } from '@/components/forms/edit-details-dialog'
 import { api, isNotFound } from '@/lib/api-client'
+import { invalidateAppearsIn } from '@/lib/appears-in'
 import { stageUpload } from '@/lib/dropbox'
 import { playlistDetailKey, playlistsQueryKey, type Playlist, type PlaylistTrackEntry } from '@/lib/playlists'
 import type { AlbumSummary, PaginatedResult } from '@/types/api'
@@ -40,10 +41,12 @@ export function usePlaylistDetail(id: string) {
   })
 }
 
-// The sidebar list and search's copy both show names/covers/totals
+// The sidebar list, search's copy and track pages' "In your playlists" all show
+// names/covers/totals (and which tracks are in which)
 function invalidateLists(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: playlistsQueryKey, exact: true })
   void queryClient.invalidateQueries({ queryKey: ['playlists', 'all'] })
+  invalidateAppearsIn(queryClient)
 }
 
 // ---- DELETE /playlists/{id}/tracks/{trackId}: optimistic, works on placeholders too ----

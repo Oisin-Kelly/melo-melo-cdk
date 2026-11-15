@@ -159,6 +159,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestoreLinkLambda", "api\La
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevokeLinkLambda", "api\Lambda\Link\RevokeLinkLambda\RevokeLinkLambda.csproj", "{C414B856-9BEE-4CE2-84C2-C19F5E8EFA89}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GetTrackAppearsInLambda", "api\Lambda\Track\GetTrackAppearsInLambda\GetTrackAppearsInLambda.csproj", "{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -997,6 +999,18 @@ Global
 		{C414B856-9BEE-4CE2-84C2-C19F5E8EFA89}.Release|x64.Build.0 = Release|Any CPU
 		{C414B856-9BEE-4CE2-84C2-C19F5E8EFA89}.Release|x86.ActiveCfg = Release|Any CPU
 		{C414B856-9BEE-4CE2-84C2-C19F5E8EFA89}.Release|x86.Build.0 = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|x64.Build.0 = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Debug|x86.Build.0 = Debug|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|x64.ActiveCfg = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|x64.Build.0 = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|x86.ActiveCfg = Release|Any CPU
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1062,5 +1076,6 @@ Global
 		{2D7FFF51-49B8-477D-9BB0-063BCFC7D0DE} = {34AA7D78-5C7A-313B-4971-7E189564CF96}
 		{9CE5B992-B77B-41EE-A80E-5C910A1EFF54} = {34AA7D78-5C7A-313B-4971-7E189564CF96}
 		{C414B856-9BEE-4CE2-84C2-C19F5E8EFA89} = {34AA7D78-5C7A-313B-4971-7E189564CF96}
+		{30D1BFCA-98ED-4727-8A4C-E233FF2F57B4} = {640F0D0F-626A-57EC-868B-B2D6A5838DAC}
 	EndGlobalSection
 EndGlobal

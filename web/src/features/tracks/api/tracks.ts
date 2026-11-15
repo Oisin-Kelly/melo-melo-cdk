@@ -1,9 +1,11 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { sileo } from 'sileo'
 import { api, isNotFound } from '@/lib/api-client'
+import { trackAppearsInKey } from '@/lib/appears-in'
 import { startDownload } from '@/lib/download'
 import { stageUpload } from '@/lib/dropbox'
-import type { PaginatedResult, Recipient, ShareChange, ShareNote, UserSummary } from '@/types/api'
+import type { Playlist } from '@/lib/playlists'
+import type { AlbumSummary, PaginatedResult, Recipient, ShareChange, ShareNote, UserSummary } from '@/types/api'
 
 // The track screen. Keys live under ['tracks', 'detail', id] — never bare ['tracks', id],
 // which would sit beside the library listings (['tracks', 'mine', …]).
@@ -42,6 +44,18 @@ export function useTrack(id: string) {
     queryKey: trackDetailKey(id),
     queryFn: () => api<Track>(`/tracks/${id}`),
     retry: (count, error) => !isNotFound(error) && count < 1,
+  })
+}
+
+// GET /tracks/{id}/appears-in: the albums holding it that you can open, and your own
+// playlists holding it (api GetTrackAppearsInLambda)
+export type TrackAppearsIn = { albums: AlbumSummary[]; playlists: Playlist[] }
+
+export function useTrackAppearsIn(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: trackAppearsInKey(id),
+    queryFn: () => api<TrackAppearsIn>(`/tracks/${id}/appears-in`),
+    enabled,
   })
 }
 

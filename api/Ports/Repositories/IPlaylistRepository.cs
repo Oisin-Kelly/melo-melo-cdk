@@ -6,6 +6,8 @@ public interface IPlaylistRepository
 {
     public Task<PaginatedResult<Playlist>> GetPlaylistsAsync(string username, int pageSize, string? cursor);
     public Task<Playlist?> GetPlaylistAsync(string username, string playlistId);
+    /// The user's own playlists (not Liked tracks) that contain the track, newest first
+    public Task<List<Playlist>> GetPlaylistsContainingTrackAsync(string username, string trackId);
     // playlistId is minted by the handler so the cover image can be processed to its
     // final key before anything is written
     public Task<Playlist> CreatePlaylistAsync(string playlistId, string username, string name, string? description,

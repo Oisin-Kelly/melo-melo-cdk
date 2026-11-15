@@ -21,6 +21,25 @@ public class PlaylistRepositoryTests(DynamoDbLocalFixture fixture)
         (await seed.Tracks.GetTrackAsync(await seed.TrackAsync(owner, duration)))!;
 
     [Fact]
+    public async Task ContainingTrack_IsOnlyTheirOwnCustomPlaylistsHoldingIt()
+    {
+        var (seed, playlists, owner, withIt) = await ArrangeAsync();
+        var track = await TrackAsync(seed, owner, 120);
+        var withoutIt = Guid.NewGuid().ToString("N");
+        await playlists.CreatePlaylistAsync(withoutIt, owner, "Other", null, null);
+        await playlists.AddTrackAsync(owner, withIt, track);
+        await seed.Likes.LikeTrackAsync(track.Id, owner, owner, track.Duration); // in Liked tracks too, which doesn't count
+
+        var someoneElse = await seed.UserAsync();
+        var theirs = Guid.NewGuid().ToString("N");
+        await playlists.CreatePlaylistAsync(theirs, someoneElse, "Theirs", null, null);
+        await playlists.AddTrackAsync(someoneElse, theirs, track);
+
+        (await playlists.GetPlaylistsContainingTrackAsync(owner, track.Id)).Select(p => p.Id).Should().Equal(withIt);
+        (await playlists.GetPlaylistsContainingTrackAsync(await seed.UserAsync(), track.Id)).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ConcurrentDoubleAddAndRemove_MoveTheCountersOnce()
     {
         var (seed, playlists, owner, playlistId) = await ArrangeAsync();

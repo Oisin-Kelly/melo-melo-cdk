@@ -60,6 +60,13 @@ Track-side base key lets the owner query who liked; GSI1 gives the user's liked-
 3. If not owner, [track access check](README.md#track-access-rule) — 404 if neither direct share nor album grant
 4. In parallel: `GetItem(PK=TRACK#{trackId}, SK=LIKE#{requestor})` → sets `likedByMe`; for a non-owner, `GetItem(PK=TRACK#{trackId}, SK=SHARED#{requestor})` → `myShare {sharedAt, caption?}` (their direct share only — absent when they have the track through an album alone). `likeCount`/`shareCount` returned to the owner only
 
+#### `GET /tracks/{trackId}/appears-in` — GetTrackAppearsInLambda
+Where a track is found, for its page. Same 404 rule as `GET /tracks/{trackId}`, then in parallel:
+- **Albums** (`IAlbumTracklistRepository.GetAlbumsContainingTrackAsync`): memberships are keyed by album, so for the **owner** `Query(PK=USER#{owner}, begins_with ALBUM#)` → every album meta, then one BatchGet of `ALBUM#{id}/TRACK#{trackId}` keeps the ones holding it (the same probe `RemoveTrackFromAllAlbumsAsync` uses). For **anyone else**, only albums shared with them: `Query(PK=TRACK#{trackId}, begins_with SHARED#{viewer}#ALBUM#)` → their album grants → BatchGet the metas. Hydrated to `AlbumSummary` (owner profile + viewer like status), newest first.
+- **Playlists** (`IPlaylistRepository.GetPlaylistsContainingTrackAsync`): the viewer's own custom playlists only (playlists are private; Liked tracks is left out — the heart says that): `Query(PK=USER#{viewer}, begins_with PLAYLIST#)` → BatchGet `PLAYLIST#{id}/TRACK#{trackId}` → `Playlist`s holding it, newest first.
+
+No index of its own: a user's albums/playlists are few, so list-then-probe is two reads each. → `{albums: AlbumSummary[], playlists: Playlist[]}`
+
 #### `GET /tracks` — GetUserTracksLambda
 1. `Query(GSI3, GSI3PK=USER#{requestor}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated track items newest-first
 2. Fetch owner profile once: `GetItem(PK=USER#{requestor}, SK=PROFILE)` → returns `PaginatedResult<Track>`

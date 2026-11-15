@@ -115,6 +115,7 @@ describe('useUpdatePlaylist', () => {
       { queryKey: playlistDetailKey('p1') },
       { queryKey: playlistsQueryKey, exact: true },
       { queryKey: ['playlists', 'all'] },
+      { predicate: expect.any(Function) }, // track pages' "In your playlists"
     ])
   })
 })

@@ -5,10 +5,10 @@ import { sileo } from 'sileo'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as mobile from '@/hooks/use-is-mobile'
 import { startDownload } from '@/lib/download'
-import { trackSummary, userSummary } from '@/testing/fixtures'
+import { albumSummary, trackSummary, userSummary } from '@/testing/fixtures'
 import { LocationProbe, renderRoutes } from '@/testing/providers'
 import { API, server } from '@/testing/server'
-import type { Track } from '../api/tracks'
+import type { Track, TrackAppearsIn } from '../api/tracks'
 import { TrackPage } from './track-page'
 
 vi.mock('@/lib/download', () => ({ startDownload: vi.fn() }))
@@ -23,8 +23,9 @@ const mine: Track = {
 }
 const theirs: Track = { ...mine, owner: userSummary('bob', { displayName: 'Bob' }), slug: 'their-song', likeCount: undefined, shareCount: undefined }
 
-function serveTrack(track: Track | 404) {
+function serveTrack(track: Track | 404, appearsIn: TrackAppearsIn = { albums: [], playlists: [] }) {
   server.use(
+    http.get(`${API}/tracks/t1/appears-in`, () => HttpResponse.json(appearsIn)),
     http.get(`${API}/tracks/t1`, () =>
       track === 404 ? HttpResponse.json({ statusCode: 404, message: 'x', error: 'Not Found' }, { status: 404 }) : HttpResponse.json(track),
     ),
@@ -100,6 +101,39 @@ describe('TrackPage', () => {
     renderAt('/bob/their-song')
     await screen.findByText('GENRE')
     expect(screen.queryByText('FROM BOB')).not.toBeInTheDocument()
+  })
+
+  it('shows the albums it is in and your playlists that hold it', async () => {
+    serveTrack(theirs, {
+      albums: [albumSummary('a1', { name: 'Late Shift', owner: theirs.owner })],
+      playlists: [
+        {
+          id: 'p1',
+          name: 'Road trip',
+          description: null,
+          type: 'CUSTOM',
+          slug: 'road-trip',
+          imageUrl: null,
+          imageBgColor: null,
+          trackCount: 3,
+          totalDurationSeconds: 540,
+          createdAt: 1,
+        },
+      ],
+    })
+    renderAt('/bob/their-song')
+
+    expect(await screen.findByText('IN ALBUMS')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Late Shift/ })).toBeInTheDocument()
+    expect(screen.getByText('IN YOUR PLAYLISTS')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Road trip/ })).toHaveAttribute('href', '/me/playlists/road-trip')
+  })
+
+  it('leaves both out when it is in none', async () => {
+    renderAt('/me/my-song')
+    await screen.findByText('GENRE')
+    expect(screen.queryByText('IN ALBUMS')).not.toBeInTheDocument()
+    expect(screen.queryByText('IN YOUR PLAYLISTS')).not.toBeInTheDocument()
   })
 
   it('deletes after confirming, then leaves for Home', async () => {

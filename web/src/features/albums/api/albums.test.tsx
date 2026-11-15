@@ -88,7 +88,7 @@ describe('useUpdateAlbum', () => {
 
     await act(() => result.current.mutateAsync(details))
 
-    expect(invalidate.mock.calls.map(([f]) => f)).toEqual([{ queryKey: ['albums'] }, { queryKey: ['feed'] }])
+    expect(invalidate.mock.calls.map(([f]) => f)).toEqual([{ queryKey: ['albums'] }, { queryKey: ['feed'] }, { predicate: expect.any(Function) }]) // + track pages' "In albums"
   })
 })
 
@@ -125,7 +125,9 @@ describe('leaving an album', () => {
     await act(() => result.current.mutateAsync())
 
     const filters = invalidate.mock.calls.map(([f]) => f as { queryKey: unknown[]; predicate?: (q: { queryKey: unknown[] }) => boolean })
-    expect(filters.map((f) => f.queryKey)).toEqual([['feed'], ['albums'], ['playlists']])
+    expect(filters.map((f) => f.queryKey)).toEqual([['feed'], ['albums'], ['playlists'], undefined]) // + track pages' "In albums"
+    expect(filters[3].predicate!({ queryKey: ['tracks', 'detail', 't1', 'appears-in'] })).toBe(true)
+    expect(filters[3].predicate!({ queryKey: ['tracks', 'detail', 't1'] })).toBe(false)
     expect(filters[1].predicate!({ queryKey: ['albums', 'detail', 'a1'] })).toBe(false)
     expect(filters[1].predicate!({ queryKey: ['albums', 'mine', 'list'] })).toBe(true)
   })

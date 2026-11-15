@@ -12,12 +12,11 @@ import { PageLoader } from '@/components/feedback/page-loader'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
-import { ShareNoteBody } from '@/components/sharing/share-note-section'
-import { nameOf } from '@/types/user'
 import { LikeButton, TrackMenu } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
 import { usePlayTrack } from '@/components/player/use-player'
+import { ShareNoteBody } from '@/components/sharing/share-note-section'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
 import { useIsCompact } from '@/hooks/use-is-compact'
@@ -25,6 +24,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
 import { trackEditPath, trackPath, trackPeoplePath, useCanonicalPath } from '@/lib/links'
+import { nameOf } from '@/types/user'
 import { formatDate, formatDuration, toUnixSeconds } from '@/utils/format'
 import {
   trackDetailKey,
@@ -32,11 +32,13 @@ import {
   useDownloadOriginal,
   useRemoveTrackFromLibrary,
   useTrack,
+  useTrackAppearsIn,
   useTrackLikers,
   useTrackRecipients,
   type Track,
 } from '../api/tracks'
 import { PersonRow } from './person-row'
+import { InAlbums, InPlaylists } from './track-appears-in'
 import { PREVIEW, SeeAll, SharedWith, TrackShareDialog } from './track-sharing'
 
 const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`
@@ -48,6 +50,7 @@ const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}
 export function TrackPage({ trackId }: { trackId: string }) {
   const me = useUsername()
   const detail = useTrack(trackId)
+  const appearsIn = useTrackAppearsIn(trackId, detail.isSuccess)
   const isCompact = useIsCompact()
   const [isSharing, setIsSharing, shareTab] = useSharingState()
   useCanonicalPath(detail.data && trackPath(detail.data))
@@ -91,6 +94,12 @@ export function TrackPage({ trackId }: { trackId: string }) {
       body: track.description ? <ExpandableText text={track.description} /> : <Placeholder>No description</Placeholder>,
     },
   ]
+  // Where else it's found: only once loaded, and only what it's actually in
+  const albums = appearsIn.data?.albums ?? []
+  const playlists = appearsIn.data?.playlists ?? []
+  if (albums.length > 0) sections.push({ title: 'In albums', body: <InAlbums albums={albums} /> })
+  if (playlists.length > 0)
+    sections.push({ title: 'In your playlists', body: <InPlaylists playlists={playlists} me={me} /> })
   if (isOwner) {
     sections.push({ title: 'Shared with', body: <SharedWith track={track} onManage={() => setIsSharing(true)} /> })
     sections.push({

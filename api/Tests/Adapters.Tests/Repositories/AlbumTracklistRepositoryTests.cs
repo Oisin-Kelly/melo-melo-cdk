@@ -7,6 +7,29 @@ namespace Adapters.Tests.Repositories;
 public class AlbumTracklistRepositoryTests(DynamoDbLocalFixture fixture)
 {
     [Fact]
+    public async Task ContainingTrack_OwnerSeesEveryAlbum_ARecipientOnlyTheOnesSharedWithThem()
+    {
+        var seed = new Seed(fixture.Db);
+        var owner = await seed.UserAsync();
+        var recipient = await seed.UserAsync();
+        var track = await seed.TrackAsync(owner);
+        var other = await seed.TrackAsync(owner);
+        var shared = await seed.AlbumAsync(owner, track);
+        var notShared = await seed.AlbumAsync(owner, track, other);
+        await seed.AlbumAsync(owner, other);
+        await seed.AlbumShares.ShareAlbumAsync(shared, owner, [recipient], [], null);
+
+        var forOwner = await seed.AlbumTracklist.GetAlbumsContainingTrackAsync(track, owner, owner);
+        forOwner.Select(a => a.Id).Should().BeEquivalentTo([shared, notShared]);
+        forOwner.Should().OnlyContain(a => a.Owner.Username == owner);
+
+        (await seed.AlbumTracklist.GetAlbumsContainingTrackAsync(track, owner, recipient))
+            .Select(a => a.Id).Should().Equal(shared);
+        (await seed.AlbumTracklist.GetAlbumsContainingTrackAsync(track, owner, await seed.UserAsync()))
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SetTracks_AddsFanOutToRecipients_RemovalsRevoke_ReordersAndRecounts()
     {
         var db = fixture.Db;

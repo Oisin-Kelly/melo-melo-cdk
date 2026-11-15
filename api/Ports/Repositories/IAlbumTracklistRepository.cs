@@ -19,6 +19,11 @@ public interface IAlbumTracklistRepository
     // Track-deletion path: takes the track out of every album of its owner (grants + counters)
     public Task RemoveTrackFromAllAlbumsAsync(string ownerUsername, string trackId);
 
+    /// The albums containing a track that the viewer can open, newest first: for its owner,
+    /// every album of theirs it's in; for anyone else, the albums shared with them that hold it
+    public Task<List<AlbumSummary>> GetAlbumsContainingTrackAsync(string trackId, string trackOwnerUsername,
+        string viewerUsername);
+
     // Album-deletion cleanup: drops every membership (grants are revoked by the share side first)
     public Task DeleteAllTracksAsync(string albumId);
 }

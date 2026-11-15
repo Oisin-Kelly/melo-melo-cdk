@@ -278,6 +278,13 @@ public class ApiStack : BaseStack
 
         HttpApi.AddRoutes(new AddRoutesOptions
         {
+            Path = "/tracks/{trackId}/appears-in",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetTrackAppearsIn),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
             Path = "/tracks/{trackId}/recipients",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetTrackRecipients),

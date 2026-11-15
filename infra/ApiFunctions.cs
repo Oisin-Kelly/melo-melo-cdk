@@ -36,6 +36,7 @@ public record ApiFunctions(
     IFunction SetPlaylistTracks,
     IFunction LikeTrack,
     IFunction GetTrackLikes,
+    IFunction GetTrackAppearsIn,
     IFunction CreateAlbum,
     IFunction GetAlbums,
     IFunction GetAlbum,

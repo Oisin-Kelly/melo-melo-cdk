@@ -116,8 +116,15 @@ public sealed class AlbumTracklistRepository : IAlbumTracklistRepository
 
     public async Task RemoveTrackFromAllAlbumsAsync(string ownerUsername, string trackId)
     {
-        var normalisedTrackId = trackId.ToLowerInvariant();
+        var (_, memberships) = await GetOwnAlbumsContainingAsync(ownerUsername, trackId);
+        foreach (var membership in memberships)
+            await RemoveMembershipAsync(membership, ownerUsername);
+    }
 
+    /// The owner's albums and the memberships of `trackId` among them.
+    private async Task<(List<AlbumDataModel> Albums, List<AlbumTrackDataModel> Memberships)>
+        GetOwnAlbumsContainingAsync(string ownerUsername, string trackId)
+    {
         // Memberships are keyed by album (ALBUM#{id} / TRACK#{id}), so finding the
         // albums containing a track means checking each of the owner's albums —
         // albums only ever contain the owner's own tracks. Needs the full set, so
@@ -128,15 +135,55 @@ public sealed class AlbumTracklistRepository : IAlbumTracklistRepository
             QueryOperator.BeginsWith);
 
         if (albums.Count == 0)
-            return;
+            return (albums, []);
 
         // One BatchGet probes every album's membership key at once (album ids are unique,
-        // so no duplicate keys); only the albums that actually contain the track are touched
+        // so no duplicate keys)
+        var normalisedTrackId = trackId.ToLowerInvariant();
         var memberships = await _dynamoDbService.BatchGetAsync<AlbumTrackDataModel>(
             albums.Select(a => (pk: $"ALBUM#{a.AlbumId}", sk: $"TRACK#{normalisedTrackId}")));
+        return (albums, memberships);
+    }
 
-        foreach (var membership in memberships)
-            await RemoveMembershipAsync(membership, ownerUsername);
+    public async Task<List<AlbumSummary>> GetAlbumsContainingTrackAsync(string trackId, string trackOwnerUsername,
+        string viewerUsername)
+    {
+        List<AlbumDataModel> albums;
+        if (trackOwnerUsername == viewerUsername)
+        {
+            var (own, memberships) = await GetOwnAlbumsContainingAsync(trackOwnerUsername, trackId);
+            var containing = memberships.Select(m => m.AlbumId).ToHashSet();
+            albums = own.Where(a => containing.Contains(a.AlbumId)).ToList();
+        }
+        else
+        {
+            // Someone else's track: only albums shared with the viewer, which are exactly
+            // the album grants they hold on it (TRACK#{t} / SHARED#{viewer}#ALBUM#{id})
+            var grants = await _dynamoDbService.QueryAsync<AlbumTrackGrantDataModel>(
+                $"TRACK#{trackId.ToLowerInvariant()}",
+                $"SHARED#{viewerUsername}#ALBUM#",
+                QueryOperator.BeginsWith);
+            if (grants.Count == 0)
+                return [];
+            albums = await _dynamoDbService.BatchGetAsync<AlbumDataModel>(
+                grants.Select(g => g.AlbumId).Distinct().Select(id => Keys.Album(trackOwnerUsername, id)));
+        }
+
+        if (albums.Count == 0)
+            return [];
+
+        // Every album here is the track owner's
+        var ownerTask = ProfileLookup.GetAsync(_dynamoDbService, [trackOwnerUsername]);
+        var likedTask = AlbumLikeRepository.GetLikedAlbumIdsAsync(
+            _dynamoDbService, viewerUsername, albums.Select(a => a.AlbumId).ToList());
+        await Task.WhenAll(ownerTask, likedTask);
+        if (!ownerTask.Result.TryGetValue(trackOwnerUsername, out var owner))
+            return [];
+
+        return albums
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => AlbumSummary.From(a, owner, likedTask.Result.Contains(a.AlbumId)))
+            .ToList();
     }
 
     public async Task DeleteAllTracksAsync(string albumId)

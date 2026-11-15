@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Details } from '@/components/forms/edit-details-dialog'
 import { api, isNotFound } from '@/lib/api-client'
+import { invalidateAppearsIn } from '@/lib/appears-in'
 import { stageUpload } from '@/lib/dropbox'
 import type { PaginatedResult, Recipient, ShareChange, ShareNote, TrackSummary, UserSummary } from '@/types/api'
 
@@ -97,6 +98,7 @@ export function useUpdateAlbum(id: string) {
       // The name and cover show in every album list, search, and recipients' feeds
       void queryClient.invalidateQueries({ queryKey: ['albums'] })
       void queryClient.invalidateQueries({ queryKey: ['feed'] })
+      invalidateAppearsIn(queryClient)
     },
   })
 }
@@ -117,6 +119,7 @@ function useLeavingMutation(request: () => Promise<unknown>) {
       })
       // Its tracks drop out of (or turn into placeholders in) playlists and likes
       void queryClient.invalidateQueries({ queryKey: ['playlists'] })
+      invalidateAppearsIn(queryClient)
     },
   })
 }

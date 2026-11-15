@@ -98,6 +98,35 @@ test.describe('track', () => {
     expect(again.suggestedFilename()).toBe(fileName);
   });
 
+  test("someone it's shared with sees what the owner said when sharing it", async ({ page, apiContext, playwright }) => {
+    // A shares their newest track with B with a caption; B opens it
+    const track = (await (await apiContext.get('/tracks?limit=1')).json()).items[0];
+    test.skip(!track, 'user A has no tracks');
+    const userB = await signIn(TEST_USER_B);
+    const apiContextB = await newApiContext(playwright, userB.idToken);
+    const b = TEST_USER_B.username.toLowerCase();
+    const before = await apiContextB.get(`/tracks/${track.id}`);
+    const hadIt = before.ok() && (await before.json()).myShare !== undefined;
+    const caption = `E2E caption ${Date.now()}`;
+    try {
+      expect((await apiContext.post(`/tracks/${track.id}/share`, { data: { add: [b], remove: [], caption } })).ok()).toBe(true);
+
+      await page.goto('/login');
+      await page.getByLabel('Username or email').fill(TEST_USER_B.username);
+      await page.getByLabel('Password').fill(TEST_USER_B.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.waitForURL((url) => url.pathname === '/');
+      await page.goto(`/tracks/${track.id}`);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(track.name);
+      await expect(page.getByText(/^FROM /)).toBeVisible();
+      await expect(page.getByText(`“${caption}”`)).toBeVisible();
+    } finally {
+      // Leave B as it was: unshared again if this test shared it
+      if (!hadIt) await apiContext.post(`/tracks/${track.id}/share`, { data: { add: [], remove: [b] } });
+      await apiContextB.dispose();
+    }
+  });
+
   test("someone it's shared with isn't offered the original", async ({ authenticatedPage: page, playwright }) => {
     test.skip(!findAudioFixture(), 'no audio fixture in e2e/fixtures/assets (sample.<ext>)');
     test.setTimeout(150_000);

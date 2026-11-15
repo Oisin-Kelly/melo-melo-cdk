@@ -77,6 +77,7 @@ public class FollowRepositoryTests(DynamoDbLocalFixture fixture)
         var profile = (await seed.ProfileAsync(user))!;
         (profile.FollowerCount, profile.FollowingCount).Should().Be((0, 0));
         (await db.QueryAsync<UserFollowDataModel>($"FOLLOW#{user}", "USER#", QueryOperator.BeginsWith)).Should().BeEmpty();
+        await fixture.ProcessStreamAsync();
         (await db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{user}", "DATE#", QueryOperator.BeginsWith)).Should().BeEmpty();
     }
 

@@ -43,5 +43,10 @@ namespace Domain
 
         [DynamoDBProperty("sharedAt")]
         public required long SharedAt { get; set; }
+
+        // ShareVia.Link when the recipient added it from a share link (no "shared with you"
+        // activity for their own doing); absent for an owner's share
+        [DynamoDBProperty("via")]
+        public string? Via { get; set; }
     }
 }

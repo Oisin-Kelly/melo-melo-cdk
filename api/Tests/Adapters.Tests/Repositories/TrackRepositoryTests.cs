@@ -24,6 +24,7 @@ public class TrackRepositoryTests(DynamoDbLocalFixture fixture)
         {
             (await shares.IsTrackSharedWithUser(trackId, recipient)).Should().BeTrue();
             (await db.QueryAsync<FeedItemDataModel>($"FEED#{recipient}", FeedItemType.Track, QueryOperator.BeginsWith)).Should().ContainSingle();
+            await fixture.ProcessStreamAsync();
             (await db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{recipient}", "DATE#", QueryOperator.BeginsWith)).Should().ContainSingle(r => r.Type == ActivityType.TrackShared && r.TargetId == trackId);
         }
     }

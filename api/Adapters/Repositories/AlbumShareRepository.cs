@@ -78,7 +78,6 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
         {
             var addBatch = _dynamoDbService.CreateBatchWritePart<AlbumShareDataModel>();
             var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-            var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
             foreach (var recipient in adds)
             {
                 addBatch.AddPutItem(new AlbumShareDataModel
@@ -91,15 +90,15 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
                     AlbumOwnerUsername = ownerUsername,
                     Caption = caption,
                     SharedAt = now,
+                    // Recipients' "shared with you" activity follows from this record
+                    // (ActivityEvents) — except a share-link accept, their own doing
+                    Via = notifyRecipients ? null : ShareVia.Link,
                 });
                 feedBatch.AddPutItem(
                     FeedItems.Build(recipient, FeedItemType.Album, normalisedId, ownerUsername, now, caption));
-                if (notifyRecipients)
-                    activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.AlbumShared,
-                        ownerUsername, FeedItemType.Album, normalisedId, now));
             }
 
-            await _dynamoDbService.ExecuteBatchWriteAsync(addBatch, feedBatch, activityBatch);
+            await _dynamoDbService.ExecuteBatchWriteAsync(addBatch, feedBatch);
         }
 
         var shareDelta = newRecipients.Count - removes.Count;

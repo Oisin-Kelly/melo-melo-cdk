@@ -158,17 +158,13 @@ public sealed class TrackRepository : ITrackRepository
     {
         await _dynamoDbService.ExecuteTransactWriteAsync(trackTx, sharedTx);
 
+        // Recipients' "shared with you" activity follows from the share records (ActivityEvents)
         var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-        var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
         foreach (var recipient in input.SharedWith)
-        {
             feedBatch.AddPutItem(FeedItems.Build(recipient, FeedItemType.Track, trackId, input.Username, now,
                 input.Caption));
-            activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, input.Username,
-                FeedItemType.Track, trackId, now));
-        }
 
-        await _dynamoDbService.ExecuteBatchWriteAsync(feedBatch, activityBatch);
+        await _dynamoDbService.ExecuteBatchWriteAsync(feedBatch);
     }
 
     public async Task<Track?> UpdateTrackAsync(string ownerUsername, string trackId, string name, string? genre,

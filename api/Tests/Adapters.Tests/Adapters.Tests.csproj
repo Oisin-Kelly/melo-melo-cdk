@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBStreams" Version="4.1.0" />
     <PackageReference Include="FluentAssertions" Version="7.2.2" />
     <PackageReference Include="NSubstitute" Version="6.2.0" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />

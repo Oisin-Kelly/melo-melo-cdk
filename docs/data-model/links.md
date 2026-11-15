@@ -47,6 +47,6 @@ Signed in. Revoked/unknown/deleted → 404. `relation`: `OWN` (with the link's s
 #### `POST /links/{token}/accept` — AcceptLinkLambda
 Signed in. Revoked/unknown/deleted → 404; own link → 400; expired → 410; already has access → 200, nothing written. Otherwise:
 1. **Claim**: `UpdateItem(LINK#{token}) ADD acceptedCount 1` guarded `attribute_exists(PK) AND attribute_not_exists(revokedAt) AND linkExpiresAt > :now` — run **before** the share, so a revoke or expiry racing the accept wins (failed claim → 404/410, nothing shared). The counter is display-only; drift if the share then fails is tolerated.
-2. **Share**: the ordinary upsert with `add: [caller]`, the link's `caption` as the share caption, `notifyRecipients: false` — the feed item is written, the "shared with you" activity isn't (they added it themselves). `GetValidatedRecipientsAsync` is skipped on purpose: the recipient's `incomingShares` setting doesn't apply to something they chose to add. Album grants fan out as for any new album recipient.
+2. **Share**: the ordinary upsert with `add: [caller]`, the link's `caption` as the share caption, `notifyRecipients: false` — the feed item is written, the share record carries `via: LINK`, so the stream consumer writes no "shared with you" activity (they added it themselves). `GetValidatedRecipientsAsync` is skipped on purpose: the recipient's `incomingShares` setting doesn't apply to something they chose to add. Album grants fan out as for any new album recipient.
 
 Returns `{kind, id, owner, slug}`.

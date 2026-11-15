@@ -38,33 +38,37 @@ test.describe('Activity feed', () => {
     const activityA = async () => (await (await apiContext.get('/activity')).json()).items as Activity[];
     const activityB = async () => (await (await apiContextB.get('/activity')).json()).items as Activity[];
 
+    // Activity follows from the like/share/follow records through the table's stream (a second
+    // or so behind), so each check waits for it
+    const poll = { timeout: 15_000 };
+    const findIn = async (rows: () => Promise<Activity[]>, type: string, targetId: string) => {
+      let found: Activity | undefined;
+      await expect.poll(async () => (found = (await rows()).find((a) => a.type === type && a.targetId === targetId)), poll).toBeTruthy();
+      return found!;
+    };
+
     try {
       // TRACK_SHARED reached B (from the upload sharedWith)
-      const shared = (await activityB()).find(
-        (a) => a.type === 'TRACK_SHARED' && a.targetId === sharedTrack
-      );
-      expect(shared).toBeTruthy();
+      const shared = await findIn(activityB, 'TRACK_SHARED', sharedTrack);
       expect(shared!.actor.username).toBe(user.username);
       expect(shared!.targetName).toBeTruthy();
 
       // A shares an already-uploaded track via POST → TRACK_SHARED reaches B
       // (exercises ShareTrackAsync's activity write, distinct from the upload path)
       await apiContext.post(`/tracks/${albumTrack1}/share`, { data: { add: [userB.username] } });
-      expect((await activityB()).some((a) => a.type === 'TRACK_SHARED' && a.targetId === albumTrack1)).toBe(true);
+      await findIn(activityB, 'TRACK_SHARED', albumTrack1);
 
       // B likes A's track → TRACK_LIKED reaches A (the owner)
       await apiContextB.post(`/tracks/${sharedTrack}/like`, { data: { newValue: true } });
-      const liked = (await activityA()).find((a) => a.type === 'TRACK_LIKED' && a.targetId === sharedTrack);
-      expect(liked).toBeTruthy();
-      expect(liked!.actor.username).toBe(userB.username);
+      const liked = await findIn(activityA, 'TRACK_LIKED', sharedTrack);
+      expect(liked.actor.username).toBe(userB.username);
 
-      // A likes their OWN track → no self-echo
+      // A likes their OWN track → no self-echo (checked below, once later activity has arrived)
       await apiContext.post(`/tracks/${albumTrack1}/like`, { data: { newValue: true } });
-      expect((await activityA()).some((a) => a.type === 'TRACK_LIKED' && a.targetId === albumTrack1)).toBe(false);
 
       // A shares the album with B → ALBUM_SHARED reaches B
       await apiContext.post(`/albums/${album.id}/share`, { data: { add: [userB.username] } });
-      expect((await activityB()).some((a) => a.type === 'ALBUM_SHARED' && a.targetId === album.id)).toBe(true);
+      await findIn(activityB, 'ALBUM_SHARED', album.id);
 
       // A adds a track to the shared album → B gains access but gets no activity row
       await apiContext.put(`/albums/${album.id}/tracks`, {
@@ -74,12 +78,11 @@ test.describe('Activity feed', () => {
 
       // B likes A's album → ALBUM_LIKED reaches A (the owner), with the album name
       await apiContextB.post(`/albums/${album.id}/like`, { data: { newValue: true } });
-      const albumLiked = (await activityA()).find(
-        (a) => a.type === 'ALBUM_LIKED' && a.targetId === album.id
-      );
-      expect(albumLiked).toBeTruthy();
-      expect(albumLiked!.actor.username).toBe(userB.username);
-      expect(albumLiked!.targetName).toBeTruthy();
+      const albumLiked = await findIn(activityA, 'ALBUM_LIKED', album.id);
+      expect(albumLiked.actor.username).toBe(userB.username);
+      expect(albumLiked.targetName).toBeTruthy();
+      // The self-like from earlier never made a row
+      expect((await activityA()).some((a) => a.type === 'TRACK_LIKED' && a.targetId === albumTrack1)).toBe(false);
 
       // activity-seen marker is private and bumped
       await apiContextB.post('/me/activity-seen', { data: {} });

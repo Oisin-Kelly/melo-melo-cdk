@@ -93,20 +93,20 @@ Request body: `{newValue: true|false}`. Following (or unfollowing) yourself, in 
 
 **Follow** (`newValue: true`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. **TransactWrite** (4 parts, atomic):
-   - `Save` follow record, guarded `attribute_not_exists(PK)` via `AddConditionalSave` (a concurrent double-follow cancels the whole transaction — counters and activity included): `PK=FOLLOW#{username}, SK=USER#{requestor}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}, GSI3PK=FOLLOWERS#{username}, GSI3SK=DATE#{epochMs}#USER#{requestor}`
+2. **TransactWrite** (3 parts, atomic):
+   - `Save` follow record, guarded `attribute_not_exists(PK)` via `AddConditionalSave` (a concurrent double-follow cancels the whole transaction, so the record — and the activity derived from it — is written once): `PK=FOLLOW#{username}, SK=USER#{requestor}, GSI1PK=FOLLOWING#{requestor}, GSI1SK=DATE#{epochMs}#TARGET#{username}, GSI3PK=FOLLOWERS#{username}, GSI3SK=DATE#{epochMs}#USER#{requestor}`
    - `Update` target user: `ADD followerCount :1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :1` on `PK=USER#{requestor}, SK=PROFILE`
-   - `Save` `USER_FOLLOWED` activity for the followed user: `PK=ACTIVITY#{username}, SK=DATE#{epochMs}#FOLLOW#{requestor}` — deterministic SK (same `epochMs` stored as the follow record's `createdAt`) so unfollow can delete it. See [activity.md](activity.md).
+   - The followed user's `USER_FOLLOWED` activity (`SK=DATE#{createdAt}#FOLLOW#{requestor}`) follows from the follow record via the stream — see [activity.md](activity.md).
 
 **Unfollow** (`newValue: false`):
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → verify target user exists
-2. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → follow record + its `createdAt` (for the activity key); no-op if absent
-3. **TransactWrite** (3 parts, atomic; **4 parts** when the follow record has a `createdAt`):
+2. `GetItem(PK=FOLLOW#{username}, SK=USER#{requestor})` → follow record; no-op if absent
+3. **TransactWrite** (3 parts, atomic):
    - `Delete` follow record, guarded `attribute_exists(PK)` (all parts run via `TryExecuteTransactWriteAsync`, so a concurrent double-unfollow decrements once)
    - `Update` target user: `ADD followerCount :-1` on `PK=USER#{username}, SK=PROFILE`
    - `Update` requestor: `ADD followingCount :-1` on `PK=USER#{requestor}, SK=PROFILE`
-   - `DeleteKey` the `USER_FOLLOWED` activity: `PK=ACTIVITY#{username}, SK=DATE#{createdAt}#FOLLOW#{requestor}` — reconstructed from the follow record's `createdAt` (pre-existing records lacking it skip cleanly; a keyed delete of a missing item is a harmless no-op)
+   - Deleting the follow record deletes its `USER_FOLLOWED` activity row (stream consumer)
 
 #### `GET /users/{username}/followers` — GetUserFollowersLambda
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → check user exists (follow lists are visible to anyone signed in)

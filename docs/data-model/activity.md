@@ -8,11 +8,21 @@ Part of the [data model](README.md). The per-recipient activity log and the resu
 
 | PK | SK |
 |----|-----|
-| `ACTIVITY#{recipient}` | `DATE#{epochMs}#{shortId}` (likes/shares) or `DATE#{followTs}#FOLLOW#{follower}` (follows) |
+| `ACTIVITY#{recipient}` | `DATE#{likedAt}#LIKE#{liker}#{TYPE}#{id}` (likes), `DATE#{sharedAt}#SHARE#{TYPE}#{id}` (shares), `DATE#{followTs}#FOLLOW#{follower}` (follows) |
 
-Attributes: `type` (`TRACK_LIKED` \| `ALBUM_LIKED` \| `TRACK_SHARED` \| `ALBUM_SHARED` \| `USER_FOLLOWED`), `actorUsername`, `targetType` (`TRACK`\|`ALBUM`\|`USER`), `targetId`, `createdAt`, `expiresAt` (90-day TTL). No GSI — queried newest-first by the descending `DATE#` sort key; the random `shortId` disambiguates same-ms like/share events, while **follow** items instead use a deterministic `FOLLOW#{follower}` suffix (built by `ActivityItems.BuildFollow`) so unfollow can reconstruct and delete the exact key.
+Attributes: `type` (`TRACK_LIKED` \| `ALBUM_LIKED` \| `TRACK_SHARED` \| `ALBUM_SHARED` \| `USER_FOLLOWED`), `actorUsername`, `targetType` (`TRACK`\|`ALBUM`\|`USER`), `targetId`, `createdAt` (the like's/share's/follow's own timestamp). No GSI and **no TTL** — a row lasts exactly as long as the record behind it. Queried newest-first by the descending `DATE#` sort key.
 
-Recipient-perspective, written in the triggering operation's batch/transaction (`ActivityItems`): `TRACK_LIKED`/`ALBUM_LIKED` → the track/album owner (never a self-like); `TRACK_SHARED`/`ALBUM_SHARED` → every recipient in the share's `add` (a re-share to an existing recipient writes a fresh row; liveness shows only the newest, see below); `USER_FOLLOWED` → the followed user (never a self-follow), written as a 4th part of the follow transaction (its `USER` target is the follower, which the actor profile already carries, so there is no separate name to hydrate). Adding tracks to a shared album grants access but deliberately writes no activity. Read hydration resolves the actor profile and, for track/album targets, the target name (target owner = the actor except for the like types, where the viewer owns their liked track/album). Listen-analytics events could slot into this entity later.
+**Written by the table's stream, not the request.** The rows are derived from the records that cause them by `Adapters/Events/ActivityEvents`, run by `TableEventsLambda` off the table's DynamoDB Stream (`NEW_AND_OLD_IMAGES`; see [README.md](README.md#stream-consumers)). Like/share/follow writes keep only their counters in their transactions.
+
+| Record (keys) | Added | Changed | Removed |
+|---|---|---|---|
+| `TRACK#{t}` / `LIKE#{u}` | `TRACK_LIKED` → `trackOwnerUsername` (no self-like) | — | row deleted |
+| `ALBUM#{a}` / `LIKE#{u}` | `ALBUM_LIKED` → `albumOwnerUsername` (no self-like) | — | row deleted |
+| `TRACK#{t}` / `SHARED#{r}` | `TRACK_SHARED` → `r` | new `sharedAt` (re-share): old row deleted, new one written (moves to the top) | row deleted |
+| `ALBUM#{a}` / `SHARED#{r}` | `ALBUM_SHARED` → `r` | as above | row deleted |
+| `FOLLOW#{target}` / `USER#{follower}` | `USER_FOLLOWED` → target | — | row deleted |
+
+Album grants (`SHARED#{r}#ALBUM#{id}`) make no row (adding tracks to a shared album grants access silently). A share record with `via: "LINK"` (the recipient accepted a share link — their own doing) makes no row; an owner re-sharing it later rewrites the record without `via`, which does. TTL expiries are ignored. Every key is rebuilt from the record's own attributes, so a redelivered change rewrites the same row and a removal deletes the exact one. Read hydration resolves the actor profile and, for track/album targets, the target name (target owner = the actor except for the like types, where the viewer owns their liked track/album).
 
 ### User Progress (resume / continue-listening)
 
@@ -28,14 +38,8 @@ Attributes: `contextType` (`TRACK`/`ALBUM`/`PLAYLIST`, or `LIST` — a list the 
 
 ### Activity API
 
-#### `GET /activity` — GetActivityLambda — a **live snapshot**, not an event log
-`Query(PK=ACTIVITY#{requestor}, begins_with DATE#, ScanIndexForward=false, Limit=20, cursor)` → BatchGet actor profiles + target metas (per-type owner; keys **de-duplicated** — a user can have multiple activities about the same target, and `BatchGetItem` rejects duplicate keys) → `PaginatedResult<ActivityEntry>`. The read materialises current state: a row is kept only if **all** of
-
-1. the **actor** resolves,
-2. for like/share rows, the **target** still resolves (deleted track/album ⇒ dropped), **and**
-3. for like/share rows, the **exact relationship record that produced the row still exists** — a liveness probe (`KeyProbeDataModel` BatchGet) of `TRACK#{t}/SHARED#{viewer}`, `ALBUM#{a}/SHARED#{viewer}`, `TRACK#{t}/LIKE#{actor}`, or `ALBUM#{a}/LIKE#{actor}`. The probe also reads the record's `likedAt`/`sharedAt`, which must equal the row's `createdAt` (all writers use one `now` for both) — so after unlike→re-like or a re-share, only the newest row shows and older rows don't revive against the recreated key. This is what makes unshare / unlike / remove-from-library drop the row. Deliberately the *direct* record, not general access (an album grant must not keep a `TRACK_SHARED` row alive).
-
-Follow rows skip (2) and (3): their `USER` target has no name and they're **eager-deleted on unfollow** (deterministic SK, keyed-delete in the same transaction that removes the follow record). Rows are never *physically* deleted on unshare/unlike (they age out via the 90-day TTL) — the read does the hiding, so heavy filtering can yield a short page while `NextCursor` is non-null (return-short; the client keeps paging).
+#### `GET /activity` — GetActivityLambda
+`Query(PK=ACTIVITY#{requestor}, begins_with DATE#, ScanIndexForward=false, Limit=20, cursor)` → BatchGet actor profiles + target metas (per-type owner; keys **de-duplicated** — `BatchGetItem` rejects duplicate keys) → `PaginatedResult<ActivityEntry>`. Rows already exist only while their like/share/follow does (the stream consumer deletes them with it), so the read just drops a row whose **actor** no longer resolves or — for like/share rows — whose **target** has been deleted. A dropped row can make a short page while `NextCursor` is non-null (return-short; the client keeps paging).
 
 #### `POST /me/activity-seen` — MarkActivitySeenLambda
 `UpdateItem SET activitySeenAt = now` on the profile (unread-activity marker). The client badges activity newer than this — and must compute the badge from the **filtered `GET /activity` feed**, never a raw item count, or it would count hidden/stale rows the list doesn't show.

@@ -17,8 +17,11 @@ public class AlbumLikeRepositoryTests(DynamoDbLocalFixture fixture)
         return (seed, new AlbumLikeRepository(db), owner, fan, albumId);
     }
 
-    private Task<List<ActivityItemDataModel>> ActivityAsync(string username) =>
-        fixture.Db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{username}", "DATE#", QueryOperator.BeginsWith);
+    private async Task<List<ActivityItemDataModel>> ActivityAsync(string username)
+    {
+        await fixture.ProcessStreamAsync();
+        return await fixture.Db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{username}", "DATE#", QueryOperator.BeginsWith);
+    }
 
     [Fact]
     public async Task ConcurrentDoubleLike_CountsOnce_UnlikeIsIdempotent()

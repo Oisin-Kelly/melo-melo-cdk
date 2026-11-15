@@ -1,5 +1,9 @@
+using System.Collections.Generic;
 using Amazon.CDK;
+using Amazon.CDK.AWS.CloudWatch;
 using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.Lambda.EventSources;
+using Amazon.CDK.AWS.SQS;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.S3;
 using Constructs;
@@ -250,6 +254,8 @@ public class LambdaStack : BaseStack
         var getDropboxPresignedUrl = CreateLambdaFunction("Track/GetDropboxPresignedUrlLambda");
         dropboxBucket.GrantWrite(getDropboxPresignedUrl);
 
+        AddTableEvents(table);
+
         ApiFunctions = new ApiFunctions(
             GetUser: getUser,
             SearchUsers: searchUsers,
@@ -313,6 +319,65 @@ public class LambdaStack : BaseStack
             GetLinkViewer: getLinkViewer,
             AcceptLink: acceptLink
         );
+    }
+
+    // Table events: the activity feed follows from likes, shares and follows being added or
+    // removed (Adapters/Events/ActivityEvents), read off the table's stream in order per item.
+    // Only those records reach the Lambda (filters, any one matches); one batch per shard at
+    // a time keeps the order; a failing record is retried, then parked in the dead-letter
+    // queue so it can't hold its shard up for the stream's 24 hours.
+    private void AddTableEvents(ITable table)
+    {
+        var tableEvents = CreateLambdaFunction("Events/TableEventsLambda");
+        table.GrantReadWriteData(tableEvents);
+
+        var deadLetters = new Queue(this, "TableEventsDlq", new QueueProps
+        {
+            QueueName = $"table-events-dlq-{Env}",
+            RetentionPeriod = Duration.Days(14),
+        });
+        new Alarm(this, "TableEventsDlqAlarm", new AlarmProps
+        {
+            AlarmName = $"table-events-dlq-{Env}",
+            AlarmDescription = "A table change couldn't be processed (activity) — see the dead-letter queue",
+            Metric = deadLetters.MetricApproximateNumberOfMessagesVisible(),
+            Threshold = 1,
+            EvaluationPeriods = 1,
+            ComparisonOperator = ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            TreatMissingData = TreatMissingData.NOT_BREACHING,
+        });
+
+        // Event-filter patterns, written out ({"S": [{"prefix": …}]}) with concrete Dictionary
+        // values all the way down: jsii can't pass IDictionary-typed values (FilterRule's
+        // included) back into CDK
+        static IDictionary<string, object> KeysMatch(Dictionary<string, object> keys) =>
+            FilterCriteria.Filter(new Dictionary<string, object>
+            {
+                ["dynamodb"] = new Dictionary<string, object> { ["Keys"] = keys },
+            });
+        static Dictionary<string, object> Prefix(string prefix) =>
+            new() { ["S"] = new object[] { new Dictionary<string, object> { ["prefix"] = prefix } } };
+
+        tableEvents.AddEventSource(new DynamoEventSource(table, new DynamoEventSourceProps
+        {
+            StartingPosition = StartingPosition.LATEST,
+            BatchSize = 100,
+            ParallelizationFactor = 1,
+            BisectBatchOnError = true,
+            ReportBatchItemFailures = true,
+            RetryAttempts = 5,
+            MaxRecordAge = Duration.Hours(1),
+            OnFailure = new SqsDlq(deadLetters),
+            Filters =
+            [
+                // Track and album likes: {TRACK|ALBUM}#{id} / LIKE#{user}
+                KeysMatch(new Dictionary<string, object> { ["SK"] = Prefix("LIKE#") }),
+                // Track and album shares (and album grants, which the handler skips)
+                KeysMatch(new Dictionary<string, object> { ["SK"] = Prefix("SHARED#") }),
+                // Follows: FOLLOW#{target} / USER#{follower} — both in one pattern
+                KeysMatch(new Dictionary<string, object> { ["PK"] = Prefix("FOLLOW#"), ["SK"] = Prefix("USER#") }),
+            ],
+        }));
     }
 
     private Function CreateLambdaFunction(string lambdaName, int memorySize = 512)

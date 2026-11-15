@@ -13,3 +13,9 @@ public record ShareNote
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Caption { get; set; }
 }
+
+/// How a share record came about, when it wasn't the owner sharing it (the `via` attribute)
+public static class ShareVia
+{
+    public const string Link = "LINK";
+}

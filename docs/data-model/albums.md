@@ -90,14 +90,14 @@ Declarative save from the edit-tracks screen: `{trackIds: [...]}` (≤50, all ow
 #### `POST /albums/{albumId}/share` — ShareAlbumLambda
 Request body: `{add: [users], remove: [users], caption?}` — owner-only; caption sanitised/validated (`ValidateShare`, ≤300); recipients validated via `GetValidatedRecipientsAsync` (strips self/unknown/dupes + enforces each recipient's `incomingShares` setting); ≤50 people in `add` and ≤50 in `remove` per request, no total cap. The Lambda passes the **full** validated add list (no pre-dedup); `ShareAlbumAsync` classifies each against existing shares (upsert — see below).
 1. Removes: delete grants (every track × removed user) first, then AlbumShare records (and their feed items)
-2. Adds (upsert — every recipient in `add` is written): **new** recipient → write grants (every track × user) + AlbumShare record + feed item + `ALBUM_SHARED` activity; **existing** recipient → overwrite the AlbumShare record with the request's caption + fresh `sharedAt` (resurfaces the feed & shared-list) + new activity, grants untouched. No same-caption short-circuit; re-sharing without a caption overwrites the stored caption to null. A user in both `add` and `remove` → remove wins
+2. Adds (upsert — every recipient in `add` is written): **new** recipient → write grants (every track × user) + AlbumShare record (`via: LINK` on a share-link accept) + feed item; **existing** recipient → overwrite the AlbumShare record with the request's caption + fresh `sharedAt` (resurfaces the feed & shared-list), grants untouched. The recipients' `ALBUM_SHARED` activity follows from the AlbumShare records via the stream ([activity.md](activity.md)); a re-share moves it to the top. No same-caption short-circuit; re-sharing without a caption overwrites the stored caption to null. A user in both `add` and `remove` → remove wins
 3. `shareCount` adjusted by **new recipients** minus **removals that hit an existing share** (reshares don't count; removing a non-recipient is a no-op)
 
 #### `DELETE /albums/shared/{albumId}` — RemoveSharedAlbumLambda
 Recipient-side "remove from my library" — the mirror of a single-recipient unshare, callable by anyone (drops the caller's own access; no owner check). `RemoveAlbumFromLibraryAsync`:
 1. `GetItem(PK=ALBUM#{id}, SK=SHARED#{requestor})` → **idempotency guard**: no-op 200 if absent
 2. Delete the caller's grants (every track × requestor) first, then **one transaction**: the AlbumShare record (guarded `attribute_exists(PK)`) + its feed item (`FEED#{requestor}` / `ALBUM#{id}`) + step 3's counter — a concurrent double-remove cancels the loser, so it decrements once. Only `…#ALBUM#{albumId}` keys are touched, so any direct `SHARED#{requestor}` track shares survive — a track shared both directly and via this album stays accessible directly
-3. Decrement the owner's `shareCount` by 1, in that same transaction (kept equal to the live AlbumShare record count, so the re-share upsert stays consistent). The `ALBUM_SHARED` activity item ages out via TTL, same as owner-side unshare.
+3. Decrement the owner's `shareCount` by 1, in that same transaction (kept equal to the live AlbumShare record count, so the re-share upsert stays consistent). Deleting the AlbumShare record also deletes its `ALBUM_SHARED` activity row (stream consumer), same as owner-side unshare.
 
 ### Album Like APIs
 

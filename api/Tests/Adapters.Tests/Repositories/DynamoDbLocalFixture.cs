@@ -1,8 +1,15 @@
+using Adapters.Events;
 using Adapters.Services;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Amazon.Runtime;
+using Domain;
 using Ports.Services;
+using StreamsClient = Amazon.DynamoDBStreams.AmazonDynamoDBStreamsClient;
+using StreamsConfig = Amazon.DynamoDBStreams.AmazonDynamoDBStreamsConfig;
+using StreamsModel = Amazon.DynamoDBStreams.Model;
+using StreamRecord = Amazon.DynamoDBStreams.Model.Record;
+using StreamValue = Amazon.DynamoDBStreams.Model.AttributeValue;
 
 namespace Adapters.Tests.Repositories;
 
@@ -20,6 +27,10 @@ public sealed class DynamoDbLocalFixture : IAsyncLifetime
 {
     private readonly string _tableName = $"melo-unit-{Guid.NewGuid():N}";
     private AmazonDynamoDBClient? _client;
+    private StreamsClient? _streams;
+    private string? _streamArn;
+    // Where each shard of the table's stream has been read up to (null: the shard is closed)
+    private readonly Dictionary<string, string?> _shardIterators = new();
     private IDynamoDBService? _service;
     private string? _unavailableReason;
 
@@ -44,6 +55,15 @@ public sealed class DynamoDbLocalFixture : IAsyncLifetime
             MaxErrorRetry = 0,
         });
 
+        _streams = new StreamsClient(new BasicAWSCredentials("local", "local"),
+            new StreamsConfig
+            {
+                ServiceURL = url,
+                AuthenticationRegion = "eu-west-1",
+                Timeout = TimeSpan.FromSeconds(5),
+                MaxErrorRetry = 0,
+            });
+
         try
         {
             await CreateTableAsync(_client);
@@ -67,7 +87,58 @@ public sealed class DynamoDbLocalFixture : IAsyncLifetime
         if (_service is not null)
             await _client.DeleteTableAsync(_tableName);
         _client.Dispose();
+        _streams?.Dispose();
     }
+
+    /// What production's stream consumer (TableEventsLambda) does after a write, done now:
+    /// every change on the table's stream since the last call, in order, through the real
+    /// handlers (today ActivityEvents). Call it after the writes and before reading anything
+    /// they derive, e.g. GET /activity.
+    public async Task ProcessStreamAsync()
+    {
+        var handler = new ActivityEvents(Db);
+        var shards = (await _streams!.DescribeStreamAsync(new StreamsModel.DescribeStreamRequest { StreamArn = _streamArn })).StreamDescription.Shards;
+        foreach (var shard in shards)
+        {
+            if (!_shardIterators.TryGetValue(shard.ShardId, out var iterator))
+                iterator = (await _streams.GetShardIteratorAsync(new StreamsModel.GetShardIteratorRequest
+                {
+                    StreamArn = _streamArn,
+                    ShardId = shard.ShardId,
+                    ShardIteratorType = Amazon.DynamoDBStreams.ShardIteratorType.TRIM_HORIZON,
+                })).ShardIterator;
+
+            while (iterator is not null)
+            {
+                var page = await _streams.GetRecordsAsync(new StreamsModel.GetRecordsRequest { ShardIterator = iterator });
+                foreach (var record in page.Records ?? [])
+                    await handler.HandleAsync(ToChange(record));
+                iterator = page.NextShardIterator;
+                if (page.Records is not { Count: > 0 })
+                    break; // caught up on an open shard
+            }
+            _shardIterators[shard.ShardId] = iterator;
+        }
+    }
+
+    // The same flattening TableEventsLambda does to a Lambda stream event
+    private static TableChange ToChange(StreamRecord record) => new(
+        record.EventName.Value switch
+        {
+            "INSERT" => TableChangeKind.Insert,
+            "MODIFY" => TableChangeKind.Modify,
+            _ => TableChangeKind.Remove,
+        },
+        Flatten(record.Dynamodb.Keys)!,
+        Flatten(record.Dynamodb.NewImage),
+        Flatten(record.Dynamodb.OldImage),
+        record.UserIdentity is { Type: "Service", PrincipalId: "dynamodb.amazonaws.com" });
+
+    private static Dictionary<string, string>? Flatten(Dictionary<string, StreamValue>? image) =>
+        image is not { Count: > 0 }
+            ? null
+            : image.Where(kv => kv.Value.S is not null || kv.Value.N is not null)
+                .ToDictionary(kv => kv.Key, kv => (kv.Value.S ?? kv.Value.N)!);
 
     // Mirrors infra/DataStack.cs: PK/SK, GSI1 (GSI1PK/GSI1SK), GSI2 (GSI1PK/GSI2SK — shared
     // hash key), GSI3 (GSI3PK/GSI3SK), all projecting ALL
@@ -81,8 +152,13 @@ public sealed class DynamoDbLocalFixture : IAsyncLifetime
             Projection = new Projection { ProjectionType = ProjectionType.ALL },
         };
 
-        await client.CreateTableAsync(new CreateTableRequest
+        var created = await client.CreateTableAsync(new CreateTableRequest
         {
+            StreamSpecification = new StreamSpecification
+            {
+                StreamEnabled = true,
+                StreamViewType = StreamViewType.NEW_AND_OLD_IMAGES,
+            },
             TableName = _tableName,
             BillingMode = BillingMode.PAY_PER_REQUEST,
             AttributeDefinitions = new[] { "PK", "SK", "GSI1PK", "GSI1SK", "GSI2SK", "GSI3PK", "GSI3SK" }
@@ -96,5 +172,6 @@ public sealed class DynamoDbLocalFixture : IAsyncLifetime
                 Gsi("GSI3", "GSI3PK", "GSI3SK"),
             ],
         });
+        _streamArn = created.TableDescription.LatestStreamArn;
     }
 }

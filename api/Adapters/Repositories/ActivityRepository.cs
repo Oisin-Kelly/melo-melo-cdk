@@ -34,23 +34,6 @@ public sealed class ActivityRepository : IActivityRepository
         string TargetOwner(ActivityItemDataModel a) =>
             a.Type is ActivityType.TrackLiked or ActivityType.AlbumLiked ? username : a.ActorUsername;
 
-        // Liveness key: the exact SHARED#/LIKE# record that produced this activity. If it's gone
-        // (unshared, unliked, removed, revoked), the activity is stale and must not show — this is
-        // what makes GET /activity a live snapshot of current relationships rather than an event
-        // log. NOT general access (e.g. album grants) — the direct record that caused this row.
-        // The record must also be the *same* one: its likedAt/sharedAt has to equal the row's
-        // createdAt, so after unlike→re-like or a re-share only the newest row shows instead of
-        // the old ones reviving against the recreated key.
-        // Follow has no liveness key: it's already eager-deleted on unfollow.
-        (string pk, string sk)? RelKey(ActivityItemDataModel a) => a.Type switch
-        {
-            ActivityType.TrackShared => ($"TRACK#{a.TargetId}", $"SHARED#{username}"),
-            ActivityType.AlbumShared => ($"ALBUM#{a.TargetId}", $"SHARED#{username}"),
-            ActivityType.TrackLiked => ($"TRACK#{a.TargetId}", $"LIKE#{a.ActorUsername}"),
-            ActivityType.AlbumLiked => ($"ALBUM#{a.TargetId}", $"LIKE#{a.ActorUsername}"),
-            _ => null,
-        };
-
         // Keys must be de-duplicated: a user can have several activities about the same
         // target (e.g. a track re-shared after an unshare, or re-liked), and BatchGetItem
         // rejects duplicate keys in one request.
@@ -60,20 +43,17 @@ public sealed class ActivityRepository : IActivityRepository
         var albumKeys = items.Where(a => a.TargetType == FeedItemType.Album)
             .Select(a => (pk: $"USER#{TargetOwner(a)}", sk: $"ALBUM#{a.TargetId}"))
             .Distinct();
-        var relKeys = items.Select(RelKey).Where(k => k.HasValue).Select(k => k!.Value).Distinct();
 
         var actorsTask = ProfileLookup.GetAsync(_dynamoDbService, items.Select(a => a.ActorUsername));
         var tracksTask = _dynamoDbService.BatchGetAsync<TrackDataModel>(trackKeys);
         var albumsTask = _dynamoDbService.BatchGetAsync<AlbumDataModel>(albumKeys);
-        var liveTask = _dynamoDbService.BatchGetAsync<KeyProbeDataModel>(relKeys);
-        await Task.WhenAll(actorsTask, tracksTask, albumsTask, liveTask);
+        await Task.WhenAll(actorsTask, tracksTask, albumsTask);
 
         var actors = actorsTask.Result;
         var trackTargets = tracksTask.Result.ToDictionary(t => t.TrackId, t => (Name: t.TrackName, t.Slug),
             StringComparer.OrdinalIgnoreCase);
         var albumTargets = albumsTask.Result.ToDictionary(a => a.AlbumId, a => (a.Name, a.Slug),
             StringComparer.OrdinalIgnoreCase);
-        var liveRelAt = liveTask.Result.ToDictionary(p => (p.Pk, p.Sk), p => p.LikedAt ?? p.SharedAt);
 
         (string Name, string? Slug)? Target(ActivityItemDataModel a) =>
             (a.TargetType == FeedItemType.Track ? trackTargets : albumTargets)
@@ -81,22 +61,12 @@ public sealed class ActivityRepository : IActivityRepository
 
         string? TargetName(ActivityItemDataModel a) => Target(a)?.Name;
 
-        // Keep a row only if: the actor resolves, and — for share/like — its underlying
-        // relationship record still exists with a matching timestamp (liveness) and its target
-        // still resolves.
-        // Follow rows skip target/liveness (USER target, no name; eager-deleted on unfollow).
-        bool Keep(ActivityItemDataModel a)
-        {
-            if (!actors.ContainsKey(a.ActorUsername))
-                return false;
-            if (a.Type == ActivityType.UserFollowed)
-                return true;
-            if (TargetName(a) is null)
-                return false;
-            var rk = RelKey(a);
-            return rk is null
-                || (liveRelAt.TryGetValue((rk.Value.pk, rk.Value.sk), out var at) && at == a.CreatedAt);
-        }
+        // Rows only exist while the like/share/follow behind them does: the stream consumer
+        // (Adapters/Events/ActivityEvents) writes and deletes them with it. So a row is kept
+        // unless its actor or (for likes/shares) its target has since gone. Follow rows have
+        // a USER target with no name to resolve.
+        bool Keep(ActivityItemDataModel a) =>
+            actors.ContainsKey(a.ActorUsername) && (a.Type == ActivityType.UserFollowed || TargetName(a) is not null);
 
         var entries = items
             .Where(Keep)

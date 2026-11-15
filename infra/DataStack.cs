@@ -26,6 +26,10 @@ public class DataStack : BaseStack
             TableName = $"melo-melo-table-{Env}",
             RemovalPolicy = DeletionPolicy,
             TimeToLiveAttribute = "expiresAt",
+            // The change log TableEventsLambda reads (lambda-stack). Old and new images both:
+            // removals need what was deleted, re-shares what changed. Don't change the view
+            // type later — that replaces the stream ARN lambda-stack imports.
+            Stream = StreamViewType.NEW_AND_OLD_IMAGES,
             // Only set when on: leaves environments without it exactly as they were deployed
             PointInTimeRecoverySpecification = Config.PointInTimeRecovery
                 ? new PointInTimeRecoverySpecification { PointInTimeRecoveryEnabled = true }

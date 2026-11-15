@@ -61,47 +61,40 @@ public record ActivityItemDataModel
 
     [DynamoDBProperty("createdAt")] public required long CreatedAt { get; set; }
 
-    [DynamoDBProperty("expiresAt")] public required long ExpiresAt { get; set; }
 }
 
 public static class ActivityItems
 {
-    // `now` must be the exact value written as the triggering record's likedAt/sharedAt:
-    // GET /activity only shows a like/share row whose relationship timestamp equals createdAt.
-    public static ActivityItemDataModel Build(string recipient, string type, string actorUsername,
-        string targetType, string targetId, long now)
-    {
-        var shortId = Guid.NewGuid().ToString("N")[..8];
-        return new ActivityItemDataModel
-        {
-            Pk = $"ACTIVITY#{recipient}",
-            Sk = $"DATE#{now}#{shortId}",
-            Type = type,
-            ActorUsername = actorUsername,
-            TargetType = targetType,
-            TargetId = targetId.ToLowerInvariant(),
-            CreatedAt = now,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(90).ToUnixTimeSeconds(),
-        };
-    }
+    // Every activity row is derived from the record that caused it (a like, a share, a
+    // follow) by the stream consumer (Adapters/Events/ActivityEvents), so its key is built
+    // from that record alone — deterministic, so a redelivered change rewrites the same row
+    // and a removal can rebuild the exact key to delete. Rows don't expire: they last as
+    // long as the like/share/follow behind them.
 
-    // Follow activity is the one deletable-by-design activity (removed on unfollow), so
-    // its SK is deterministic — DATE#{followTs}#FOLLOW#{follower} — reconstructable from
-    // the follow record's CreatedAt without a random shortId. The follower suffix keeps it
-    // unique within the recipient partition (one active follow per follower).
+    public static string Pk(string recipient) => $"ACTIVITY#{recipient}";
+
+    /// Someone liked the recipient's track/album: DATE#{likedAt}#LIKE#{liker}#{TYPE}#{id}
+    public static string LikeSk(long likedAt, string likerUsername, string targetType, string targetId) =>
+        $"DATE#{likedAt}#LIKE#{likerUsername}#{targetType}#{targetId.ToLowerInvariant()}";
+
+    /// A track/album was shared with the recipient: DATE#{sharedAt}#SHARE#{TYPE}#{id} (one
+    /// share per item × recipient, so the item identifies it)
+    public static string ShareSk(long sharedAt, string targetType, string targetId) =>
+        $"DATE#{sharedAt}#SHARE#{targetType}#{targetId.ToLowerInvariant()}";
+
+    /// Someone followed the recipient: DATE#{followedAt}#FOLLOW#{follower}
     public static string FollowSk(string followerUsername, long followTimestamp) =>
         $"DATE#{followTimestamp}#FOLLOW#{followerUsername}";
 
-    public static ActivityItemDataModel BuildFollow(string recipient, string followerUsername, long now) =>
-        new()
-        {
-            Pk = $"ACTIVITY#{recipient}",
-            Sk = FollowSk(followerUsername, now),
-            Type = ActivityType.UserFollowed,
-            ActorUsername = followerUsername,
-            TargetType = ActivityTargetType.User,
-            TargetId = followerUsername,
-            CreatedAt = now,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(90).ToUnixTimeSeconds(),
-        };
+    public static ActivityItemDataModel Build(string recipient, string sk, string type, string actorUsername,
+        string targetType, string targetId, long createdAt) => new()
+    {
+        Pk = Pk(recipient),
+        Sk = sk,
+        Type = type,
+        ActorUsername = actorUsername,
+        TargetType = targetType,
+        TargetId = targetId.ToLowerInvariant(),
+        CreatedAt = createdAt,
+    };
 }

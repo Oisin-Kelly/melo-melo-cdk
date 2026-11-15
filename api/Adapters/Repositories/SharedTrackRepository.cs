@@ -74,7 +74,6 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
 
         var batch = _dynamoDbService.CreateBatchWritePart<SharedTrackDataModel>();
         var feedBatch = _dynamoDbService.CreateBatchWritePart<FeedItemDataModel>();
-        var activityBatch = _dynamoDbService.CreateBatchWritePart<ActivityItemDataModel>();
 
         // Upsert per (track × recipient): a re-share overwrites the record with the current
         // caption + a fresh timestamp (resurface + notify). Only new recipients count.
@@ -98,12 +97,12 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
                 TrackOwnerUsername = ownerUsername,
                 SharedAt = now,
                 Caption = caption,
+                // Recipients' "shared with you" activity follows from this record
+                // (ActivityEvents) — except a share-link accept, their own doing
+                Via = notifyRecipients ? null : ShareVia.Link,
             });
             feedBatch.AddPutItem(
                 FeedItems.Build(recipient, FeedItemType.Track, normalisedTrackId, ownerUsername, now, caption));
-            if (notifyRecipients)
-                activityBatch.AddPutItem(ActivityItems.Build(recipient, ActivityType.TrackShared, ownerUsername,
-                    FeedItemType.Track, normalisedTrackId, now));
         }
 
         var toRemove = existingShares
@@ -117,7 +116,7 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         }
         var removedCount = toRemove.Count;
 
-        await _dynamoDbService.ExecuteBatchWriteAsync(batch, feedBatch, activityBatch);
+        await _dynamoDbService.ExecuteBatchWriteAsync(batch, feedBatch);
 
         var shareDelta = newCount - removedCount;
         if (shareDelta != 0)

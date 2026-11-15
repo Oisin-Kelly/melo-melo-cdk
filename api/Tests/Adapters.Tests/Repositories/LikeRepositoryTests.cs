@@ -18,8 +18,11 @@ public class LikeRepositoryTests(DynamoDbLocalFixture fixture)
         return (seed, new LikeRepository(db), owner, fan, trackId);
     }
 
-    private Task<List<ActivityItemDataModel>> OwnerActivityAsync(string owner) =>
-        fixture.Db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{owner}", "DATE#", QueryOperator.BeginsWith);
+    private async Task<List<ActivityItemDataModel>> OwnerActivityAsync(string owner)
+    {
+        await fixture.ProcessStreamAsync();
+        return await fixture.Db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{owner}", "DATE#", QueryOperator.BeginsWith);
+    }
 
     [Fact]
     public async Task Like_CountsOnTheTrackAndTheLikersLikesPlaylist_AndNotifiesTheOwner()

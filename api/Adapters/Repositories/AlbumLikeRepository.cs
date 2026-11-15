@@ -35,17 +35,8 @@ public sealed class AlbumLikeRepository : IAlbumLikeRepository
             LikedAt = now,
         }, ConditionExpressions.ItemNotExists());
 
-        var parts = new List<ITransactWrite> { likeTx, LikeCountUpdate(normalisedId, albumOwnerUsername, 1) };
-
-        if (!string.Equals(username, albumOwnerUsername, StringComparison.OrdinalIgnoreCase))
-        {
-            var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
-            activityTx.AddSaveItem(ActivityItems.Build(albumOwnerUsername, ActivityType.AlbumLiked, username,
-                FeedItemType.Album, normalisedId, now));
-            parts.Add(activityTx);
-        }
-
-        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
+        // The owner's "liked your album" activity follows from the like record (ActivityEvents)
+        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx, LikeCountUpdate(normalisedId, albumOwnerUsername, 1));
     }
 
     public async Task UnlikeAlbumAsync(string albumId, string username, string albumOwnerUsername)

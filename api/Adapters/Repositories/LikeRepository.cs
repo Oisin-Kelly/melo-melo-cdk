@@ -39,23 +39,10 @@ public sealed class LikeRepository : ILikeRepository
             LikedAt = now,
         }, ConditionExpressions.ItemNotExists());
 
-        var parts = new List<ITransactWrite>
-        {
-            likeTx,
+        // The owner's "liked your track" activity follows from the like record (ActivityEvents)
+        await _dynamoDbService.TryExecuteTransactWriteAsync(likeTx,
             LikeCountUpdate(normalisedTrackId, trackOwnerUsername, 1),
-            LikesPlaylistUpdate(username, 1, duration),
-        };
-
-        // Notify the track owner — but never echo a self-like
-        if (!string.Equals(username, trackOwnerUsername, StringComparison.OrdinalIgnoreCase))
-        {
-            var activityTx = _dynamoDbService.CreateTransactionPart<ActivityItemDataModel>();
-            activityTx.AddSaveItem(ActivityItems.Build(trackOwnerUsername, ActivityType.TrackLiked, username,
-                FeedItemType.Track, normalisedTrackId, now));
-            parts.Add(activityTx);
-        }
-
-        await _dynamoDbService.TryExecuteTransactWriteAsync(parts.ToArray());
+            LikesPlaylistUpdate(username, 1, duration));
     }
 
     public async Task UnlikeTrackAsync(string trackId, string username, string trackOwnerUsername)

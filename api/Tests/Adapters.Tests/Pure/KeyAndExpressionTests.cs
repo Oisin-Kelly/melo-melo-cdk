@@ -1,3 +1,4 @@
+using Adapters.Events;
 using Adapters.Repositories;
 using Domain;
 
@@ -68,30 +69,43 @@ public class ExpressionTests
 
 public class ItemBuilderTests
 {
-    [Fact]
-    public void FollowActivityKey_IsDeterministic_SoUnfollowCanRebuildIt()
-    {
-        var item = ActivityItems.BuildFollow("bob", "alice", 1_700_000_000_000);
+    private static Dictionary<string, string> Keys(string pk, string sk) => new() { ["PK"] = pk, ["SK"] = sk };
 
-        item.Pk.Should().Be("ACTIVITY#bob");
-        item.Sk.Should().Be(ActivityItems.FollowSk("alice", 1_700_000_000_000));
-        item.Sk.Should().Be("DATE#1700000000000#FOLLOW#alice");
+    [Fact]
+    public void ActivityRows_AreBuiltFromTheRecordAlone_WithDeterministicKeys()
+    {
+        // A like: to the track's owner, keyed by when and who
+        var like = ActivityEvents.RowFor(Keys("TRACK#trk1", "LIKE#fan"),
+            new Dictionary<string, string> { ["trackOwnerUsername"] = "owner", ["likedAt"] = "1700000000123" })!;
+        (like.Pk, like.Sk, like.Type, like.ActorUsername, like.TargetId, like.CreatedAt).Should().Be((
+            "ACTIVITY#owner", "DATE#1700000000123#LIKE#fan#TRACK#trk1", ActivityType.TrackLiked, "fan", "trk1",
+            1_700_000_000_123L));
+
+        // A share: to the recipient, from the owner
+        var share = ActivityEvents.RowFor(Keys("ALBUM#alb1", "SHARED#bob"),
+            new Dictionary<string, string> { ["albumOwnerUsername"] = "alice", ["sharedAt"] = "5" })!;
+        (share.Pk, share.Sk, share.Type, share.ActorUsername).Should().Be((
+            "ACTIVITY#bob", "DATE#5#SHARE#ALBUM#alb1", ActivityType.AlbumShared, "alice"));
+
+        // A follow: the same key unfollow always rebuilt
+        var follow = ActivityEvents.RowFor(Keys("FOLLOW#bob", "USER#alice"),
+            new Dictionary<string, string> { ["createdAt"] = "1700000000000" })!;
+        (follow.Pk, follow.Sk).Should().Be(("ACTIVITY#bob", ActivityItems.FollowSk("alice", 1_700_000_000_000)));
+        follow.Sk.Should().Be("DATE#1700000000000#FOLLOW#alice");
     }
 
     [Fact]
-    public void ActivityItem_CreatedAtIsTheRelationshipTimestamp()
+    public void NoActivityRow_ForSelfLikes_ShareLinkAccepts_AlbumGrants_OrOtherRecords()
     {
-        // GET /activity only shows a like/share row whose relationship likedAt/sharedAt equals
-        // createdAt — Build must stamp exactly the `now` it was given
-        const long now = 1_700_000_000_123;
-        var item = ActivityItems.Build("owner", ActivityType.TrackLiked, "fan", FeedItemType.Track, "TRK1", now);
-
-        item.CreatedAt.Should().Be(now);
-        item.Sk.Should().StartWith($"DATE#{now}#");
-        item.TargetId.Should().Be("trk1");
-
-        var ttlDays = DateTimeOffset.FromUnixTimeSeconds(item.ExpiresAt) - DateTimeOffset.UtcNow;
-        ttlDays.TotalDays.Should().BeInRange(89.9, 90.1);
+        ActivityEvents.RowFor(Keys("TRACK#t", "LIKE#owner"),
+            new Dictionary<string, string> { ["trackOwnerUsername"] = "owner", ["likedAt"] = "1" }).Should().BeNull();
+        ActivityEvents.RowFor(Keys("TRACK#t", "SHARED#bob"),
+            new Dictionary<string, string> { ["trackOwnerUsername"] = "alice", ["sharedAt"] = "1", ["via"] = ShareVia.Link })
+            .Should().BeNull();
+        ActivityEvents.RowFor(Keys("TRACK#t", "SHARED#bob#ALBUM#a"),
+            new Dictionary<string, string> { ["trackOwnerUsername"] = "alice", ["grantedAt"] = "1" }).Should().BeNull();
+        ActivityEvents.RowFor(Keys("USER#alice", "PROFILE"), new Dictionary<string, string>()).Should().BeNull();
+        ActivityEvents.RowFor(Keys("PLAYLIST#p", "TRACK#t"), new Dictionary<string, string>()).Should().BeNull();
     }
 
     [Fact]

@@ -46,7 +46,7 @@ GSI2SK is a sender+date prefix for per-sender filtered sorting (GSI2). Both GSI1
 
 Attributes: `trackOwnerUsername`, `duration` (denormalized so unlike can decrement the likes playlist's `totalDurationSeconds` without re-fetching the track), `likedAt`
 
-Track-side base key lets the owner query who liked; GSI1 gives the user's liked-tracks feed. The Track item carries a `likeCount` attribute and the liker's likes-playlist meta carries `trackCount`/`totalDurationSeconds`, all maintained transactionally (`ADD :±`) with like/unlike writes; read-before-write is the fast path, and an `attribute_not_exists(PK)` / `attribute_exists(PK)` guard on the like record (via `TryExecuteTransactWriteAsync`) makes the toggle idempotent under concurrency — a double-tapped like cancels the loser's whole transaction, counters and activity included. The guarded put goes through `IDynamoDBService.AddConditionalSave` (the SDK's typed put takes no condition).
+Track-side base key lets the owner query who liked; GSI1 gives the user's liked-tracks feed. The Track item carries a `likeCount` attribute and the liker's likes-playlist meta carries `trackCount`/`totalDurationSeconds`, all maintained transactionally (`ADD :±`) with like/unlike writes; read-before-write is the fast path, and an `attribute_not_exists(PK)` / `attribute_exists(PK)` guard on the like record (via `TryExecuteTransactWriteAsync`) makes the toggle idempotent under concurrency — a double-tapped like cancels the loser's whole transaction, so the like record (and with it the owner's activity row, which the [stream consumer](README.md#stream-consumers) derives from it) is written once. The guarded put goes through `IDynamoDBService.AddConditionalSave` (the SDK's typed put takes no condition).
 
 ---
 
@@ -100,13 +100,13 @@ Owner-only (404 otherwise). `{add: [], remove: [], caption?}`, ≤50 people in `
 1. Track fetch → owner check
 2. `Query(PK=TRACK#{id}, SK begins_with SHARED#)` **excluding `#ALBUM#` grant records** → current direct recipients
 3. Validate adds: `GetValidatedRecipientsAsync` (strips self, dupes, unknown users, and recipients whose `incomingShares` setting blocks the sender — `FOLLOWING` checks `Query(PK=FOLLOW#{sender}, begins_with USER#{recipient}#)` per candidate). The Lambda passes the **full** validated add list (no pre-dedup); `ShareTrackAsync` classifies each against the current direct shares (upsert)
-4. **BatchWrite** (upsert per recipient — every recipient in `add` is written): **new** recipient → put SharedTrack item (`GSI1SK=DATE#{now}`, `GSI2SK=SENDER#{owner}#DATE#{now}`, `caption`) + feed + activity, `shareCount +1`; **existing** recipient → overwrite the item with fresh `DATE#{now}` + the request's caption (resurfaces the feed & shared-with lists) + new activity, no count change. No same-caption short-circuit; re-sharing without a caption overwrites the stored caption to null. A user in both `add` and `remove` → remove wins. Removes delete direct-share items — album grant records are never touched, so album-derived access survives. Feed/activity writes share the batch (see [feed.md](feed.md) and [activity.md](activity.md))
+4. **BatchWrite** (upsert per recipient — every recipient in `add` is written): **new** recipient → put SharedTrack item (`GSI1SK=DATE#{now}`, `GSI2SK=SENDER#{owner}#DATE#{now}`, `caption`, `via: LINK` on a share-link accept) + feed, `shareCount +1`; **existing** recipient → overwrite the item with fresh `DATE#{now}` + the request's caption (resurfaces the feed & shared-with lists), no count change. No same-caption short-circuit; re-sharing without a caption overwrites the stored caption to null. A user in both `add` and `remove` → remove wins. Removes delete direct-share items — album grant records are never touched, so album-derived access survives. Feed writes share the batch ([feed.md](feed.md)); the recipients' `TRACK_SHARED` activity follows from the share records via the stream ([activity.md](activity.md)) — a re-share moves it to the top
 
 #### `DELETE /tracks/shared/{trackId}` — RemoveSharedTrackLambda
 Recipient-side "remove from my library" — the mirror of a single-recipient unshare, callable by anyone (drops the caller's own share; no owner check). `RemoveTrackFromLibraryAsync`:
 1. `GetItem(PK=TRACK#{id}, SK=SHARED#{requestor})` → **idempotency guard**: no-op 200 if absent
 2. **One transaction**: delete the direct-share item (guarded `attribute_exists(PK)`) + its feed item (`FEED#{requestor}` / `TRACK#{id}`) + step 3's counter — a concurrent double-remove cancels the loser, so it decrements once; the album grant records (`SHARED#{requestor}#ALBUM#{id}`) are **never touched**, so a track that is also in a shared album stays accessible via that album ([access rule](README.md#track-access-rule) = direct OR album grant)
-3. Decrement the owner's `shareCount` by 1, in that same transaction (kept equal to the live direct-share record count, so the re-share upsert stays consistent). The `TRACK_SHARED` activity item is left to age out via TTL, same as owner-side unshare.
+3. Decrement the owner's `shareCount` by 1, in that same transaction (kept equal to the live direct-share record count, so the re-share upsert stays consistent). Deleting the share record also deletes its `TRACK_SHARED` activity row (stream consumer), same as owner-side unshare.
 
 #### `GET /tracks/{trackId}/recipients` — GetTrackRecipientsLambda
 Owner-only (404 otherwise). `Query(PK=TRACK#{id}, begins_with SHARED#)` filtered to direct shares (drops `#ALBUM#` grant SKs) → BatchGet profiles → `{items:[{user, sharedAt}]}` newest-first. Bounded, no pagination.
@@ -140,7 +140,7 @@ Playlist membership records referencing the track (any user's — not enumerable
 Request body: `{newValue: true|false}` (mirrors follow-user)
 1. Track fetch via GSI1 → 404 if missing; like requires access (owner/direct/album-grant), unlike always allowed
 2. Read-before-write: `GetItem(PK=TRACK#{id}, SK=LIKE#{requestor})` — no-op if state already matches (idempotent; protects `likeCount`)
-3. **TransactWrite** (3–4 parts): save/delete Like item + `ADD likeCount :±1` on the Track item + `ADD trackCount :±1, totalDurationSeconds :±duration` on the requestor's likes-playlist meta + (on a non-self like) a `TRACK_LIKED` activity item for the owner (see [activity.md](activity.md))
+3. **TransactWrite** (3 parts): save/delete Like item + `ADD likeCount :±1` on the Track item + `ADD trackCount :±1, totalDurationSeconds :±duration` on the requestor's likes-playlist meta. The owner's `TRACK_LIKED` activity (non-self likes) follows from the like record being added/removed, via the stream ([activity.md](activity.md))
 
 #### `GET /tracks/{trackId}/likes` — GetTrackLikesLambda
 Owner-only (404 otherwise)

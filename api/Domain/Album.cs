@@ -222,6 +222,10 @@ public record AlbumShareDataModel
     [DynamoDBProperty("sharedAt")]
     public required long SharedAt { get; set; }
 
+    // ShareVia.Link when the recipient added it from a share link; absent otherwise
+    [DynamoDBProperty("via")]
+    public string? Via { get; set; }
+
     [DynamoDBIgnore]
     public string AlbumId => Pk.Replace("ALBUM#", "");
 

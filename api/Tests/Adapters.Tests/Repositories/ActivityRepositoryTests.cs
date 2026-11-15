@@ -1,13 +1,21 @@
+using Amazon.DynamoDBv2.DocumentModel;
 using Adapters.Repositories;
 using Domain;
 
 namespace Adapters.Tests.Repositories;
 
-// GET /activity is a live snapshot: a row shows only while the exact relationship record that
-// produced it (same likedAt/sharedAt) still exists, and its actor + target still resolve.
+// GET /activity: rows follow from likes/shares/follows through the stream consumer
+// (ActivityEvents) — each read here first processes the stream, as production would have —
+// and show while their actor + target still resolve.
 [Collection(DynamoDbLocalCollection.Name)]
 public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
 {
+    private async Task<PaginatedResult<ActivityEntry>> ActivityAsync(string username, int pageSize, string? cursor)
+    {
+        await fixture.ProcessStreamAsync();
+        return await new ActivityRepository(fixture.Db).GetActivityAsync(username, pageSize, cursor);
+    }
+
     private static int Rows(PaginatedResult<ActivityEntry> page, string type, string targetId) =>
         page.Items.Count(a => a.Type == type && a.TargetId == targetId);
 
@@ -23,15 +31,15 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         var trackId = await seed.TrackAsync(owner, 120, fan);
 
         await likes.LikeTrackAsync(trackId, fan, owner, 120);
-        Rows(await activity.GetActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(1);
+        Rows(await ActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(1);
 
         await likes.UnlikeTrackAsync(trackId, fan, owner);
-        Rows(await activity.GetActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(0);
+        Rows(await ActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(0);
 
         await Task.Delay(5); // distinct likedAt for the second like
         await likes.LikeTrackAsync(trackId, fan, owner, 120);
-        // Two raw activity rows now exist; only the one matching the live like's likedAt shows
-        Rows(await activity.GetActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(1);
+        // The unlike deleted the first row; the re-like wrote a new one
+        Rows(await ActivityAsync(owner, 50, null), ActivityType.TrackLiked, trackId).Should().Be(1);
     }
 
     [Fact]
@@ -44,7 +52,7 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         var trackId = await seed.TrackAsync(owner, 120, fan);
         await new LikeRepository(db).LikeTrackAsync(trackId, fan, owner, 120);
 
-        var row = (await new ActivityRepository(db).GetActivityAsync(owner, 50, null)).Items.Should().ContainSingle().Subject;
+        var row = (await ActivityAsync(owner, 50, null)).Items.Should().ContainSingle().Subject;
         row.Actor.Username.Should().Be(fan);
         row.TargetType.Should().Be(FeedItemType.Track);
         row.TargetName.Should().Be((await seed.TrackItemAsync(owner, trackId))!.TrackName);
@@ -62,14 +70,14 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         var trackId = await seed.TrackAsync(owner);
 
         await shares.ShareTrackAsync(trackId, owner, [recipient], [], "listen to this");
-        Rows(await activity.GetActivityAsync(recipient, 50, null), ActivityType.TrackShared, trackId).Should().Be(1);
+        Rows(await ActivityAsync(recipient, 50, null), ActivityType.TrackShared, trackId).Should().Be(1);
 
         await shares.ShareTrackAsync(trackId, owner, [], [recipient], null);
-        Rows(await activity.GetActivityAsync(recipient, 50, null), ActivityType.TrackShared, trackId).Should().Be(0);
+        Rows(await ActivityAsync(recipient, 50, null), ActivityType.TrackShared, trackId).Should().Be(0);
     }
 
     [Fact]
-    public async Task ReShare_ShowsOnlyTheNewestShareRow()
+    public async Task ReShare_ReplacesTheRow_ItMovesToTheTop()
     {
         var db = fixture.Db;
         var seed = new Seed(db);
@@ -82,10 +90,32 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         await Task.Delay(5);
         await shares.ShareTrackAsync(trackId, owner, [recipient], [], "again");
 
-        var page = await new ActivityRepository(db).GetActivityAsync(recipient, 50, null);
+        var page = await ActivityAsync(recipient, 50, null);
         var row = page.Items.Should().ContainSingle(a => a.Type == ActivityType.TrackShared && a.TargetId == trackId).Subject;
         var shareRecord = (await shares.GetTracksSharedWithUser(recipient, 10, null)).Items.Single();
         row.CreatedAt.Should().Be(shareRecord.SharedAt);
+        // Replaced, not hidden: the first share's row is gone from the table
+        (await db.QueryAsync<ActivityItemDataModel>($"ACTIVITY#{recipient}", "DATE#", QueryOperator.BeginsWith))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ShareLinkAccept_GivesTheRecipientNoActivity_ButAnOwnerShareLaterDoes()
+    {
+        var db = fixture.Db;
+        var seed = new Seed(db);
+        var shares = new SharedTrackRepository(db);
+        var owner = await seed.UserAsync();
+        var recipient = await seed.UserAsync();
+        var trackId = await seed.TrackAsync(owner);
+
+        await shares.ShareTrackAsync(trackId, owner, [recipient], [], null, notifyRecipients: false);
+        (await ActivityAsync(recipient, 50, null)).Items.Should().BeEmpty();
+
+        // The owner sharing it with them again is a real share: it says so
+        await Task.Delay(5);
+        await shares.ShareTrackAsync(trackId, owner, [recipient], [], "this one");
+        Rows(await ActivityAsync(recipient, 50, null), ActivityType.TrackShared, trackId).Should().Be(1);
     }
 
     [Fact]
@@ -99,10 +129,10 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         var albumId = await seed.AlbumAsync(owner, await seed.TrackAsync(owner));
 
         await seed.AlbumShares.ShareAlbumAsync(albumId, owner, [recipient], [], null);
-        Rows(await activity.GetActivityAsync(recipient, 50, null), ActivityType.AlbumShared, albumId).Should().Be(1);
+        Rows(await ActivityAsync(recipient, 50, null), ActivityType.AlbumShared, albumId).Should().Be(1);
 
         await seed.AlbumShares.RemoveAlbumFromLibraryAsync(albumId, recipient);
-        Rows(await activity.GetActivityAsync(recipient, 50, null), ActivityType.AlbumShared, albumId).Should().Be(0);
+        Rows(await ActivityAsync(recipient, 50, null), ActivityType.AlbumShared, albumId).Should().Be(0);
     }
 
     [Fact]
@@ -115,11 +145,11 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
         var follower = await seed.UserAsync();
 
         await seed.Follows.FollowUser(target, follower);
-        var row = (await activity.GetActivityAsync(target, 50, null)).Items.Should().ContainSingle().Subject;
+        var row = (await ActivityAsync(target, 50, null)).Items.Should().ContainSingle().Subject;
         (row.Type, row.Actor.Username, row.TargetType).Should().Be((ActivityType.UserFollowed, follower, ActivityTargetType.User));
 
         await seed.Follows.UnfollowUser(target, follower);
-        (await activity.GetActivityAsync(target, 50, null)).Items.Should().BeEmpty();
+        (await ActivityAsync(target, 50, null)).Items.Should().BeEmpty();
     }
 
     [Fact]
@@ -134,7 +164,7 @@ public class ActivityRepositoryTests(DynamoDbLocalFixture fixture)
 
         await seed.Tracks.DeleteTrackAsync(owner, trackId);
 
-        (await new ActivityRepository(db).GetActivityAsync(owner, 50, null)).Items.Should().BeEmpty();
+        (await ActivityAsync(owner, 50, null)).Items.Should().BeEmpty();
     }
 
     [Fact]

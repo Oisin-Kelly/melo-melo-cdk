@@ -37,6 +37,17 @@ Album share/unshare/add/remove/delete operations write or delete N recipients ×
 
 **Known ceiling — fan-out runs in-line.** Every fan-out above runs synchronously inside the request's Lambda (30s timeout, ~25 items per batch call), and with no total recipient cap its size grows with the audience: an album tracklist save writes or deletes (changed tracks × all recipients) grants, an album delete or track delete removes every recipient's records, and a share call writes up to 50 × album tracks grants. That's comfortably fast for small private audiences (tens to low hundreds of recipients) but would start timing out somewhere in the thousands, leaving a half-applied fan-out (retry-safe thanks to the ordering rule, but slow and costly). **If albums/tracks ever get big audiences, move the fan-out to a queue (SQS → worker Lambda) or a Step Function** — the request writes the authoritative record and enqueues the grant work, and the client sees access arrive shortly after. Not built now on purpose; the recipients endpoints (`GET /tracks|albums/{id}/recipients`) are also unpaginated and would want a cursor at the same point.
 
+### Stream consumers
+
+The table has a DynamoDB Stream (`NEW_AND_OLD_IMAGES`, `infra/DataStack.cs` — don't change the view type: it replaces the stream ARN `lambda-stack` imports). `TableEventsLambda` reads it through an event source mapping (`LambdaStack.AddTableEvents`) and hands each change, flattened to a `TableChange`, to an `ITableChangeHandler`. Rules for anything derived this way:
+
+- **Only derived, display-only data** moves to the stream — today the [activity feed](activity.md). Counters stay inside their transactions (a redelivered `ADD 1` would double-count), access records (shares, grants) stay inline (access must not lag), and so does the Home feed for now.
+- **Idempotent by key**: the stream delivers at least once, so a handler only puts or deletes items whose keys are rebuilt from the changed record alone.
+- **Order is per item** (one batch per shard at a time; on the first failing record the batch stops and Lambda retries from it). After 5 retries or an hour, the record goes to `table-events-dlq-{env}` (alarmed) rather than blocking its shard.
+- **Filters** on the mapping keep everything else from invoking the Lambda (`LIKE#`/`SHARED#` sort keys; `FOLLOW#` + `USER#` keys together). A new derived view adds its filter there.
+- **TTL expiries** arrive as removes from the DynamoDB service; handlers ignore them.
+- Repository tests drain the DynamoDB Local test table's stream through the same handlers (`DynamoDbLocalFixture.ProcessStreamAsync`).
+
 ### Readable URLs (slugs)
 
 Tracks, albums and custom playlists have a readable URL — `/{owner}/{slug}`, `/{owner}/albums/{slug}`, `/{owner}/playlists/{slug}` — while their GUID stays the identity every key and endpoint uses. A slug is one more item in the owner's partition, `USER#{owner}` / `SLUG#{TRACK|ALBUM|PLAYLIST}#{slug}` → `targetId` (see [users.md](users.md#slug)), unique per owner per kind; the meta item's `slug` attribute is the canonical one.

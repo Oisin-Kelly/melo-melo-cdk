@@ -64,6 +64,14 @@ describe('AlbumPage', () => {
     expect(await screen.findByRole('menuitem', { name: 'Delete album' })).toBeInTheDocument()
   })
 
+  it('to someone it was shared with, shows what the owner said when sharing it', async () => {
+    serveAlbum({ ...shared, myShare: { sharedAt: Date.now(), caption: 'For the drive' } })
+    renderAt('/bob/albums/summer')
+
+    expect(await screen.findByText('FROM BOB')).toBeInTheDocument()
+    expect(screen.getByText('“For the drive”')).toBeInTheDocument()
+  })
+
   it('to someone it was shared with: no Share, and they can remove it from their library', async () => {
     serveAlbum(shared)
     let removed = false

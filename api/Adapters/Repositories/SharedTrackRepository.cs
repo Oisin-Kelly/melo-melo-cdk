@@ -15,6 +15,13 @@ public sealed class SharedTrackRepository : ISharedTrackRepository
         _dynamoDbService = dynamoDbService;
     }
 
+    public async Task<ShareNote?> GetDirectShareAsync(string trackId, string username)
+    {
+        var share = await _dynamoDbService.GetFromDynamoAsync<SharedTrackDataModel>(
+            $"TRACK#{trackId.ToLowerInvariant()}", $"SHARED#{username}");
+        return share is null ? null : new ShareNote { SharedAt = share.SharedAt, Caption = share.Caption };
+    }
+
     public async Task<bool> IsTrackSharedWithUser(string trackId, string userId)
     {
         var normalisedTrackId = trackId.ToLowerInvariant();

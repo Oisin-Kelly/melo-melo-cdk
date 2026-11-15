@@ -58,8 +58,10 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Access: owner, or the album is shared with the requester. No per-track checks needed —
             // every track is the owner's, and access derives from the album share itself.
+            // The share record is both the access check and the caption shown to the recipient
             var isOwner = album.OwnerUsername == username;
-            if (!isOwner && !await _albumShareRepository.IsAlbumSharedWithUserAsync(album.Id, username))
+            var myShare = isOwner ? null : await _albumShareRepository.GetShareAsync(album.Id, username);
+            if (!isOwner && myShare is null)
                 return Error(HttpStatusCode.NotFound, $"no album found by id {albumId}", "Not Found");
 
             // Independent reads, run together: like status, the owner's profile (the detail
@@ -70,6 +72,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             await Task.WhenAll(likedTask, ownerTask, tracksTask);
 
             album.LikedByMe = likedTask.Result;
+            album.MyShare = myShare;
             album.Owner = ownerTask.Result is { } owner ? UserSummary.From(owner) : null;
             if (!isOwner)
             {

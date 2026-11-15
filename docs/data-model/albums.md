@@ -71,7 +71,7 @@ Request body: `{name, description?, imageKey?, trackIds?}` (≤50 tracks)
 
 #### `GET /albums/{albumId}` — GetAlbumLambda
 1. `Query(GSI1, GSI1PK=ALBUM#{id}, GSI1SK=INFO)` → meta or 404
-2. Access: owner, or `GetItem(PK=ALBUM#{id}, SK=SHARED#{requestor})` — no per-track checks needed (all tracks are the owner's; access derives from the album share). Sets `likedByMe`; share/like counts owner-only.
+2. Access: owner, or `GetItem(PK=ALBUM#{id}, SK=SHARED#{requestor})` — no per-track checks needed (all tracks are the owner's; access derives from the album share). That same share record becomes the recipient's `myShare {sharedAt, caption?}`. Sets `likedByMe`; share/like counts owner-only.
 3. In parallel: like status (`GetItem(PK=ALBUM#{id}, SK=LIKE#{requestor})`), the owner's profile (`GetItem(PK=USER#{owner}, SK=PROFILE)` → `album.owner` UserSummary for the header), and `Query(GSI1, GSI1PK=ALBUM#{id}, begins_with ORDER#, ascending, Limit=10, cursor)` + `TrackBatchLookup` join → meta + paginated tracks
 
 #### `GET /albums/{albumId}/recipients` — GetAlbumRecipientsLambda

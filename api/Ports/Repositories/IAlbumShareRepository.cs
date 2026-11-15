@@ -7,6 +7,8 @@ namespace Ports.Repositories;
 public interface IAlbumShareRepository
 {
     public Task<bool> IsAlbumSharedWithUserAsync(string albumId, string username);
+    /// The user's share of the album (when + caption); null without one
+    public Task<ShareNote?> GetShareAsync(string albumId, string username);
     public Task<List<string>> GetAlbumRecipientsAsync(string albumId);
 
     /// Recipients with hydrated profiles, newest share first (≤50 by the share limit)

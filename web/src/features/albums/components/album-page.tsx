@@ -21,6 +21,7 @@ import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
+import { ShareNoteSection } from '@/components/sharing/share-note-section'
 import { LikeButton, TrackRow } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
@@ -205,6 +206,7 @@ export function AlbumPage({ albumId }: { albumId: string }) {
         description={isCompact ? album.description : undefined}
         aside={isOwner && <SharedWith album={album} onManage={() => setIsSharing(true)} />}
       />
+      {owner && <ShareNoteSection share={album.myShare} owner={owner} />}
       {album.description && !isCompact && (
         <DetailSection title="Description">
           <ExpandableText text={album.description} />

@@ -71,7 +71,7 @@ public class AlbumHandlerTests
     [Fact]
     public async Task Get_Recipient_HasOwnerOnlyCountsStripped_AndSeesTheirLike()
     {
-        _shares.IsAlbumSharedWithUserAsync(AlbumId, "bob").Returns(true);
+        _shares.GetShareAsync(AlbumId, "bob").Returns(new ShareNote { SharedAt = 5 });
         _likes.IsAlbumLikedByUserAsync(AlbumId, "bob").Returns(true);
         _tracklist.GetAlbumTracksAsync(AlbumId, "bob", 10, null).Returns(Fakes.Page<TrackSummary>());
 
@@ -81,6 +81,23 @@ public class AlbumHandlerTests
         album.TryGetProperty("shareCount", out _).Should().BeFalse();
         album.TryGetProperty("likeCount", out _).Should().BeFalse();
         album.GetProperty("likedByMe").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Get_Recipient_SeesTheirShareWithItsCaption_TheOwnerNone()
+    {
+        _shares.GetShareAsync(AlbumId, "bob").Returns(new ShareNote { SharedAt = 5, Caption = "for the drive" });
+        _tracklist.GetAlbumTracksAsync(AlbumId, Arg.Any<string>(), 10, Arg.Any<string?>()).Returns(Fakes.Page<TrackSummary>());
+
+        var share = (await GetAlbum.FunctionHandler(Http.As("bob"), _context, AlbumId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json().GetProperty("album").GetProperty("myShare");
+        share.GetProperty("sharedAt").GetInt64().Should().Be(5);
+        share.GetProperty("caption").GetString().Should().Be("for the drive");
+
+        (await GetAlbum.FunctionHandler(Http.As(Owner), _context, AlbumId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json().GetProperty("album")
+            .TryGetProperty("myShare", out _).Should().BeFalse();
+        await _shares.DidNotReceive().GetShareAsync(AlbumId, Owner);
     }
 
     [Fact]

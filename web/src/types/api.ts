@@ -61,6 +61,15 @@ export type AlbumSummary = {
 /** Someone a thing is shared with: GET /albums|tracks/{id}/recipients items. */
 export type Recipient = { user: UserSummary; sharedAt: number }
 
+/** Your own share of a track or album (its owner's, so the owner is who shared it):
+ *  on the detail GETs for recipients only (api/Domain/ShareNote.cs). */
+export type ShareNote = {
+  /** Epoch ms. */
+  sharedAt: number
+  /** Absent when there isn't one. */
+  caption?: string
+}
+
 /** POST /albums|tracks/{id}/share. `add` must hold only the people being (re)shared with
  *  now: everyone in it is rewritten with this caption, so resending the whole list would
  *  overwrite every existing recipient's caption. */

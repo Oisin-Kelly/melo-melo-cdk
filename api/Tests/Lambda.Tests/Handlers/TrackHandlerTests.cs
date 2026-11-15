@@ -95,6 +95,20 @@ public class TrackHandlerTests
         body.TryGetProperty("likeCount", out _).Should().BeFalse();
         body.TryGetProperty("shareCount", out _).Should().BeFalse();
         body.GetProperty("likedByMe").GetBoolean().Should().BeFalse();
+        body.TryGetProperty("myShare", out _).Should().BeFalse(); // reached via an album: no direct share
+    }
+
+    [Fact]
+    public async Task GetTrack_DirectRecipient_SeesTheirShareWithItsCaption()
+    {
+        _shares.IsTrackAccessibleToUser(TrackId, "bob").Returns(true);
+        _shares.GetDirectShareAsync(TrackId, "bob").Returns(new ShareNote { SharedAt = 7, Caption = "this one!" });
+
+        var share = (await GetTrack.FunctionHandler(Http.As("bob"), _context, TrackId))
+            .ShouldHaveStatus(HttpStatusCode.OK).Json().GetProperty("myShare");
+
+        share.GetProperty("sharedAt").GetInt64().Should().Be(7);
+        share.GetProperty("caption").GetString().Should().Be("this one!");
     }
 
     [Fact]

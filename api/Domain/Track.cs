@@ -67,6 +67,11 @@ namespace Domain
         [JsonPropertyName("shareCount")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ShareCount { get; set; }
+
+        // Recipient-only: the viewer's direct share (not an album grant), with its caption
+        [JsonPropertyName("myShare")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ShareNote? MyShare { get; set; }
     }
 
     public record TrackDataModel

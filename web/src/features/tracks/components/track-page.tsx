@@ -12,6 +12,8 @@ import { PageLoader } from '@/components/feedback/page-loader'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
+import { ShareNoteBody } from '@/components/sharing/share-note-section'
+import { nameOf } from '@/types/user'
 import { LikeButton, TrackMenu } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
@@ -74,6 +76,15 @@ export function TrackPage({ trackId }: { trackId: string }) {
   // Genre and description always show, with a quiet placeholder when blank, so a bare
   // track's page isn't empty below the header
   const sections: { title: string; body: ReactNode }[] = [
+    // Shared with you with a caption: what they said comes first
+    ...(track.myShare?.caption
+      ? [
+          {
+            title: `From ${nameOf(track.owner)}`,
+            body: <ShareNoteBody caption={track.myShare.caption} sharedAt={track.myShare.sharedAt} />,
+          },
+        ]
+      : []),
     { title: 'Genre', body: track.genre ? <Text type="body">{track.genre}</Text> : <Placeholder>No genre</Placeholder> },
     {
       title: 'Description',

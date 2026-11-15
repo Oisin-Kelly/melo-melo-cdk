@@ -37,6 +37,21 @@ public class SharedTrackRepositoryTests(DynamoDbLocalFixture fixture)
     }
 
     [Fact]
+    public async Task DirectShare_IsTheRecipientsOwn_WithItsCaption_AndNullForAnyoneElse()
+    {
+        var (seed, shares, owner, recipient, trackId) = await ArrangeUnsharedAsync();
+        var stranger = await seed.UserAsync();
+
+        await shares.ShareTrackAsync(trackId, owner, [recipient], [], "play it loud");
+
+        var share = await shares.GetDirectShareAsync(trackId, recipient);
+        share!.Caption.Should().Be("play it loud");
+        share.SharedAt.Should().BePositive();
+        (await shares.GetDirectShareAsync(trackId, stranger)).Should().BeNull();
+        (await shares.GetDirectShareAsync(trackId, owner)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Library_IsOwnPlusDirectPlusAlbumTracks_DedupedAndNothingElse()
     {
         var db = fixture.Db;

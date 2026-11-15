@@ -5,6 +5,8 @@ namespace Ports.Repositories;
 public interface ISharedTrackRepository
 {
     public Task<bool> IsTrackSharedWithUser(string trackId, string userId);
+    /// The user's direct share of the track (when + caption); null without one
+    public Task<ShareNote?> GetDirectShareAsync(string trackId, string username);
     public Task<bool> IsTrackSharedWithUserViaAlbum(string trackId, string userId);
     public Task<bool> IsTrackAccessibleToUser(string trackId, string userId);
     public Task<List<string>> GetTrackRecipientsAsync(string trackId);

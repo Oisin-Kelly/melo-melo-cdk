@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import type { Details } from '@/components/forms/edit-details-dialog'
 import { api, isNotFound } from '@/lib/api-client'
 import { stageUpload } from '@/lib/dropbox'
-import type { PaginatedResult, Recipient, ShareChange, TrackSummary, UserSummary } from '@/types/api'
+import type { PaginatedResult, Recipient, ShareChange, ShareNote, TrackSummary, UserSummary } from '@/types/api'
 
 // The album screen. Keys live under ['albums', 'detail', id] — never bare
 // ['albums', id], which would sit beside search's ['albums', …, 'all'] snapshots.
@@ -26,6 +26,8 @@ export type Album = {
   owner?: UserSummary
   /** Readable-URL slug; null on items made before slugs existed (links fall back to the id). */
   slug?: string | null
+  /** Shared with you: when, and the caption. */
+  myShare?: ShareNote
 }
 
 export const albumDetailKey = (id: string) => ['albums', 'detail', id] as const

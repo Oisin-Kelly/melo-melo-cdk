@@ -58,7 +58,7 @@ Track-side base key lets the owner query who liked; GSI1 gives the user's liked-
 1. `Query(GSI1, GSI1PK=TRACK#{trackId}, GSI1SK=INFO)` → get TrackDataModel (owner unknown at query time, need GSI)
 2. `GetItem(PK=USER#{ownerUsername}, SK=PROFILE)` → get track owner's profile
 3. If not owner, [track access check](README.md#track-access-rule) — 404 if neither direct share nor album grant
-4. `GetItem(PK=TRACK#{trackId}, SK=LIKE#{requestor})` → sets `likedByMe`; `likeCount`/`shareCount` returned to the owner only
+4. In parallel: `GetItem(PK=TRACK#{trackId}, SK=LIKE#{requestor})` → sets `likedByMe`; for a non-owner, `GetItem(PK=TRACK#{trackId}, SK=SHARED#{requestor})` → `myShare {sharedAt, caption?}` (their direct share only — absent when they have the track through an album alone). `likeCount`/`shareCount` returned to the owner only
 
 #### `GET /tracks` — GetUserTracksLambda
 1. `Query(GSI3, GSI3PK=USER#{requestor}, GSI3SK begins_with DATE#, Limit=10, ScanIndexForward=false, cursor)` → paginated track items newest-first

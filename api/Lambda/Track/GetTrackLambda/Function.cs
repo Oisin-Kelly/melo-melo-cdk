@@ -5,6 +5,7 @@ using Amazon.Lambda.Annotations.APIGateway;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Lambda.Shared;
+using Domain;
 using Ports.Repositories;
 
 namespace GetTrackLambda;
@@ -45,7 +46,14 @@ public sealed class Function : BaseLambdaFunctionHandler
             if (!isOwner && !await _sharedTrackRepository.IsTrackAccessibleToUser(trackId, requestorUsername))
                 return Error(HttpStatusCode.NotFound, $"no track found by id {trackId}", "Not Found");
 
-            track.LikedByMe = await _likeRepository.IsTrackLikedByUserAsync(trackId, requestorUsername);
+            // A recipient also gets their own direct share (when, and the caption)
+            var likedTask = _likeRepository.IsTrackLikedByUserAsync(trackId, requestorUsername);
+            var shareTask = isOwner
+                ? Task.FromResult<ShareNote?>(null)
+                : _sharedTrackRepository.GetDirectShareAsync(trackId, requestorUsername);
+            await Task.WhenAll(likedTask, shareTask);
+            track.LikedByMe = likedTask.Result;
+            track.MyShare = shareTask.Result;
             if (!isOwner)
             {
                 // like and share counts are visible to the owner only

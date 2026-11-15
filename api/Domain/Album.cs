@@ -51,6 +51,11 @@ public record Album
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public UserSummary? Owner { get; set; }
 
+    // Recipient-only: the viewer's share of the album, with its caption
+    [JsonPropertyName("myShare")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ShareNote? MyShare { get; set; }
+
     // For access checks only — never serialized
     [JsonIgnore]
     public string? OwnerUsername { get; set; }

@@ -33,6 +33,20 @@ public class AlbumShareRepositoryTests(DynamoDbLocalFixture fixture)
     }
 
     [Fact]
+    public async Task Share_IsTheRecipientsOwn_WithItsCaption_AndNullForAnyoneElse()
+    {
+        var seed = new Seed(fixture.Db);
+        var owner = await seed.UserAsync();
+        var recipient = await seed.UserAsync();
+        var albumId = await seed.AlbumAsync(owner, await seed.TrackAsync(owner));
+
+        await seed.AlbumShares.ShareAlbumAsync(albumId, owner, [recipient], [], "for the drive");
+
+        (await seed.AlbumShares.GetShareAsync(albumId, recipient))!.Caption.Should().Be("for the drive");
+        (await seed.AlbumShares.GetShareAsync(albumId, owner)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task ReShare_OverwritesCaption_WithoutCountingTheRecipientTwice()
     {
         var db = fixture.Db;

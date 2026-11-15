@@ -86,6 +86,22 @@ describe('TrackPage', () => {
     expect(screen.queryByRole('menuitem', { name: 'Delete track' })).not.toBeInTheDocument()
   })
 
+  it('to someone it was shared with, what the owner said when sharing it comes first', async () => {
+    serveTrack({ ...theirs, myShare: { sharedAt: Date.now() - 3 * 86_400_000, caption: 'Play this loud' } })
+    renderAt('/bob/their-song')
+
+    expect(await screen.findByText('FROM BOB')).toBeInTheDocument()
+    expect(screen.getByText('“Play this loud”')).toBeInTheDocument()
+    expect(screen.getByText(/^Shared/)).toBeInTheDocument()
+  })
+
+  it('shows no note when the share had no caption', async () => {
+    serveTrack({ ...theirs, myShare: { sharedAt: 1 } })
+    renderAt('/bob/their-song')
+    await screen.findByText('GENRE')
+    expect(screen.queryByText('FROM BOB')).not.toBeInTheDocument()
+  })
+
   it('deletes after confirming, then leaves for Home', async () => {
     let deleted = false
     server.use(

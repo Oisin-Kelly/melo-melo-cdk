@@ -15,11 +15,14 @@ public sealed class AlbumShareRepository : IAlbumShareRepository
         _dynamoDbService = dynamoDbService;
     }
 
-    public async Task<bool> IsAlbumSharedWithUserAsync(string albumId, string username)
+    public async Task<bool> IsAlbumSharedWithUserAsync(string albumId, string username) =>
+        await GetShareAsync(albumId, username) is not null;
+
+    public async Task<ShareNote?> GetShareAsync(string albumId, string username)
     {
         var share = await _dynamoDbService.GetFromDynamoAsync<AlbumShareDataModel>(
             $"ALBUM#{albumId.ToLowerInvariant()}", $"SHARED#{username}");
-        return share is not null;
+        return share is null ? null : new ShareNote { SharedAt = share.SharedAt, Caption = share.Caption };
     }
 
     public async Task<List<string>> GetAlbumRecipientsAsync(string albumId)

@@ -3,7 +3,7 @@ import { sileo } from 'sileo'
 import { api, isNotFound } from '@/lib/api-client'
 import { startDownload } from '@/lib/download'
 import { stageUpload } from '@/lib/dropbox'
-import type { PaginatedResult, Recipient, ShareChange, UserSummary } from '@/types/api'
+import type { PaginatedResult, Recipient, ShareChange, ShareNote, UserSummary } from '@/types/api'
 
 // The track screen. Keys live under ['tracks', 'detail', id] — never bare ['tracks', id],
 // which would sit beside the library listings (['tracks', 'mine', …]).
@@ -28,6 +28,8 @@ export type Track = {
   likeCount?: number | null
   /** Owner only. */
   shareCount?: number | null
+  /** Shared with you directly (not just through an album): when, and the caption. */
+  myShare?: ShareNote
 }
 
 export const trackDetailKey = (id: string) => ['tracks', 'detail', id] as const

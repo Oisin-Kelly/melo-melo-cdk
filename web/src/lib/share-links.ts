@@ -22,8 +22,7 @@ export type LinkPreviewTrack = {
   name: string
   /** Seconds. */
   duration: number
-  /** Null when previews are off for this link. */
-  preview: LinkPreviewAudio | null
+  preview: LinkPreviewAudio
 }
 
 /** What the invite screen shows. Revoked, mistyped and deleted all read UNAVAILABLE, with no
@@ -43,7 +42,6 @@ export type LinkPreview =
       duration: number
       /** Epoch ms. */
       expiresAt: number
-      allowPreview: boolean
       /** The sender's note, if they wrote one. */
       caption?: string
       /** The track itself, or the album's tracklist in order. */
@@ -61,7 +59,6 @@ export type ShareLink = {
   createdAt: number
   /** Epoch ms. */
   expiresAt: number
-  allowPreview: boolean
   acceptedCount: number
   /** The sender's note: shown on the invite screen, and the share's caption once accepted. */
   caption?: string
@@ -175,10 +172,10 @@ export function useItemLinks(kind: LinkKind, id: string, enabled: boolean) {
 export function useCreateLink(kind: LinkKind, id: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ expiresIn, allowPreview, caption }: { expiresIn: LinkExpiry; allowPreview: boolean; caption?: string }) =>
+    mutationFn: ({ expiresIn, caption }: { expiresIn: LinkExpiry; caption?: string }) =>
       api<ShareLink>('/links', {
         method: 'POST',
-        body: { kind, targetId: id, expiresIn, allowPreview, caption: caption?.trim() || null },
+        body: { kind, targetId: id, expiresIn, caption: caption?.trim() || null },
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: itemLinksKey(kind, id) }),
   })

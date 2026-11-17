@@ -15,6 +15,7 @@ const RESERVED_USERNAMES = new Set([
   'me', 'new', 'home', 'feed', 'explore', 'discover', 'notifications', 'messages', 'inbox',
   'logout', 'signin', 'sign-in', 'sign-up', 'register', 'account', 'profile', 'user', 'users',
   'share', 'shared', 'melomelo', 'www', 'mail', 'blog', 'status', 'docs', 'dev', 'test',
+  'suggestions',
 ])
 // A web file extension (sw.js, robots.txt); ordinary dotted names (oisin.kelly) are fine
 const FILE_EXTENSION =

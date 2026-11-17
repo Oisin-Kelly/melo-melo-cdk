@@ -2,13 +2,11 @@ import { Button } from '@astryxdesign/core/Button'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Link } from '@astryxdesign/core/Link'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
 import { PageLoader } from '@/components/feedback/page-loader'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { ShareDialog, type ShareTab } from '@/components/sharing/share-dialog'
 import { trackPeoplePath } from '@/lib/links'
-import { PREVIEW_CLIP_SECONDS } from '@/lib/share-links'
-import { toUnixSeconds } from '@/utils/format'
 import { useShareTrack, useTrackRecipients, type Track } from '../api/tracks'
 import { PersonRow } from './person-row'
 
@@ -29,10 +27,9 @@ export function TrackShareDialog({ track, isOpen, onOpenChange, initialTab }: {
       onOpenChange={onOpenChange}
       name={track.name}
       kind="track"
-      subtitle="They can listen to it and add it to their playlists."
       recipients={recipients}
       share={share}
-      links={{ kind: 'TRACK', id: track.id, isShortTrack: track.duration <= PREVIEW_CLIP_SECONDS }}
+      links={{ kind: 'TRACK', id: track.id }}
       initialTab={initialTab}
     />
   )
@@ -84,7 +81,7 @@ export function SharedWith({
       <VStack gap={0}>
         {recipients.data.slice(0, PREVIEW).map((recipient) => (
           <PersonRow key={recipient.user.username} user={recipient.user}>
-            Shared <Timestamp value={toUnixSeconds(recipient.sharedAt)} format="relative" />
+            Shared <TimeAgo ms={recipient.sharedAt} />
           </PersonRow>
         ))}
       </VStack>

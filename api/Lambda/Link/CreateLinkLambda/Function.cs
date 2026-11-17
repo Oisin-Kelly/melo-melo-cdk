@@ -59,8 +59,7 @@ public sealed class Function : BaseLambdaFunctionHandler
                 return Error(HttpStatusCode.NotFound, $"no {kind.ToLowerInvariant()} found by id {createRequest.TargetId}",
                     "Not Found");
 
-            var link = await _shareLinkRepository.CreateAsync(username, kind, item.Id, expiresIn.Value,
-                createRequest.AllowPreview ?? true, caption);
+            var link = await _shareLinkRepository.CreateAsync(username, kind, item.Id, expiresIn.Value, caption);
 
             var response = ShareLinks.ToShareLink(link, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             return Created(JsonSerializer.Serialize(response, CreateLinkJsonContext.Default.ShareLink));

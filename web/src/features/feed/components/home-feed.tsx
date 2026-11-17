@@ -3,6 +3,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { useEffect, useRef, useState } from 'react'
 import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
+import { PeopleYouMayKnow } from '@/components/people/people-you-may-know'
 import { feedContext } from '@/components/player/load-context'
 import { TrackListPlayback } from '@/components/player/track-list-playback'
 import { useMe } from '@/lib/me'
@@ -38,17 +39,26 @@ function useLastVisit(): number | null | undefined {
   return lastVisit // undefined while the profile is still loading
 }
 
-type Props = { type: FeedType; sort: FeedSort }
+type Props = {
+  type: FeedType
+  sort: FeedSort
+  /** Nothing shared yet: People you may know as a shelf (off when Home has its side panel) */
+  hasSuggestionsShelf?: boolean
+}
 
-export function HomeFeed({ type, sort }: Props) {
+export function HomeFeed({ type, sort, hasSuggestionsShelf = true }: Props) {
   const feed = useFeed(type, sort)
   const lastVisit = useLastVisit()
   const items = feed.data?.pages.flatMap((page) => page.items) ?? []
 
-  // Dividers only make sense newest-first and once there is a last visit to compare to
-  const showDividers = sort === 'newest' && typeof lastVisit === 'number'
-  const isNew = (entry: Entry) => showDividers && entry.sharedAt > (lastVisit as number)
+  // Shared since your last visit (none on a first visit: there's nothing to compare to).
+  // Its dot shows in any order; the dividers only make sense newest-first.
+  const isUnseen = (entry: Entry) => typeof lastVisit === 'number' && entry.sharedAt > lastVisit
+  const showDividers = sort === 'newest'
+  const isNew = (entry: Entry) => showDividers && isUnseen(entry)
   const hasNew = items.some(isNew)
+
+  const isEmpty = feed.isSuccess && items.length === 0 && !feed.hasNextPage
 
   // A track card plays the feed's loaded tracks from that card on (albums play on their own)
   const feedTracks = items.flatMap((entry) => (entry.track ? [entry.track] : []))
@@ -72,8 +82,10 @@ export function HomeFeed({ type, sort }: Props) {
           if (index > 0 && !isNew(entry) && isNew(items[index - 1])) return <SectionLabel>Earlier</SectionLabel>
           return null
         }}
-        renderItem={(entry) => <FeedEntry entry={entry} />}
+        renderItem={(entry) => <FeedEntry entry={entry} isNew={isUnseen(entry)} />}
       />
+      {/* Nothing shared with you yet: people you may know, so there soon is */}
+      {isEmpty && hasSuggestionsShelf && <PeopleYouMayKnow />}
     </TrackListPlayback>
   )
 }

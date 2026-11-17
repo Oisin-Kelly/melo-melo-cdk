@@ -93,6 +93,21 @@ public class ApiStack : BaseStack
             Integration = CreateIntegration(functions.FollowUser),
         });
 
+        // Static /users/suggestions outranks /users/{username} ("suggestions" is a reserved username)
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/suggestions",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetSuggestedUsers),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/users/suggestions/{username}/hide",
+            Methods = [HttpMethod.POST],
+            Integration = CreateIntegration(functions.HideSuggestion),
+        });
+
         HttpApi.AddRoutes(new AddRoutesOptions
         {
             Path = "/users/{username}/followers",
@@ -140,6 +155,21 @@ public class ApiStack : BaseStack
             Path = "/tracks/uploads/{trackId}",
             Methods = [HttpMethod.GET],
             Integration = CreateIntegration(functions.GetUploadStatus),
+        });
+
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/uploads/{trackId}",
+            Methods = [HttpMethod.DELETE],
+            Integration = CreateIntegration(functions.DismissUpload),
+        });
+
+        // A literal path, so it outranks /tracks/{trackId}
+        HttpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/tracks/uploads",
+            Methods = [HttpMethod.GET],
+            Integration = CreateIntegration(functions.GetUploads),
         });
 
         HttpApi.AddRoutes(new AddRoutesOptions

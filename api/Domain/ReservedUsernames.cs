@@ -19,6 +19,8 @@ public static partial class ReservedUsernames
         "me", "new", "home", "feed", "explore", "discover", "notifications", "messages", "inbox",
         "logout", "signin", "sign-in", "sign-up", "register", "account", "profile", "user", "users",
         "share", "shared", "melomelo", "www", "mail", "blog", "status", "docs", "dev", "test",
+        // API paths that sit beside /users/{username} (a user by that name would be unreachable)
+        "suggestions",
     ];
 
     // A dotted name ending in a web file extension (sw.js, robots.txt, index.html) would be served

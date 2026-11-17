@@ -13,14 +13,14 @@ public class ShareLinkRepositoryTests(DynamoDbLocalFixture fixture)
         var owner = Seed.NewName();
         var trackId = Guid.NewGuid().ToString("N");
 
-        var first = await links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromDays(7), true);
+        var first = await links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromDays(7));
         await Task.Delay(5);
-        var second = await links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromHours(24), false, "a note");
+        var second = await links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromHours(24), "a note");
         (await links.GetAsync(second.Token))!.Caption.Should().Be("a note");
 
         var read = (await links.GetAsync(first.Token))!;
-        (read.Owner, read.Kind, read.TargetId, read.AllowPreview, read.AcceptedCount)
-            .Should().Be((owner, ShareLinkKind.Track, trackId, true, 0));
+        (read.Owner, read.Kind, read.TargetId, read.AcceptedCount)
+            .Should().Be((owner, ShareLinkKind.Track, trackId, 0));
         read.ExpiresAt.Should().Be(DateTimeOffset.FromUnixTimeMilliseconds(read.LinkExpiresAt)
             .Add(ShareLinks.ExpiredGrace).ToUnixTimeSeconds());
 
@@ -41,7 +41,7 @@ public class ShareLinkRepositoryTests(DynamoDbLocalFixture fixture)
     public async Task Claim_CountsWhileLive_RevokeStopsIt_RestoreReopens()
     {
         var links = new ShareLinkRepository(fixture.Db);
-        var link = await links.CreateAsync(Seed.NewName(), ShareLinkKind.Album, "a1", TimeSpan.FromDays(1), true);
+        var link = await links.CreateAsync(Seed.NewName(), ShareLinkKind.Album, "a1", TimeSpan.FromDays(1));
 
         (await links.TryClaimAsync(link.Token)).Should().BeTrue();
         (await links.TryClaimAsync(link.Token)).Should().BeTrue();
@@ -64,7 +64,7 @@ public class ShareLinkRepositoryTests(DynamoDbLocalFixture fixture)
     {
         var links = new ShareLinkRepository(fixture.Db);
         var expired = await links.CreateAsync(Seed.NewName(), ShareLinkKind.Track, "t1",
-            TimeSpan.FromMilliseconds(-1), true);
+            TimeSpan.FromMilliseconds(-1));
         (await links.TryClaimAsync(expired.Token)).Should().BeFalse();
 
         var unknown = ShareLinks.NewToken();
@@ -80,8 +80,8 @@ public class ShareLinkRepositoryTests(DynamoDbLocalFixture fixture)
         var owner = await seed.UserAsync();
         var trackId = await seed.TrackAsync(owner);
         var albumId = await seed.AlbumAsync(owner, trackId);
-        var trackLink = await seed.Links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromDays(1), true);
-        var albumLink = await seed.Links.CreateAsync(owner, ShareLinkKind.Album, albumId, TimeSpan.FromDays(1), true);
+        var trackLink = await seed.Links.CreateAsync(owner, ShareLinkKind.Track, trackId, TimeSpan.FromDays(1));
+        var albumLink = await seed.Links.CreateAsync(owner, ShareLinkKind.Album, albumId, TimeSpan.FromDays(1));
 
         await seed.Albums.DeleteAlbumAsync(owner, albumId);
         (await seed.Links.GetAsync(albumLink.Token)).Should().BeNull();

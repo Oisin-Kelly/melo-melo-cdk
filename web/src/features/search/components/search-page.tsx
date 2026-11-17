@@ -3,6 +3,7 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { VStack } from '@astryxdesign/core/VStack'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useSearchParams } from 'react-router'
+import { PeopleYouMayKnow } from '@/components/people/people-you-may-know'
 import { SEARCH_PLACEHOLDER } from './global-search'
 import { SearchResults } from './search-results'
 
@@ -26,7 +27,7 @@ export function SearchPage() {
         width="100%"
         onChange={(value) => setParams(value ? { q: value } : {}, { replace: true })}
       />
-      {query.trim() && <SearchResults query={query} onPicked={() => {}} />}
+      {query.trim() ? <SearchResults query={query} onPicked={() => {}} /> : <PeopleYouMayKnow />}
     </VStack>
   )
 }

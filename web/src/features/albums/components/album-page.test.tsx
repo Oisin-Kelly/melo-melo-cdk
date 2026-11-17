@@ -46,6 +46,8 @@ describe('AlbumPage', () => {
     expect(screen.getByText('Recorded in June')).toBeInTheDocument()
     const titles = screen.getAllByRole('link', { name: /Opener|Closer/ }).map((a) => a.textContent)
     expect(titles).toEqual(['Opener', 'Closer'])
+    // Numbered, like a tracklist
+    expect([...document.querySelectorAll('.mm-row .mm-row-number')].map((n) => n.textContent)).toEqual(['1', '2'])
   })
 
   it('moves an old id link to the readable URL', async () => {
@@ -62,14 +64,15 @@ describe('AlbumPage', () => {
     expect(screen.getByText(/shared with 3 people/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'More album options' }))
     expect(await screen.findByRole('menuitem', { name: 'Delete album' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Edit tracks' })).toBeInTheDocument()
   })
 
   it('to someone it was shared with, shows what the owner said when sharing it', async () => {
     serveAlbum({ ...shared, myShare: { sharedAt: Date.now(), caption: 'For the drive' } })
     renderAt('/bob/albums/summer')
 
-    expect(await screen.findByText('FROM BOB')).toBeInTheDocument()
-    expect(screen.getByText('“For the drive”')).toBeInTheDocument()
+    expect(await screen.findByText('For the drive')).toBeInTheDocument()
+    expect(screen.getByText(/shared this with you/i)).toBeInTheDocument()
   })
 
   it('to someone it was shared with: no Share, and they can remove it from their library', async () => {
@@ -86,6 +89,7 @@ describe('AlbumPage', () => {
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'More album options' }))
+    expect(screen.queryByRole('menuitem', { name: 'Edit tracks' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('menuitem', { name: 'Remove from my library' }))
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Remove Summer?' })).getByRole('button', { name: 'Remove' }))
 

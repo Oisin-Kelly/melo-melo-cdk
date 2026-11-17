@@ -10,7 +10,7 @@ Part of the [data model](README.md). A share link invites whoever holds it to ad
 |----|-----|--------|--------|
 | `LINK#{token}` | `META` | `LINKS#{TRACK\|ALBUM}#{targetId}` | `DATE#{createdAt}` |
 
-Attributes: `token`, `owner`, `kind` (`TRACK`\|`ALBUM`), `targetId`, `createdAt`, `linkExpiresAt` (epoch ms — when it stops working; 24h / 7d / 30d from creation), `expiresAt` (epoch s — the table's TTL attribute, `linkExpiresAt` + 30 days, so an expired link can still say "expired" for a month rather than "isn't available"), `allowPreview` (default true), `caption?` (≤300, sanitised like a share caption — shown on the invite screen and passed as the share's caption on accept), `acceptedCount`, `revokedAt?` (epoch ms; removed again by restore).
+Attributes: `token`, `owner`, `kind` (`TRACK`\|`ALBUM`), `targetId`, `createdAt`, `linkExpiresAt` (epoch ms — when it stops working; 24h / 7d / 30d from creation), `expiresAt` (epoch s — the table's TTL attribute, `linkExpiresAt` + 30 days, so an expired link can still say "expired" for a month rather than "isn't available"), `caption?` (≤300, sanitised like a share caption — shown on the invite screen and passed as the share's caption on accept), `acceptedCount`, `revokedAt?` (epoch ms; removed again by restore).
 
 - **Token**: 16 random bytes (`RandomNumberGenerator`), base64url, 22 characters — unguessable. Anything not shaped like one is unavailable without a lookup (`ShareLinks.IsWellFormed`).
 - **State** (`ShareLinks.StateOf`): `REVOKED` if `revokedAt` is set (wins over expiry), else `EXPIRED` once `now ≥ linkExpiresAt`, else `ACTIVE`. Every read checks it itself — TTL deletion runs late.
@@ -27,7 +27,7 @@ Attributes: `token`, `owner`, `kind` (`TRACK`\|`ALBUM`), `targetId`, `createdAt`
 ## Access Patterns
 
 #### `POST /links` — CreateLinkLambda
-Body `{kind, targetId, expiresIn?: '24h'|'7d'|'30d' (default 7d), allowPreview?: bool (default true), caption?}` (caption sanitised with `InputSanitiser.MultiLine`, >300 → 400). Bad kind/target/expiry → 400. Item lookup (`ILinkTargetService.GetAsync` — track by id, or album meta + tracklist) → owner check (404 otherwise) → guarded put (`attribute_not_exists(PK)`) → 201 `ShareLink`.
+Body `{kind, targetId, expiresIn?: '24h'|'7d'|'30d' (default 7d), caption?}` (caption sanitised with `InputSanitiser.MultiLine`, >300 → 400). Bad kind/target/expiry → 400. Item lookup (`ILinkTargetService.GetAsync` — track by id, or album meta + tracklist) → owner check (404 otherwise) → guarded put (`attribute_not_exists(PK)`) → 201 `ShareLink`.
 
 #### `GET /links?kind=&targetId=` — GetLinksLambda
 Owner check as above → `Query(GSI3, GSI3PK=LINKS#{kind}#{id}, begins_with DATE#)` → newest first, each with its `state`. Not paginated (a handful per item).
@@ -39,7 +39,7 @@ Owner check as above → `Query(GSI3, GSI3PK=LINKS#{kind}#{id}, begins_with DATE
 The API's only unauthenticated route; throttled on its own (route settings: 20 rps, burst 40, across all callers). Always 200 with a `state`:
 - `UNAVAILABLE` — unknown, malformed, revoked, item deleted, or sender gone: `{state}` only, identical for all, so a dead link reveals nothing.
 - `EXPIRED` — `{state, kind, sender, expiresAt}`: who sent it, nothing about what.
-- `VALID` — sender `UserSummary`, the item's name/cover/`imageBgColor`/genre/duration, `expiresAt`, `allowPreview`, `caption`, and `tracks` (the track, or the album's tracklist in order) each with `preview: {url, isFullTrack} | null` when `allowPreview`: a 10-minute presigned GET of `preview.m4a`, or of `audio.m4a` for a track of 30s or less.
+- `VALID` — sender `UserSummary`, the item's name/cover/`imageBgColor`/genre/duration, `expiresAt`, `caption`, and `tracks` (the track, or the album's tracklist in order) each with `preview: {url, isFullTrack}` (every link can be previewed): a 10-minute presigned GET of `preview.m4a`, or of `audio.m4a` for a track of 30s or less.
 
 #### `GET /links/{token}/viewer` — GetLinkViewerLambda
 Signed in. Revoked/unknown/deleted → 404. `relation`: `OWN` (with the link's stats), `ALREADY_HAVE` (the item's usual access rule — owner, direct share or album grant / album share), or `NONE`; plus `target {kind, id, owner, slug}`. A separate route because an HTTP API route is either authorized or not.

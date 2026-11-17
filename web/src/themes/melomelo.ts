@@ -23,6 +23,16 @@ export const melomeloTheme = defineTheme({
     // Apple's system teal (light / dark) — the wordmark's colour. Unused elsewhere,
     // so the logo owns this token.
     '--color-text-teal': ['#30b0c7', '#40c8e0'],
+    // A liked heart: a strong red in both modes (the theme's error red is a dark maroon
+    // on light and a pale pink on dark — right for messages, weak for a heart). Themes
+    // can't add token names, so the heart owns the palette's red icon token, unused
+    // elsewhere (as the wordmark owns the teal above).
+    '--color-icon-red': ['#e5233b', '#ff4d5e'],
+  },
+  components: {
+    // Neutral paints accent status dots its own blue; ours are the accent teal, like the
+    // "New since your last visit" label they sit under (Home's new shares, unread activity)
+    'status-dot': { 'variant:accent': { backgroundColor: 'var(--color-accent)' } },
   },
 })
 

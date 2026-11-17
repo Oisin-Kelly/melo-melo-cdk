@@ -75,6 +75,13 @@ describe('SearchPage (the phone Search tab)', () => {
     expect(await screen.findByText('Summer Song')).toBeInTheDocument()
   })
 
+  it('before you type, suggests people you may know', async () => {
+    server.use(http.get(`${API}/users/suggestions`, () => HttpResponse.json({ items: [{ user: userSummary('carol', { displayName: 'Carol' }), reason: 'FOLLOWS_YOU', mutuals: [], mutualCount: 0 }] })))
+    renderWithProviders(<Routes><Route path="/search" element={<SearchPage />} /></Routes>, { route: '/search' })
+    expect(await screen.findByRole('heading', { name: 'People you may know' })).toBeInTheDocument()
+    expect(screen.getByText('Carol')).toBeInTheDocument()
+  })
+
   it('shows results straight away for a ?q= in the URL', async () => {
     renderWithProviders(<Routes><Route path="/search" element={<SearchPage />} /></Routes>, { route: '/search?q=summer' })
     expect(await screen.findByText('Summer Song')).toBeInTheDocument()

@@ -98,7 +98,7 @@ public class TrackRepositoryTests(DynamoDbLocalFixture fixture)
         var owner = await seed.UserAsync();
         var recipient = await seed.UserAsync();
         var trackId = await seed.TrackAsync(owner, 100, recipient);
-        await uploads.CreateProcessingAsync(owner, trackId);
+        await uploads.CreateProcessingAsync(owner, trackId, "Song");
 
         await seed.Tracks.DeleteTrackAsync(owner, trackId);
 

@@ -7,7 +7,7 @@ namespace Ports.Repositories;
 public interface IShareLinkRepository
 {
     public Task<ShareLinkDataModel> CreateAsync(string ownerUsername, string kind, string targetId,
-        TimeSpan expiresIn, bool allowPreview, string? caption = null);
+        TimeSpan expiresIn, string? caption = null);
 
     public Task<ShareLinkDataModel?> GetAsync(string token);
 

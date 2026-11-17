@@ -1,11 +1,16 @@
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
+import { Icon } from '@astryxdesign/core/Icon'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
+import { HStack } from '@astryxdesign/core/HStack'
+import { Link } from '@astryxdesign/core/Link'
 import { VStack } from '@astryxdesign/core/VStack'
+import { PlusIcon } from '@heroicons/react/24/outline'
 import type { ReactNode } from 'react'
 import { useParams } from 'react-router'
+import { useAlbumEditor } from '@/components/albums/album-editor-context'
 import { PageLoader } from '@/components/feedback/page-loader'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
 import { AlbumShelf } from '@/components/media/album-tile'
@@ -13,10 +18,10 @@ import { DetailSection, ExpandableText } from '@/components/media/detail-section
 import { TrackRow } from '@/components/media/media-rows'
 import { myTracksContext, sharedFromContext } from '@/components/player/load-context'
 import { TrackListPlayback } from '@/components/player/track-list-playback'
+import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
 import { nameOf, type User } from '@/types/user'
-import { toUnixSeconds } from '@/utils/format'
 import {
   useAlbumsSharedFrom,
   useMyAlbums,
@@ -95,7 +100,7 @@ function SharedWithYouSections({ user }: { user: User }) {
                   track={row.track}
                   aside={
                     <Text type="supporting" color="secondary">
-                      <Timestamp value={toUnixSeconds(row.sharedAt)} format="relative" />
+                      <TimeAgo ms={row.sharedAt} />
                     </Text>
                   }
                 />
@@ -114,14 +119,40 @@ function SharedWithYouSections({ user }: { user: User }) {
 }
 
 function OwnSections() {
+  const albumEditor = useAlbumEditor()
   const albums = useMyAlbums(true)
   const tracks = useMyTracks(true)
   const me = useUsername()
+  // The Your tracks table is for wider screens
+  const isMobile = useIsMobile()
 
   return (
     <>
-      <AlbumShelf title="Your albums" query={albums} toAlbum={(album) => album} />
-      <Section title="Your tracks">
+      <AlbumShelf
+        title="Your albums"
+        query={albums}
+        toAlbum={(album) => album}
+        emptyText="Group your tracks into an album to share them together."
+        action={
+          <Button
+            label="New album"
+            variant="secondary"
+            size="sm"
+            icon={<Icon icon={PlusIcon} />}
+            onClick={() => albumEditor.create()}
+          />
+        }
+      />
+      <Section
+        title="Your tracks"
+        action={
+          !isMobile && (
+            <Link href="/tracks" color="secondary">
+              Manage
+            </Link>
+          )
+        }
+      >
         <TrackListPlayback
           context={myTracksContext(me)}
           tracks={tracks.data?.pages.flatMap((page) => page.items) ?? []}
@@ -144,12 +175,15 @@ function OwnSections() {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <VStack gap={3}>
-      <Text type="label" size="sm" weight="semibold" color="secondary">
-        {title.toUpperCase()}
-      </Text>
+      <HStack gap={3} vAlign="center" hAlign="between">
+        <Text type="label" size="sm" weight="semibold" color="secondary">
+          {title.toUpperCase()}
+        </Text>
+        {action}
+      </HStack>
       {children}
     </VStack>
   )

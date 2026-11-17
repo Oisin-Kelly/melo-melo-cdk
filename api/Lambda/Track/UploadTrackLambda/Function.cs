@@ -64,7 +64,7 @@ public sealed class Function : BaseLambdaFunctionHandler
 
             // Status record first: the client polls GET /tracks/uploads/{trackId}, so
             // PROCESSING must be visible before the state machine can win the race
-            await _uploadStatusRepository.CreateProcessingAsync(username, input.TrackId);
+            await _uploadStatusRepository.CreateProcessingAsync(username, input.TrackId, input.Name!);
 
             await _stepFunctions.StartExecutionAsync(new StartExecutionRequest
             {

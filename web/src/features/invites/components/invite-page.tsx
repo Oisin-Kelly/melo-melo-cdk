@@ -219,7 +219,7 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
   })
   const isAlbum = preview.kind === 'ALBUM'
   const isOwn = viewer?.relation === 'OWN'
-  const playable: PreviewItem[] = preview.tracks.flatMap((t) => (t.preview ? [{ id: t.id, url: t.preview.url }] : []))
+  const playable: PreviewItem[] = preview.tracks.map((t) => ({ id: t.id, url: t.preview.url }))
   const nextPath = encodeURIComponent(shareLinkPath(token))
 
   const handleAccept = () =>
@@ -328,8 +328,7 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
 
   const ownStats = isOwn && viewer.link && (
     <Text type="supporting" size="sm" justify="center">
-      This link: {viewer.link.acceptedCount} added · expires {expiresIn(viewer.link.expiresAt)} · preview{' '}
-      {viewer.link.allowPreview ? 'on' : 'off'}
+      This link: {viewer.link.acceptedCount} added · expires {expiresIn(viewer.link.expiresAt)}
     </Text>
   )
 
@@ -357,12 +356,6 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
       </VStack>
     </div>
   )
-
-  const previewNote = !preview.allowPreview ? (
-    <Text type="supporting" size="sm" justify="center">
-      Preview is off for this link — add it to listen
-    </Text>
-  ) : null
 
   if (isAlbum) {
     return (
@@ -401,7 +394,6 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
                 />
               </HStack>
             )}
-            {previewNote}
           </VStack>
         </div>
         <VStack gap={3} paddingInline={5}>
@@ -425,9 +417,7 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
                   icon={<Icon icon={isPlaying ? PauseIcon : PlayIcon} />}
                   size="sm"
                   variant="ghost"
-                  isDisabled={!track.preview}
-                  tooltip={track.preview ? undefined : 'No preview'}
-                  onClick={() => track.preview && player.toggle({ id: track.id, url: track.preview.url })}
+                  onClick={() => player.toggle({ id: track.id, url: track.preview.url })}
                 />
                 <StackItem size="fill">
                   <Text maxLines={1}>{track.name}</Text>
@@ -452,15 +442,17 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
           {heading}
           <span className="mm-invite-cover">
             <CoverArt imageUrl={preview.imageUrl ?? null} imageBgColor={preview.imageBgColor ?? null} size="xl" />
-            {track?.preview && (
+            {track && (
               <span className="mm-invite-play">
+                {/* The app's play button (black on light, white on dark), larger here */}
                 <IconButton
+                  className="mm-play mm-invite-play-button"
                   label={isPlaying ? 'Stop preview' : track.preview.isFullTrack ? 'Play' : 'Play preview'}
                   icon={<Icon icon={isPlaying ? PauseIcon : PlayIcon} />}
                   variant="primary"
                   size="lg"
                   elevation="med"
-                  onClick={() => track.preview && player.toggle({ id: track.id, url: track.preview.url })}
+                  onClick={() => player.toggle({ id: track.id, url: track.preview.url })}
                 />
               </span>
             )}
@@ -474,16 +466,17 @@ function Valid({ token, preview, signedIn, viewer, onAcceptFailed }: {
             </Text>
           </VStack>
           {caption && <VStack width="100%">{caption}</VStack>}
-          {isPlaying && (
+          {/* Always there (empty until it plays), so starting and stopping never changes the
+              card's height */}
+          {track && (
             <VStack width="100%">
               <ProgressBar
-                label={track.preview?.isFullTrack ? 'Playing' : '30 second preview'}
-                value={player.progress * 100}
+                label={track.preview.isFullTrack ? 'Playing' : '30 second preview'}
+                value={isPlaying ? player.progress * 100 : 0}
                 isLabelHidden
               />
             </VStack>
           )}
-          {previewNote}
         </VStack>
       </div>
       <VStack gap={3} paddingInline={5}>

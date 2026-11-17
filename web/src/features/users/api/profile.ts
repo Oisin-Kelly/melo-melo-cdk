@@ -1,64 +1,15 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { sileo } from 'sileo'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
-import { useUsername } from '@/lib/auth/auth-context'
 import { getUser, userQueryKey } from '@/lib/me'
 import type { AlbumSummary, PaginatedResult, TrackSummary, UserSummary } from '@/types/api'
-import type { User } from '@/types/user'
 
-// A profile (/u/:username): the person, whether you follow them, and what they've shared
+// A profile (/u/:username): the person and what they've shared
 // with you — or, on your own profile, what you've made. Everything about a person sits
 // under ['users', username, …], so one invalidation refreshes their whole page.
 
 /** GET /users/{username}. Your own is the same cache entry useMe() reads. */
 export function useUser(username: string) {
   return useQuery({ queryKey: userQueryKey(username), queryFn: () => getUser(username) })
-}
-
-// ---- following ----
-
-const followStatusKey = (username: string) => ['users', username, 'follow-status'] as const
-
-/** GET /users/{username}/follow-status — do I follow them? */
-export function useFollowStatus(username: string, enabled: boolean) {
-  return useQuery({
-    queryKey: followStatusKey(username),
-    queryFn: () => api<{ followStatus: boolean }>(`/users/${encodeURIComponent(username)}/follow-status`),
-    select: (status) => status.followStatus,
-    enabled,
-  })
-}
-
-/** POST /users/{username}/follow-user {newValue}. Optimistic: the button and their
- *  follower count flip at once, and roll back if the request fails. */
-export function useToggleFollow(username: string) {
-  const queryClient = useQueryClient()
-  const me = useUsername()
-
-  return useMutation({
-    mutationFn: (follow: boolean) =>
-      api(`/users/${encodeURIComponent(username)}/follow-user`, { method: 'POST', body: { newValue: follow } }),
-    onMutate: async (follow) => {
-      await queryClient.cancelQueries({ queryKey: ['users', username] })
-      const previousStatus = queryClient.getQueryData(followStatusKey(username))
-      const previousUser = queryClient.getQueryData<User>(userQueryKey(username))
-      queryClient.setQueryData(followStatusKey(username), { followStatus: follow })
-      queryClient.setQueryData<User>(userQueryKey(username), (user) =>
-        user ? { ...user, followerCount: Math.max(0, user.followerCount + (follow ? 1 : -1)) } : user,
-      )
-      return { previousStatus, previousUser }
-    },
-    onError: (_error, follow, context) => {
-      queryClient.setQueryData(followStatusKey(username), context?.previousStatus)
-      queryClient.setQueryData(userQueryKey(username), context?.previousUser)
-      sileo.error({ title: follow ? "Couldn't follow" : "Couldn't unfollow", description: 'Please try again.' })
-    },
-    onSettled: () => {
-      // Their page (followers, count) and mine (following count + list)
-      void queryClient.invalidateQueries({ queryKey: ['users', username] })
-      void queryClient.invalidateQueries({ queryKey: ['users', me] })
-    },
-  })
 }
 
 // ---- lists ----

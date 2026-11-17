@@ -66,6 +66,15 @@
   align-items: center;
   justify-content: center;
 }
+/* Bigger than a row's play button: it's the one thing to press on the card */
+.astryx-button.mm-invite-play-button {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+.mm-invite-play-button svg {
+  width: 2rem;
+  height: 2rem;
+}
 
 /* An expired link's stand-in cover: a grey square with a lock */
 .mm-invite-locked {

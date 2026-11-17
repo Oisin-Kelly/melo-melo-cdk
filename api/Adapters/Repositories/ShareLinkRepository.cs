@@ -15,7 +15,7 @@ public sealed class ShareLinkRepository : IShareLinkRepository
     }
 
     public async Task<ShareLinkDataModel> CreateAsync(string ownerUsername, string kind, string targetId,
-        TimeSpan expiresIn, bool allowPreview, string? caption = null)
+        TimeSpan expiresIn, string? caption = null)
     {
         var now = DateTimeOffset.UtcNow;
         var expires = now.Add(expiresIn);
@@ -35,7 +35,6 @@ public sealed class ShareLinkRepository : IShareLinkRepository
             CreatedAt = now.ToUnixTimeMilliseconds(),
             LinkExpiresAt = expires.ToUnixTimeMilliseconds(),
             ExpiresAt = expires.Add(ShareLinks.ExpiredGrace).ToUnixTimeSeconds(),
-            AllowPreview = allowPreview,
             Caption = caption,
         };
 

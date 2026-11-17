@@ -93,7 +93,6 @@ public static partial class ShareLinks
         TargetId = link.TargetId,
         CreatedAt = link.CreatedAt,
         ExpiresAt = link.LinkExpiresAt,
-        AllowPreview = link.AllowPreview,
         AcceptedCount = link.AcceptedCount,
         Caption = link.Caption,
         State = StateOf(link, nowMs),
@@ -108,7 +107,6 @@ public record ShareLink
     [JsonPropertyName("targetId")] public required string TargetId { get; set; }
     [JsonPropertyName("createdAt")] public required long CreatedAt { get; set; }
     [JsonPropertyName("expiresAt")] public required long ExpiresAt { get; set; }
-    [JsonPropertyName("allowPreview")] public required bool AllowPreview { get; set; }
     [JsonPropertyName("acceptedCount")] public required int AcceptedCount { get; set; }
     [JsonPropertyName("caption")] public string? Caption { get; set; }
     [JsonPropertyName("state")] public required string State { get; set; }
@@ -130,9 +128,6 @@ public record CreateShareLinkRequest
     // "24h" | "7d" | "30d"; omitted → 7d
     [JsonPropertyName("expiresIn")] public string? ExpiresIn { get; set; }
 
-    // Omitted → true: a link plays a preview unless the owner switches it off
-    [JsonPropertyName("allowPreview")] public bool? AllowPreview { get; set; }
-
     // Optional note (≤300): shown on the invite screen, and becomes the share's caption on accept
     [JsonPropertyName("caption")] public string? Caption { get; set; }
 }
@@ -150,8 +145,7 @@ public record LinkPreviewTrack
     [JsonPropertyName("name")] public required string Name { get; set; }
     [JsonPropertyName("duration")] public required int Duration { get; set; }
 
-    // Null when previews are off for the link
-    [JsonPropertyName("preview")] public LinkPreviewAudio? Preview { get; set; }
+    [JsonPropertyName("preview")] public required LinkPreviewAudio Preview { get; set; }
 }
 
 // GET /links/{token} — public. Everything but `state` is null when unavailable.
@@ -191,10 +185,6 @@ public record LinkPreview
     [JsonPropertyName("expiresAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? ExpiresAt { get; set; }
-
-    [JsonPropertyName("allowPreview")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? AllowPreview { get; set; }
 
     // The sender's note, on a valid link only
     [JsonPropertyName("caption")]
@@ -279,8 +269,6 @@ public record ShareLinkDataModel
 
     // Epoch seconds — the table's TTL attribute: linkExpiresAt + ExpiredGrace
     [DynamoDBProperty("expiresAt")] public required long ExpiresAt { get; set; }
-
-    [DynamoDBProperty("allowPreview")] public required bool AllowPreview { get; set; }
 
     [DynamoDBProperty("acceptedCount")] public int AcceptedCount { get; set; }
 

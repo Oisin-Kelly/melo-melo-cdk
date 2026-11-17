@@ -52,14 +52,16 @@ describe('SettingsPage', () => {
 })
 
 describe('UserMenu (desktop avatar)', () => {
-  it('offers your profile, Edit profile and Sign out', async () => {
+  it('says who you are (opening your profile), then Edit profile and Sign out', async () => {
     const signOut = vi.fn(async () => {})
     const u = userEvent.setup()
     renderWithProviders(<UserMenu />, { signOut })
 
     await u.click(await screen.findByRole('button', { name: /Me/ }))
 
-    expect(await screen.findByRole('menuitem', { name: /View profile/ })).toHaveAttribute('href', '/me')
+    const me = await screen.findByRole('menuitem', { name: /@me/ })
+    expect(me).toHaveAttribute('href', '/me')
+    expect(me).toHaveTextContent(/Me\s*@me/)
     expect(screen.getByRole('menuitem', { name: /Edit profile/ })).toHaveAttribute('href', '/settings/profile')
     await u.click(screen.getByRole('menuitem', { name: /Sign out/ }))
     const confirm = await screen.findByRole('alertdialog', { name: 'Sign out?' })

@@ -17,7 +17,6 @@ const link = (token: string, extra: Partial<ShareLink> = {}): ShareLink => ({
   targetId: 't1',
   createdAt: Date.UTC(2026, 10, 2),
   expiresAt: Date.now() + 5 * DAY,
-  allowPreview: true,
   acceptedCount: 3,
   state: 'ACTIVE',
   ...extra,
@@ -39,7 +38,7 @@ beforeEach(() => {
 
 // The Share dialog on its Link tab (how "Manage links" opens it), with the People tab's
 // queries stubbed — these tests are about links
-function renderSection({ isShortTrack = false, initialTab = 'link' as ShareTab } = {}) {
+function renderSection({ initialTab = 'link' as ShareTab } = {}) {
   const recipients = { data: [], isPending: false, isError: false } as unknown as UseQueryResult<Recipient[]>
   const share = { mutate: vi.fn(), isPending: false } as unknown as UseMutationResult<unknown, Error, ShareChange>
   renderWithProviders(
@@ -48,10 +47,9 @@ function renderSection({ isShortTrack = false, initialTab = 'link' as ShareTab }
       onOpenChange={() => {}}
       name="Night Drive"
       kind="track"
-      subtitle="x"
       recipients={recipients}
       share={share}
-      links={{ kind: 'TRACK', id: 't1', isShortTrack }}
+      links={{ kind: 'TRACK', id: 't1' }}
       initialTab={initialTab}
     />,
     { username: 'me' },
@@ -72,11 +70,11 @@ describe('Share dialog — Link tab', () => {
 
   it('lists active links only, with what each one is doing', async () => {
     renderSection()
-    expect(await screen.findByText('5 days left · preview on · 3 added')).toBeInTheDocument()
+    expect(await screen.findByText('5 days left · 3 added')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(1)
   })
 
-  it('creates a link with the chosen expiry and preview setting, and copies it', async () => {
+  it('creates a link with the chosen expiry and caption, and copies it', async () => {
     let body: unknown
     server.use(
       http.post(`${API}/links`, async ({ request }) => {
@@ -87,7 +85,6 @@ describe('Share dialog — Link tab', () => {
     const user = renderSection()
 
     await user.click(await screen.findByRole('radio', { name: '24 hours' }))
-    await user.click(screen.getByRole('switch', { name: /Allow preview/ }))
     await user.type(screen.getByRole('textbox', { name: /Caption/ }), 'for the drive home')
     await user.click(screen.getByRole('button', { name: 'Create link' }))
 
@@ -95,7 +92,7 @@ describe('Share dialog — Link tab', () => {
     await vi.waitFor(async () =>
       expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/s/CCCCCCCCCCCCCCCCCCCCCC`),
     )
-    expect(body).toEqual({ kind: 'TRACK', targetId: 't1', expiresIn: '24h', allowPreview: false, caption: 'for the drive home' })
+    expect(body).toEqual({ kind: 'TRACK', targetId: 't1', expiresIn: '24h', caption: 'for the drive home' })
   })
 
   it('Copy says Copied on the button — no toast behind the dialog', async () => {
@@ -124,7 +121,7 @@ describe('Share dialog — Link tab', () => {
     const user = renderSection()
 
     await user.click(await screen.findByRole('button', { name: 'Revoke' }))
-    expect(await screen.findByText('Revoked — no one new can use it')).toBeInTheDocument()
+    expect(await screen.findByText('Revoked')).toBeInTheDocument()
     expect(revoked).toBe(true)
 
     await user.click(screen.getByRole('button', { name: 'Undo' }))
@@ -138,10 +135,5 @@ describe('Share dialog — Link tab', () => {
     const user = renderSection()
     await user.click(await screen.findByRole('button', { name: 'Create link' }))
     expect(await screen.findAllByText("Couldn't create a link. Please try again.")).not.toHaveLength(0)
-  })
-
-  it('says a short track plays in full', async () => {
-    renderSection({ isShortTrack: true })
-    expect(await screen.findByText('Plays in full before adding')).toBeInTheDocument()
   })
 })

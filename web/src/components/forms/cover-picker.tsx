@@ -4,7 +4,8 @@ import { Text } from '@astryxdesign/core/Text'
 import { VStack } from '@astryxdesign/core/VStack'
 import { useEffect, useRef, useState } from 'react'
 import { CoverArt } from '@/components/media/cover-art'
-import { IMAGE_ACCEPT, MAX_IMAGE_BYTES } from '@/lib/dropbox'
+import { IMAGE_ACCEPT, imageFileError } from '@/lib/dropbox'
+import { FileInput } from './file-input'
 
 /** What the owner did to the cover: a new file to upload, removed it, or neither. */
 export type CoverChange = { file: File | null; clear: boolean }
@@ -28,24 +29,12 @@ export function CoverPicker({ imageUrl, imageBgColor, onChange, onError }: Props
   // Free the picked cover's preview URL when it's replaced or the form closes
   useEffect(() => () => (picked ? URL.revokeObjectURL(picked.url) : undefined), [picked])
 
-  // Cancelling the browser's file picker fires a `cancel` event on the input (Chrome, Safari,
-  // Firefox) that bubbles — and a <dialog> treats `cancel` as "close" (it's what Escape sends),
-  // so the edit dialog closed along with the picker. Stop it at the input. A native listener,
-  // so it runs before the dialog's own however that's attached.
-  useEffect(() => {
-    const input = fileInput.current
-    if (!input) return
-    const keepDialogOpen = (event: Event) => event.stopPropagation()
-    input.addEventListener('cancel', keepDialogOpen)
-    return () => input.removeEventListener('cancel', keepDialogOpen)
-  }, [])
 
   const previewUrl = picked?.url ?? (isCleared ? null : imageUrl)
 
-  const pick = (file: File | undefined) => {
-    if (!file) return
-    if (!IMAGE_ACCEPT.split(',').includes(file.type)) return onError('Choose a JPEG, PNG, WebP or GIF image.')
-    if (file.size > MAX_IMAGE_BYTES) return onError('That image is over 20 MB. Choose a smaller one.')
+  const pick = (file: File) => {
+    const error = imageFileError(file)
+    if (error) return onError(error)
     setPicked({ file, url: URL.createObjectURL(file) })
     setIsCleared(false)
     onChange({ file, clear: false })
@@ -79,16 +68,7 @@ export function CoverPicker({ imageUrl, imageBgColor, onChange, onError }: Props
           JPEG, PNG, WebP or GIF, up to 20 MB.
         </Text>
       </VStack>
-      <input
-        ref={fileInput}
-        type="file"
-        accept={IMAGE_ACCEPT}
-        hidden
-        onChange={(e) => {
-          pick(e.target.files?.[0])
-          e.target.value = '' // so picking the same file again still fires
-        }}
-      />
+      <FileInput ref={fileInput} accept={IMAGE_ACCEPT} onPick={pick} />
     </HStack>
   )
 }

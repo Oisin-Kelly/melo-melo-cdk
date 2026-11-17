@@ -6,13 +6,12 @@ import { userQueryKey } from '@/lib/me'
 import { user } from '@/testing/fixtures'
 import { createTestQueryClient, renderHookWithProviders } from '@/testing/providers'
 import { API, server } from '@/testing/server'
+import { useFollowStatus, useToggleFollow } from '@/lib/people'
 import {
   useAlbumsSharedFrom,
   useFollowList,
-  useFollowStatus,
   useMyAlbums,
   useMyTracks,
-  useToggleFollow,
   useTracksSharedFrom,
   useUser,
 } from './profile'

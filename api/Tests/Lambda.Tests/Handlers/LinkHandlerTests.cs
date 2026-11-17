@@ -50,14 +50,14 @@ public class LinkHandlerTests
     }
 
     private static ShareLinkDataModel Link(string kind = ShareLinkKind.Track, string targetId = TrackId,
-        bool expired = false, bool revoked = false, bool allowPreview = true, string? caption = null)
+        bool expired = false, bool revoked = false, string? caption = null)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         return new ShareLinkDataModel
         {
             Pk = $"LINK#{Token}", Sk = "META", Gsi3Pk = ShareLinks.ListPk(kind, targetId), Gsi3Sk = "DATE#1",
             Token = Token, Owner = Owner, Kind = kind, TargetId = targetId, CreatedAt = now - 1000,
-            LinkExpiresAt = expired ? now - 1 : now + 86_400_000, ExpiresAt = 0, AllowPreview = allowPreview,
+            LinkExpiresAt = expired ? now - 1 : now + 86_400_000, ExpiresAt = 0,
             AcceptedCount = 3, RevokedAt = revoked ? now - 10 : null, Caption = caption,
         };
     }
@@ -71,7 +71,7 @@ public class LinkHandlerTests
     [Fact]
     public async Task Create_OwnTrack_Is201_DefaultsTo7DaysWithPreview()
     {
-        _links.CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7), true).Returns(Link());
+        _links.CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7)).Returns(Link());
 
         var body = (await CreateLink.FunctionHandler(Http.As(Owner), _context,
                 new CreateShareLinkRequest { Kind = "track", TargetId = TrackId }))
@@ -79,7 +79,7 @@ public class LinkHandlerTests
 
         body.GetProperty("token").GetString().Should().Be(Token);
         body.GetProperty("state").GetString().Should().Be(ShareLinkState.Active);
-        await _links.Received(1).CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7), true);
+        await _links.Received(1).CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7));
     }
 
     [Fact]
@@ -91,18 +91,18 @@ public class LinkHandlerTests
         (await CreateLink.FunctionHandler(Http.As(Owner), _context,
                 new CreateShareLinkRequest { Kind = "ALBUM", TargetId = "nope" }))
             .ShouldHaveStatus(HttpStatusCode.NotFound);
-        await _links.DidNotReceiveWithAnyArgs().CreateAsync(default!, default!, default!, default, default);
+        await _links.DidNotReceiveWithAnyArgs().CreateAsync(default!, default!, default!, default);
     }
 
     [Fact]
     public async Task Create_WithCaption_SanitisesItAndCapsIt()
     {
-        _links.CreateAsync(default!, default!, default!, default, default, default).ReturnsForAnyArgs(Link(caption: "hi there"));
+        _links.CreateAsync(default!, default!, default!, default, default).ReturnsForAnyArgs(Link(caption: "hi there"));
 
         (await CreateLink.FunctionHandler(Http.As(Owner), _context,
                 new CreateShareLinkRequest { Kind = "TRACK", TargetId = TrackId, Caption = "  hi   there  " }))
             .ShouldHaveStatus(HttpStatusCode.Created).Json().GetProperty("caption").GetString().Should().Be("hi there");
-        await _links.Received(1).CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7), true, "hi there");
+        await _links.Received(1).CreateAsync(Owner, ShareLinkKind.Track, TrackId, TimeSpan.FromDays(7), "hi there");
 
         (await CreateLink.FunctionHandler(Http.As(Owner), _context,
                 new CreateShareLinkRequest { Kind = "TRACK", TargetId = TrackId, Caption = new string('c', 301) }))
@@ -235,19 +235,6 @@ public class LinkHandlerTests
         tracks.GetArrayLength().Should().Be(2);
         tracks[0].GetProperty("preview").GetProperty("isFullTrack").GetBoolean().Should().BeTrue();
         tracks[1].GetProperty("preview").GetProperty("isFullTrack").GetBoolean().Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Preview_PreviewOff_HandsOutNoAudio()
-    {
-        LinkIs(Link(allowPreview: false));
-
-        var body = (await Preview.FunctionHandler(Http.Anonymous(), _context, Token))
-            .ShouldHaveStatus(HttpStatusCode.OK).Json();
-
-        body.GetProperty("allowPreview").GetBoolean().Should().BeFalse();
-        body.GetProperty("tracks")[0].GetProperty("preview").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
-        await _audio.DidNotReceiveWithAnyArgs().GetPreviewAsync(default!, default);
     }
 
     [Fact]

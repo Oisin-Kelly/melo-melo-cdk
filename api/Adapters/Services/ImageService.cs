@@ -46,16 +46,7 @@ public sealed class ImageService : IImageService
         using var response = await _dropboxS3Service.GetObjectResponseAsync(imageKey);
         using var image = await Image.LoadAsync<Rgba32>(response.ResponseStream);
 
-        image.Mutate(x =>
-        {
-            x.AutoOrient();
-            x.Resize(new ResizeOptions
-            {
-                Size = new Size(width, height),
-                Mode = ResizeMode.Crop,
-                Sampler = KnownResamplers.Lanczos3
-            });
-        });
+        PrepareCover(image, width, height);
 
         using var outputStream = new MemoryStream();
         await image.SaveAsJpegAsync(outputStream);
@@ -69,6 +60,24 @@ public sealed class ImageService : IImageService
     public Task DeleteImageAsync(string publicImageKey)
     {
         return _publicS3Service.DeleteObjectAsync(publicImageKey);
+    }
+
+    /// Upright, cropped to size, and flattened onto white: covers are saved as JPEG, which
+    /// has no transparency, so a transparent PNG's see-through areas would otherwise come out
+    /// black. White is also what the app shows behind a picked cover before it's uploaded.
+    internal static void PrepareCover(Image<Rgba32> image, int width, int height)
+    {
+        image.Mutate(x =>
+        {
+            x.AutoOrient();
+            x.Resize(new ResizeOptions
+            {
+                Size = new Size(width, height),
+                Mode = ResizeMode.Crop,
+                Sampler = KnownResamplers.Lanczos3
+            });
+            x.BackgroundColor(Color.White);
+        });
     }
 
     private static string GetDominantColor(Image<Rgba32> image)

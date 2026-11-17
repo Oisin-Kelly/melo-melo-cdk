@@ -22,7 +22,6 @@ export function useLinkForm(kind: LinkKind, id: string) {
   const revoke = useRevokeLink(kind, id)
   const restore = useRestoreLink(kind, id)
   const [expiresIn, setExpiresIn] = useState<LinkExpiry>('7d')
-  const [allowPreview, setAllowPreview] = useState(true)
   const [caption, setCaption] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
@@ -48,7 +47,7 @@ export function useLinkForm(kind: LinkKind, id: string) {
   const submit = () => {
     setError(null)
     create.mutate(
-      { expiresIn, allowPreview, caption },
+      { expiresIn, caption },
       {
         onSuccess: (link) => {
           setCaption('')
@@ -82,7 +81,6 @@ export function useLinkForm(kind: LinkKind, id: string) {
 
   const reset = () => {
     setExpiresIn('7d')
-    setAllowPreview(true)
     setCaption('')
     setError(null)
     setCopiedToken(null)
@@ -94,8 +92,6 @@ export function useLinkForm(kind: LinkKind, id: string) {
     id,
     expiresIn,
     setExpiresIn,
-    allowPreview,
-    setAllowPreview,
     caption,
     setCaption,
     captionError,

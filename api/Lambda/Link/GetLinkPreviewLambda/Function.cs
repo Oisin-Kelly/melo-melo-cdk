@@ -86,7 +86,7 @@ public sealed class Function : BaseLambdaFunctionHandler
             Id = t.Id,
             Name = t.Name,
             Duration = t.Duration,
-            Preview = link.AllowPreview ? await _audioService.GetPreviewAsync(t, PreviewUrlExpiry) : null,
+            Preview = await _audioService.GetPreviewAsync(t, PreviewUrlExpiry),
         }));
 
         return new LinkPreview
@@ -100,7 +100,6 @@ public sealed class Function : BaseLambdaFunctionHandler
             Genre = item.Genre,
             Duration = item.Duration,
             ExpiresAt = link.LinkExpiresAt,
-            AllowPreview = link.AllowPreview,
             Caption = link.Caption,
             Tracks = tracks.ToList(),
         };

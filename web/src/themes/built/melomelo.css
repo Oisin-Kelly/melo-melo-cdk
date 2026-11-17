@@ -263,7 +263,7 @@
     --color-tint-hover: light-dark(black, white);
     --color-background-red: light-dark(#ffc4be, #5b2b28);
     --color-border-red: light-dark(#ffaea7, #fa6762);
-    --color-icon-red: light-dark(#76000c, #ff9890);
+    --color-icon-red: light-dark(#e5233b, #ff4d5e);
     --color-text-red: light-dark(#76000c, #ffaea7);
     --color-background-orange: light-dark(#ffc7a1, #503424);
     --color-border-orange: light-dark(#ffc7a1, #df843f);
@@ -534,7 +534,7 @@
   }
 
   .astryx-status-dot[data-variant="accent"] {
-    background-color: var(--astryx-theme-neutral-color-status-fill-accent);
+    background-color: var(--color-accent);
   }
 
   .astryx-avatar-status-dot[data-variant="success"] {

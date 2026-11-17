@@ -22,7 +22,6 @@ const validTrack = (extra: Partial<Extract<LinkPreview, { state: 'VALID' }>> = {
   duration: 242,
   genre: 'Electronic',
   expiresAt: Date.now() + 3 * DAY,
-  allowPreview: true,
   tracks: [{ id: 't1', name: 'Night Drive', duration: 242, preview: { url: 'https://s3/clip', isFullTrack: false } }],
   ...extra,
 })
@@ -34,7 +33,6 @@ const validAlbum: LinkPreview = {
   name: "Demos '26",
   duration: 780,
   expiresAt: Date.now() + 3 * DAY,
-  allowPreview: true,
   tracks: [
     { id: 't1', name: 'Cabin Intro', duration: 25, preview: { url: 'https://s3/full', isFullTrack: true } },
     { id: 't2', name: 'Kitchen Light', duration: 185, preview: { url: 'https://s3/clip', isFullTrack: false } },
@@ -106,7 +104,10 @@ describe('InvitePage — signed out', () => {
   it('plays the 30s preview from the cover', async () => {
     serve(validTrack())
     const { user } = renderInvite({ username: null })
-    await user.click(await screen.findByRole('button', { name: 'Play preview' }))
+    const play = await screen.findByRole('button', { name: 'Play preview' })
+    // The progress bar is there before anything plays, so the card doesn't grow when it does
+    expect(screen.getByRole('progressbar', { name: '30 second preview' })).toBeInTheDocument()
+    await user.click(play)
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Stop preview' })).toBeInTheDocument()
   })
@@ -115,13 +116,6 @@ describe('InvitePage — signed out', () => {
     serve(validTrack({ tracks: [{ id: 't1', name: 'Jingle', duration: 20, preview: { url: 'https://s3/full', isFullTrack: true } }] }))
     renderInvite({ username: null })
     expect(await screen.findByRole('button', { name: 'Play' })).toBeInTheDocument()
-  })
-
-  it('preview off: no play button, and says why', async () => {
-    serve(validTrack({ allowPreview: false, tracks: [{ id: 't1', name: 'Night Drive', duration: 242, preview: null }] }))
-    renderInvite({ username: null })
-    expect(await screen.findByText(/Preview is off for this link/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Play/ })).not.toBeInTheDocument()
   })
 })
 
@@ -177,12 +171,12 @@ describe('InvitePage — signed in', () => {
       target,
       link: {
         token: TOKEN, kind: 'TRACK', targetId: 't1', createdAt: Date.now(), expiresAt: Date.now() + 5 * DAY,
-        allowPreview: true, acceptedCount: 3, state: 'ACTIVE',
+        acceptedCount: 3, state: 'ACTIVE',
       },
     })
     renderInvite({ username: 'oisin' })
     expect(await screen.findByText('THIS IS YOUR TRACK')).toBeInTheDocument()
-    expect(screen.getByText('This link: 3 added · expires in 5 days · preview on')).toBeInTheDocument()
+    expect(screen.getByText('This link: 3 added · expires in 5 days')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Manage links' })).toHaveAttribute('href', '/oisin/night-drive?share=links')
   })
 

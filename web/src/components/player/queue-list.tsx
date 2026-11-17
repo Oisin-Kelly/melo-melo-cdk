@@ -9,9 +9,9 @@ import type { CSSProperties, ReactNode } from 'react'
 import { CoverArt } from '@/components/media/cover-art'
 import type { TrackSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
-import { ownTouches } from './own-touches'
+import { ownTouches } from '@/components/lists/own-touches'
 import { currentTrack, upcoming } from './queue'
-import { useDragReorder } from './use-drag-reorder'
+import { useDragReorder } from '@/components/lists/use-drag-reorder'
 import { usePlayer, usePlayerState } from './use-player'
 
 /** Keys that follow a track as it moves (an index would hand a dragged row's focus to its

@@ -6,7 +6,6 @@ import {
   KeyIcon,
   PencilSquareIcon,
   ShieldCheckIcon,
-  UserCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import { useUsername } from '@/lib/auth/auth-context'
@@ -15,7 +14,8 @@ import { useMe } from '@/lib/me'
 import { nameOf } from '@/types/user'
 import { SignOutDialog } from './sign-out-dialog'
 
-// The avatar at the top right: view / edit your profile, sign out (after a confirm).
+// The avatar at the top right: who you're signed in as (name, @username — opens your
+// profile), edit your profile and account, sign out (after a confirm).
 export function UserMenu() {
   const username = useUsername()
   const me = useMe()
@@ -42,7 +42,15 @@ export function UserMenu() {
           />
         )}
         items={[
-          { label: 'View profile', icon: UserCircleIcon, href: profilePath(username) },
+          // Who you're signed in as, opening your profile
+          {
+            id: 'me',
+            icon: <Avatar src={me.data?.imageUrl ?? undefined} name={name} tooltip={false} size="sm" />,
+            label: name,
+            description: `@${username}`,
+            href: profilePath(username),
+          },
+          { type: 'divider' },
           { label: 'Edit profile', icon: PencilSquareIcon, href: '/settings/profile' },
           { label: 'Change password', icon: KeyIcon, href: '/settings/password' },
           { label: 'Two-step verification', icon: ShieldCheckIcon, href: '/settings/two-step' },

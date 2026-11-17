@@ -13,7 +13,7 @@ import { profilePath } from '@/lib/links'
 import type { TrackSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
 import { formatDuration } from '@/utils/format'
-import { ownTouches } from './own-touches'
+import { ownTouches } from '@/components/lists/own-touches'
 import { useCurrentTrack, usePlaybackPosition, usePlayer, usePlayerState, usePlayingFrom } from './use-player'
 
 // The pieces the desktop bar and the phone's Now playing sheet are made of.

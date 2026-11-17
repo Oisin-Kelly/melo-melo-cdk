@@ -15,4 +15,6 @@ export const LIMITS = {
   bio: 2000,
   /** A track/album/playlist's readable URL (Domain/Slugs.cs MaxLength). */
   slug: 60,
+  /** Tracks in one album (AlbumValidationService.MaxTracksPerAlbum). */
+  albumTracks: 50,
 } as const

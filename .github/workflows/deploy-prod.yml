@@ -1,0 +1,139 @@
+name: Deploy to prod
+
+# Never runs by itself: Actions → "Deploy to prod" → Run workflow, with a version.
+#   A new version (e.g. v1.4.0) deploys the head of main, then tags that commit and creates a
+#     GitHub release — so a version tag always means "this is what went to prod". A failed
+#     deploy leaves no tag; run it again with the same version.
+#   An existing version redeploys exactly that tag — a rollback, or a retry.
+# Only commits CI passed on can be released. The `production` GitHub environment holds the prod
+# secrets (AWS_ROLE_ARN for the prod account's deploy role, WEB_CERTIFICATE_ARN for
+# melomelo.app's us-east-1 certificate) and can require an approval before the deploy starts.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deploy: a new one (v1.4.0) releases main; an existing one redeploys it"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One prod deploy at a time; a second waits rather than cancelling the first half-way
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT: prod
+  AWS_REGION: eu-west-1
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      actions: read # to check the commit's CI run
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      is-new: ${{ steps.pick.outputs.is-new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every tag, to tell a new version from an existing one
+
+      - name: Pick the commit
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like v1.4.0 (got '$VERSION')"; exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            sha=$(git rev-list -n 1 "$VERSION")
+            echo "is-new=false" >> "$GITHUB_OUTPUT"
+            echo "Redeploying existing $VERSION ($sha)"
+          else
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::A new version is released from main — run the workflow on main"; exit 1
+            fi
+            sha=$(git rev-parse HEAD)
+            # Versions only go up (a rollback reuses an existing tag instead)
+            latest=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n 1)
+            if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" ]; then
+              echo "::error::$VERSION is lower than the latest version, $latest"; exit 1
+            fi
+            echo "is-new=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing $VERSION from main ($sha); previous: ${latest:-none}"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+          # A new release must have passed CI; an existing tag already did when it was released,
+          # and a rollback shouldn't hang on GitHub still having that old run
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then exit 0; fi
+          ci=$(gh run list --workflow ci.yml --commit "$sha" --status success --limit 1 --json databaseId --jq 'length')
+          if [ "$ci" != "1" ]; then
+            echo "::error::CI hasn't passed on $sha — wait for it (or fix it) before deploying"; exit 1
+          fi
+
+  deploy:
+    needs: resolve
+    # arm64: the lambdas are linux-arm64 native AOT, built natively rather than under QEMU
+    runs-on: ubuntu-24.04-arm
+    environment:
+      name: production
+      url: https://melomelo.app
+    permissions:
+      id-token: write # OIDC role assumption
+      contents: read
+    env:
+      WEB_CERTIFICATE_ARN: ${{ secrets.WEB_CERTIFICATE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Build lambdas (native arm64 AOT)
+        run: ./scripts/build-lambdas.sh
+
+      # Backend first (web-stack isn't in the app until web/dist exists), then the web app
+      # built against the backend's outputs
+      - name: Deploy backend
+        run: USE_PREBUILT=1 cdk deploy --all --require-approval never
+
+      - name: Deploy web
+        run: ./scripts/deploy-web.sh
+
+  release:
+    needs: [resolve, deploy]
+    if: needs.resolve.outputs.is-new == 'true'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write # the tag and the release
+    steps:
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+        # Notes list the PRs/commits since the previous version
+        run: gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "$VERSION" --generate-notes

@@ -22,9 +22,9 @@ GSI1 gives by-id lookup (owner unknown at query time); GSI3 gives the owner's tr
 |----|-----|
 | `USER#{username}` | `UPLOAD#{trackId}` |
 
-Attributes: `status` (`PROCESSING` / `COMPLETE` / `FAILED`), `error`, `createdAt`, `expiresAt` (table TTL attribute — records self-expire after 24h). No GSI keys — only ever fetched point-wise by the owner.
+Attributes: `status` (`PROCESSING` / `COMPLETE` / `FAILED`), `trackName` (the name it was uploaded with), `error`, `createdAt`, `expiresAt` (table TTL attribute — records self-expire after 24h). No GSI keys — read by the owner only, point-wise or as their `UPLOAD#` range. A PROCESSING record older than 20 minutes (`UploadStatusRepository.StaleAfter`: the processor's 15-minute timeout plus a margin) is reported as FAILED ("Processing took too long") — its processor died without saying so.
 
-Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before encoding — when ffprobe can't read a duration (`N/A`), the encode is capped with `-t` just past the limit and the encoded file's duration is checked instead; unreadable even then → FAILED).
+Written by `UploadTrackLambda` (PROCESSING, before starting the state machine), finalized by `ProcessTrackLambda` (only while the record still exists — `attribute_exists`, so a dismissed record never comes back nameless) (COMPLETE, or FAILED with a user-safe reason from its catch block — e.g. not an audio file, or over the 24-hour per-track duration cap checked via ffprobe before encoding — when ffprobe can't read a duration (`N/A`), the encode is capped with `-t` just past the limit and the encoded file's duration is checked instead; unreadable even then → FAILED).
 
 ### Shared Track
 
@@ -122,7 +122,16 @@ Owner-only: the original upload, in the format it was uploaded in.
 3. Presign a 5-minute GET with `response-content-disposition: attachment; filename="…"; filename*=UTF-8''…` → `{url, fileName, contentType, expiresAt}`. `fileName` is `{track name}.{ext}` (`Domain/OriginalDownloads`: extension from the content type, filesystem-unsafe characters removed). No table writes.
 
 #### `GET /tracks/uploads/{trackId}` — GetUploadStatusLambda
-1. `GetItem(PK=USER#{requestor}, SK=UPLOAD#{trackId})` → `{trackId, status, error?, createdAt}` (404 if absent/expired)
+1. `GetItem(PK=USER#{requestor}, SK=UPLOAD#{trackId})` → `{trackId, status, name, error?, createdAt}` (404 if absent/expired)
+
+#### `GET /tracks/uploads` — GetUploadsLambda
+The caller's uploads that haven't become tracks (Your tracks pins them above the table).
+1. `Query(PK=USER#{requestor}, SK begins_with UPLOAD#)` (at most a day's uploads, unpaged) → drop COMPLETE → `{items: [{trackId, status, name, error?, createdAt}]}` newest first
+
+#### `DELETE /tracks/uploads/{trackId}` — DismissUploadLambda
+Clears a failed upload's row (also sent by the upload dialog's Try another file).
+1. `GetItem(PK=USER#{requestor}, SK=UPLOAD#{trackId})` → still PROCESSING (not stale) → 400 "This upload is still processing."; absent → 200 no-op
+2. Delete it → 200
 
 #### `DELETE /tracks/{trackId}` — DeleteTrackLambda
 Owner-only (404 otherwise). Ordered so any mid-delete crash is retryable (track stays fetchable until the last step):

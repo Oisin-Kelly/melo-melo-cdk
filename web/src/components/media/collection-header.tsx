@@ -157,16 +157,22 @@ export function CollectionHeader({
             </VStack>
           </StackItem>
         </HStack>
-        {description && <ExpandableText text={description} type="supporting" color="secondary" lines={2} isTextToggle />}
-        <HStack gap={2} vAlign="center">
-          <StackItem size="fill">
-            <HStack gap={2} vAlign="center" wrap="wrap">
-              {actions}
+        {/* Under the cover: a big play button on the right, its top where the cover ends;
+            beside it the description (if any) and, on the circle's bottom line, the buttons */}
+        <div className="mm-header-controls">
+          <div className="mm-header-controls-main">
+            {description && <ExpandableText text={description} type="supporting" color="secondary" lines={2} isTextToggle />}
+            <HStack gap={2} vAlign="center">
+              <StackItem size="fill">
+                <HStack gap={2} vAlign="center" wrap="wrap">
+                  {actions}
+                </HStack>
+              </StackItem>
+              {aside}
             </HStack>
-          </StackItem>
-          {aside}
-          {play && <PlayButton label={play.label} size="lg" onPlay={play.onPlay} isPlaying={play.isPlaying} />}
-        </HStack>
+          </div>
+          {play && <PlayButton label={play.label} isBig onPlay={play.onPlay} isPlaying={play.isPlaying} />}
+        </div>
       </Hero>
     )
   }

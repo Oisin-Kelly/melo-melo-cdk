@@ -18,12 +18,23 @@ public record UploadStatus
     [JsonPropertyName("status")]
     public required string Status { get; set; }
 
+    // The name it was uploaded with, for the Your tracks rows of uploads still on their way
+    [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; set; }
+
     [JsonPropertyName("error")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Error { get; set; }
 
     [JsonPropertyName("createdAt")]
     public required long CreatedAt { get; set; }
+}
+
+// GET /tracks/uploads
+public record UploadStatusList
+{
+    [JsonPropertyName("items")] public required List<UploadStatus> Items { get; set; }
 }
 
 public record UploadStatusDataModel
@@ -36,6 +47,9 @@ public record UploadStatusDataModel
 
     [DynamoDBProperty("status")]
     public required string Status { get; set; }
+
+    [DynamoDBProperty("trackName")]
+    public string? TrackName { get; set; }
 
     [DynamoDBProperty("error")]
     public string? Error { get; set; }

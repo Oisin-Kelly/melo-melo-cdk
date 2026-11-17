@@ -28,6 +28,14 @@ The base-table SK is deterministic — one row per (target × follower) — so f
 
 > Key format changed 2026-10-16 (SK used to be `USER#{follower}#{epochMs}`, no GSI3 keys). Rows in the old format aren't found by the new reads — dev follow rows were wiped rather than migrated.
 
+### Hidden Suggestion
+
+| PK | SK |
+|----|-----|
+| `USER#{username}` | `HIDE_SUGGESTION#{hiddenUsername}` |
+
+Attributes: `hiddenAt`, `expiresAt` (table TTL, 180 days). A person the user dismissed from People you may know; read with `begins_with HIDE_SUGGESTION#` on each suggestions request.
+
 ### Slug
 
 | PK | SK |
@@ -68,6 +76,19 @@ Attributes: `targetId`, `createdAt`. One per readable URL an item has ever had �
 #### `GET /users/{username}` — GetUserLambda (profile + shared-with-you count)
 1. `GetItem(PK=USER#{username}, SK=PROFILE)` → profile or 404
 2. Own profile: surface the private `lastSeenAt`/`activitySeenAt` (via a dedicated `SeenMarkersDataModel` projection). Viewing someone else: leave those null and `CountAsync(GSI2, SHARED#{requestor}, begins_with SENDER#{username}#)` → `sharedWithYouCount`
+
+#### `GET /users/suggestions` — GetSuggestedUsersLambda
+People you may know, worked out on each request (no precomputed rows; ~35 small reads). In parallel:
+1. `Query(GSI1, GSI1PK=FOLLOWING#{requestor}, Limit=200)` → who they follow (excluded)
+2. `Query(GSI3, GSI3PK=FOLLOWERS#{requestor}, Limit=200)` → who follows them ("Follows you")
+3. `Query(GSI1, GSI1PK=SHARED#{requestor}, Limit=100)` + `Query(GSI1, GSI1PK=ALBUMSHARED#{requestor}, Limit=100)` → owners of what was shared with them ("Shared music with you")
+4. `Query(GSI3, GSI3PK=USER#{requestor}, Limit=20)` → their 20 newest tracks → `Query(PK=TRACK#{t}, begins_with SHARED#)` each, grants (`SHARED#{u}#ALBUM#…`) skipped → who they shared with ("You shared with them"; there's no index by sender)
+5. `Query(PK=USER#{requestor}, begins_with HIDE_SUGGESTION#)` → dismissed (excluded)
+
+Then `Query(GSI1, GSI1PK=FOLLOWING#{f}, Limit=100)` for up to 30 of their most recent followings → friends of friends (each person they follow who follows a candidate is a mutual). Scored by `SuggestionScoring` (10 / 10 / 6, +2 per mutual), top 40 → `BatchGet FOLLOW#{candidate}/USER#{requestor}` drops anyone they already follow past the 200 cap → top 20 → one deduped profile BatchGet for the candidates and their first two mutuals → `{items: [{user, reason, mutuals, mutualCount}]}`. Mutuals are named (follow lists are public); co-recipients of a share are never used to explain a suggestion.
+
+#### `POST /users/suggestions/{username}/hide` — HideSuggestionLambda
+Put `USER#{requestor}` / `HIDE_SUGGESTION#{username}` (180-day TTL). 400 for yourself. `suggestions` is a reserved username, since this static path outranks `/users/{username}`.
 
 #### `GET /users/search?q=&limit=&cursor=` — SearchUsersLambda
 1. Validate `q`: trim + lowercase, 400 if empty or outside the username charset (`[a-zA-Z0-9._]`)

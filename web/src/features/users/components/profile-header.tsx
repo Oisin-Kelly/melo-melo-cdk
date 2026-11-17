@@ -14,7 +14,7 @@ import { useIsCompact } from '@/hooks/use-is-compact'
 import { useIsNarrow } from '@/hooks/use-is-narrow'
 import { followListPath, profilePath } from '@/lib/links'
 import { nameOf, type User } from '@/types/user'
-import { useFollowStatus, useToggleFollow } from '../api/profile'
+import { useFollowStatus, useToggleFollow } from '@/lib/people'
 
 // The top of a profile: the same header as albums, playlists and tracks — the round
 // photo where the cover goes, then PROFILE, the name, @username · location, their

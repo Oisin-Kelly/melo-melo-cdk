@@ -91,16 +91,17 @@ describe('TrackPage', () => {
     serveTrack({ ...theirs, myShare: { sharedAt: Date.now() - 3 * 86_400_000, caption: 'Play this loud' } })
     renderAt('/bob/their-song')
 
-    expect(await screen.findByText('FROM BOB')).toBeInTheDocument()
-    expect(screen.getByText('“Play this loud”')).toBeInTheDocument()
-    expect(screen.getByText(/^Shared/)).toBeInTheDocument()
+    // A note from them (their name, not a section label), then the quote
+    expect(await screen.findByText('Play this loud')).toBeInTheDocument()
+    expect(screen.getByText(/shared this with you/i)).toBeInTheDocument()
+    expect(screen.queryByText('FROM BOB')).not.toBeInTheDocument()
   })
 
   it('shows no note when the share had no caption', async () => {
     serveTrack({ ...theirs, myShare: { sharedAt: 1 } })
     renderAt('/bob/their-song')
     await screen.findByText('GENRE')
-    expect(screen.queryByText('FROM BOB')).not.toBeInTheDocument()
+    expect(screen.queryByText(/shared this with you/i)).not.toBeInTheDocument()
   })
 
   it('shows the albums it is in and your playlists that hold it', async () => {
@@ -158,12 +159,12 @@ describe('TrackPage', () => {
     expect(sileo.success).toHaveBeenCalledWith({ title: 'Track deleted', description: 'My Song' })
   })
 
-  it('gives its owner an Edit button, to the Edit track page', async () => {
+  it('gives its owner Edit (button and ⋯), opening the Edit track dialog', async () => {
     const { user } = renderAt('/me/my-song')
     await screen.findByRole('heading', { name: 'My Song' })
-    expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', '/me/my-song/edit')
     await user.click(screen.getByRole('button', { name: 'More options for My Song' }))
-    expect(await screen.findByRole('menuitem', { name: 'Edit track' })).toHaveAttribute('href', '/me/my-song/edit')
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit track' }))
+    expect(await screen.findByRole('dialog', { name: 'Edit track' })).toBeInTheDocument()
   })
 
   it('has no Edit for someone it was shared with', async () => {

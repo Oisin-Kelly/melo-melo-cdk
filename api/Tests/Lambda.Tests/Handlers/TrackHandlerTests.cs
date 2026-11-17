@@ -523,6 +523,40 @@ public class TrackHandlerTests
             .Should().Be((UploadState.Failed, "not an audio file"));
     }
 
+    // ---------------------------------------------------------------- GET /tracks/uploads
+
+    [Fact]
+    public async Task Uploads_ListsTheCallersUnfinishedUploads()
+    {
+        var handler = new GetUploadsLambda.Function(_uploads);
+        _uploads.GetUnfinishedAsync(Owner).Returns([
+            new UploadStatus { TrackId = "t2", Status = UploadState.Processing, Name = "New one", CreatedAt = 2 },
+            new UploadStatus { TrackId = "t1", Status = UploadState.Failed, Name = "Old one", Error = "not an audio file", CreatedAt = 1 },
+        ]);
+
+        (await handler.FunctionHandler(Http.Anonymous(), _context)).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        var items = (await handler.FunctionHandler(Http.As(Owner), _context)).ShouldHaveStatus(HttpStatusCode.OK)
+            .Json().GetProperty("items").EnumerateArray().ToList();
+        items.Select(i => (i.GetProperty("trackId").GetString(), i.GetProperty("name").GetString(), i.GetProperty("status").GetString()))
+            .Should().Equal(("t2", "New one", UploadState.Processing), ("t1", "Old one", UploadState.Failed));
+        items[1].GetProperty("error").GetString().Should().Be("not an audio file");
+    }
+
+    // ---------------------------------------------------------------- DELETE /tracks/uploads/{trackId}
+
+    [Fact]
+    public async Task DismissUpload_ActsOnTheCaller_AndRefusesOneStillProcessing()
+    {
+        var handler = new DismissUploadLambda.Function(_uploads);
+        _uploads.DismissAsync(Owner, "done").Returns(true);
+        _uploads.DismissAsync(Owner, "busy").Returns(false);
+
+        (await handler.FunctionHandler(Http.Anonymous(), _context, "done")).ShouldHaveStatus(HttpStatusCode.Unauthorized);
+        (await handler.FunctionHandler(Http.As(Owner), _context, "done")).ShouldHaveStatus(HttpStatusCode.OK);
+        (await handler.FunctionHandler(Http.As(Owner), _context, "busy")).ShouldHaveStatus(HttpStatusCode.BadRequest);
+        await _uploads.Received(1).DismissAsync(Owner, "done");
+    }
+
     // ---------------------------------------------------------------- POST /tracks/{trackId}/share
 
     private ShareTrackLambda.Function ShareTrack => new(_tracks, _shares, _users, _validation);
@@ -621,7 +655,7 @@ public class TrackHandlerTests
         body.GetProperty("status").GetString().Should().Be(UploadState.Processing);
         Received.InOrder(() =>
         {
-            _uploads.CreateProcessingAsync(Owner, trackId);
+            _uploads.CreateProcessingAsync(Owner, trackId, "Song");
             _stepFunctions.StartExecutionAsync(Arg.Any<StartExecutionRequest>());
         });
         await _stepFunctions.Received(1).StartExecutionAsync(Arg.Is<StartExecutionRequest>(r =>
@@ -636,7 +670,7 @@ public class TrackHandlerTests
 
         (await UploadTrack.FunctionHandler(Http.As(Owner), _context, new UploadTrackRequest { Name = "Song", AudioKey = "alice/a.wav" }))
             .ShouldHaveStatus(HttpStatusCode.BadRequest);
-        await _uploads.DidNotReceiveWithAnyArgs().CreateProcessingAsync(default!, default!);
+        await _uploads.DidNotReceiveWithAnyArgs().CreateProcessingAsync(default!, default!, default!);
         await _stepFunctions.DidNotReceiveWithAnyArgs().StartExecutionAsync(default(StartExecutionRequest)!);
     }
 

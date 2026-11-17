@@ -6,7 +6,6 @@ import { Icon } from '@astryxdesign/core/Icon'
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl'
 import { Spinner } from '@astryxdesign/core/Spinner'
 import { StackItem } from '@astryxdesign/core/Stack'
-import { Switch } from '@astryxdesign/core/Switch'
 import { Text } from '@astryxdesign/core/Text'
 import { TextArea } from '@astryxdesign/core/TextArea'
 import { VStack } from '@astryxdesign/core/VStack'
@@ -35,8 +34,8 @@ const createdOn = (epochMs: number) =>
 function LinkRow({ link, form }: { link: ShareLink; form: LinkForm }) {
   const isRevoked = form.revoked.has(link.token)
   const details = isRevoked
-    ? 'Revoked — no one new can use it'
-    : [timeLeft(link.expiresAt), `preview ${link.allowPreview ? 'on' : 'off'}`, `${link.acceptedCount} added`].join(' · ')
+    ? 'Revoked'
+    : [timeLeft(link.expiresAt), `${link.acceptedCount} added`].join(' · ')
   return (
     <HStack gap={2} vAlign="center">
       <StackItem size="fill">
@@ -73,31 +72,23 @@ function LinkRow({ link, form }: { link: ShareLink; form: LinkForm }) {
 
 // The Share dialog's Link tab (owner only). Unlike the People tab, which waits for its Share
 // button, links act immediately — you need one to copy it — so a revoked link stays in the list
-// with Undo until the dialog closes. Feedback is all inline (see useLinkForm).
-export function ShareLinksSection({ form, isShortTrack = false }: { form: LinkForm; isShortTrack?: boolean }) {
+// with Undo until the dialog closes. Feedback is all inline (see useLinkForm). Kept to its
+// controls, with no explaining text; every link lets people preview before adding.
+export function ShareLinksSection({ form }: { form: LinkForm }) {
   const links = useItemLinks(form.kind, form.id, true)
-  const word = form.kind === 'TRACK' ? 'track' : 'album'
   const shown = (links.data ?? []).filter((link) => link.state === 'ACTIVE' || form.revoked.has(link.token))
-  const previewHint =
-    form.kind === 'ALBUM' ? '30s of each track before adding' : isShortTrack ? 'Plays in full before adding' : '30s before adding'
 
   return (
     <VStack gap={4}>
       {form.error && <Banner status="error" title={form.error} />}
-      <Text type="supporting" color="secondary">
-        Anyone with a link can add this {word} until it expires or you revoke it. Removing someone from People
-        doesn't stop them using a link they still have.
-      </Text>
       <SegmentedControl label="Expires in" value={form.expiresIn} onChange={(value) => form.setExpiresIn(value as LinkExpiry)}>
         {EXPIRY_OPTIONS.map((option) => (
           <SegmentedControlItem key={option.value} value={option.value} label={option.label} />
         ))}
       </SegmentedControl>
-      <Switch label="Allow preview" description={previewHint} value={form.allowPreview} onChange={form.setAllowPreview} />
       <TextArea
         label="Caption"
         isOptional
-        description={`Shown when they open the link, and with the ${word} in their feed once they add it.`}
         value={form.caption}
         onChange={form.setCaption}
         maxLength={LIMITS.caption}

@@ -6,7 +6,6 @@ import { Icon } from '@astryxdesign/core/Icon'
 import { IconButton } from '@astryxdesign/core/IconButton'
 import { StackItem } from '@astryxdesign/core/Stack'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
 import {
   EllipsisHorizontalIcon,
@@ -20,6 +19,7 @@ import {
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageLoader } from '@/components/feedback/page-loader'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { EditDetailsDialog } from '@/components/forms/edit-details-dialog'
 import { Illustration } from '@/components/illustrations/illustration'
@@ -29,7 +29,7 @@ import { CollectionHeader } from '@/components/media/collection-header'
 import { CoverArt } from '@/components/media/cover-art'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
 import { LikedCover } from '@/components/media/liked-cover'
-import { MediaRow, TrackRow } from '@/components/media/media-rows'
+import { MediaRow, RowNumber, TrackListHeader, TrackRow } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
 import { allPages } from '@/components/player/all-pages'
@@ -44,7 +44,7 @@ import { useUsername } from '@/lib/auth/auth-context'
 import { playlistPath, useCanonicalPath } from '@/lib/links'
 import { useMe } from '@/lib/me'
 import { playlistDetailKey, type Playlist, type PlaylistTrackEntry } from '@/lib/playlists'
-import { formatDate, formatDuration, formatLength, toUnixSeconds } from '@/utils/format'
+import { formatDate, formatDuration, formatLength, formatShortDate } from '@/utils/format'
 import { useDeletePlaylist, usePlaylistDetail, useRemoveFromPlaylist, useUpdatePlaylist } from '../api/playlists'
 import {
   comparePlaylistEntries,
@@ -71,10 +71,11 @@ const REASON: Record<NonNullable<PlaylistTrackEntry['reason']>, string> = {
 
 // A track that's gone (deleted, or its share withdrawn): kept in the playlist so you
 // can see what it was and remove it yourself, rather than silently vanishing.
-function UnavailableRow({ entry, onRemove }: { entry: PlaylistTrackEntry; onRemove: () => void }) {
+function UnavailableRow({ entry, number, onRemove }: { entry: PlaylistTrackEntry; number: number; onRemove: () => void }) {
   const isMobile = useIsMobile()
   return (
     <MediaRow colour={null}>
+      <RowNumber number={number} />
       <CoverArt imageUrl={null} imageBgColor={null} size="sm" />
       <StackItem size="fill">
         <VStack gap={0.5}>
@@ -316,16 +317,18 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
             actions: <Button label="Browse Home" variant="secondary" href="/" />,
           }}
           endMessage={null}
-          renderItem={(entry) =>
+          renderBefore={(_entry, index) => index === 0 && <TrackListHeader aside={isLikes ? 'Liked' : 'Date added'} />}
+          renderItem={(entry, index) =>
             isLikes ? (
               // The server drops liked tracks that are gone, so every entry has its track
               entry.track && (
                 <TrackRow
                   track={entry.track}
+                  number={index + 1}
                   showOwner
                   aside={
                     <Text type="supporting" color="secondary">
-                      <Timestamp value={toUnixSeconds(entry.addedAt)} format="relative" />
+                      <TimeAgo ms={entry.addedAt} />
                     </Text>
                   }
                 />
@@ -333,7 +336,16 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
             ) : entry.track && !entry.unavailable ? (
               <TrackRow
                 track={entry.track}
+                number={index + 1}
                 showOwner
+                // Its own column on wider screens; a phone row's second line has no room for it
+                aside={
+                  !isMobile && (
+                    <Text type="supporting" color="secondary">
+                      {formatShortDate(entry.addedAt)}
+                    </Text>
+                  )
+                }
                 excludePlaylistId={playlist.id}
                 menuItems={[
                   { type: 'divider' },
@@ -346,7 +358,7 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
                 ]}
               />
             ) : (
-              <UnavailableRow entry={entry} onRemove={() => setRemoving(entry)} />
+              <UnavailableRow entry={entry} number={index + 1} onRemove={() => setRemoving(entry)} />
             )
           }
         />

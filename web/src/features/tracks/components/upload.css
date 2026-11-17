@@ -1,0 +1,108 @@
+/* Upload's Audio step (upload-dialog.tsx): a small card in the middle of the dialog, in a
+   soft wash of the logo teal (--color-text-teal), the whole card a button. A file dragged
+   anywhere over the window sets data-active: the card's edge goes teal and it lifts. */
+.mm-audio-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--spacing-6) 0;
+}
+.mm-drop-card {
+  --mm-drop: var(--color-text-teal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: min(100%, 26rem);
+  padding: var(--spacing-8) var(--spacing-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-page);
+  background: color-mix(in oklch, var(--mm-drop) 9%, var(--color-background-surface));
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast, 0.15s),
+    background-color var(--duration-fast, 0.15s),
+    transform var(--duration-fast, 0.15s);
+}
+.mm-drop-card .astryx-text,
+.mm-audio-step-note.astryx-text { text-align: center; }
+@media (hover: hover) {
+  .mm-drop-card:hover { background: color-mix(in oklch, var(--mm-drop) 14%, var(--color-background-surface)); }
+}
+.mm-drop-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.mm-drop-card[data-active] {
+  border-color: var(--mm-drop);
+  background: color-mix(in oklch, var(--mm-drop) 18%, var(--color-background-surface));
+  transform: scale(1.03);
+}
+/* The cloud in a light teal disc */
+.mm-drop-card-icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-block-end: var(--spacing-2);
+  border-radius: 50%;
+  color: var(--mm-drop);
+  background: color-mix(in oklch, var(--mm-drop) 22%, var(--color-background-surface));
+}
+.mm-drop-card-icon svg { width: 1.75rem; height: 1.75rem; }
+.mm-audio-step-note { max-width: 22rem; }
+@media (prefers-reduced-motion: reduce) {
+  .mm-drop-card { transition: none; }
+  .mm-drop-card[data-active] { transform: none; }
+}
+
+/* A file dragged over a later step: the whole window says it will replace the audio */
+.mm-upload-overlay {
+  position: fixed;
+  inset: var(--spacing-3);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--color-text-teal);
+  border-radius: var(--radius-page);
+  background: color-mix(in oklch, var(--color-text-teal) 14%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+/* After Upload: the right-hand side while the server gets it ready */
+.mm-upload-processing {
+  padding-block-start: var(--spacing-4);
+  max-width: 32rem;
+}
+
+/* The title row: the stepper at the top left, where a page's title sits */
+.mm-upload-steps {
+  width: min(100%, 30rem);
+}
+
+/* The upload dialog keeps one size from step to step (on wider screens), so picking a file
+   doesn't make it jump; the drop zone fills it */
+@media (min-width: 768px) {
+  .mm-upload-body {
+    /* Never taller than the room the dialog has (its header and footer take ~19rem), or
+       the body would scroll by however much it overshoots */
+    min-height: min(32rem, calc(100dvh - 19rem));
+    display: flex;
+    flex-direction: column;
+  }
+  .mm-upload-body > * { flex: 1; }
+}
+
+/* Phones (the bottom sheet): the body fills the room between the stepper and the buttons,
+   so the Audio step's card sits in the middle of the sheet */
+.mm-form-sheet .mm-upload-body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mm-form-sheet .mm-upload-body > * { flex: 1; }

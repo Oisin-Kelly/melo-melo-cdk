@@ -6,6 +6,7 @@ import { IconButton } from '@astryxdesign/core/IconButton'
 import { SideNav, SideNavItem, SideNavSection } from '@astryxdesign/core/SideNav'
 import { TopNav } from '@astryxdesign/core/TopNav'
 import {
+  AdjustmentsHorizontalIcon,
   ArrowUpTrayIcon,
   HeartIcon,
   HomeIcon,
@@ -13,6 +14,7 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import {
+  AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolid,
   HeartIcon as HeartSolid,
   HomeIcon as HomeSolid,
   RectangleStackIcon as RectangleStackSolid,
@@ -23,6 +25,9 @@ import { Wordmark } from '@/components/brand/wordmark'
 import { MiniPlayer } from '@/components/player/mini-player'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { PlayerProvider } from '@/components/player/player-provider'
+import { AlbumEditorProvider } from '@/features/albums/components/album-editor'
+import { UploadProvider } from '@/features/tracks/components/upload-dialog'
+import { useUpload } from '@/features/tracks/components/upload-context'
 import { ThemeModeMenu } from '@/components/theme/theme-mode-menu'
 import { NotificationsPopover } from '@/features/activity/components/notifications-popover'
 import { GlobalSearch } from '@/features/search/components/global-search'
@@ -45,11 +50,19 @@ import './app-shell.css'
 // player sits above the layout switch, so resizing never interrupts the music.
 export function AppLayout() {
   const isMobile = useIsMobile()
-  return <PlayerProvider>{isMobile ? <PhoneLayout /> : <DesktopLayout />}</PlayerProvider>
+  // Upload is a dialog over whatever page you're on, open-able from anywhere (UploadProvider)
+  return (
+    <PlayerProvider>
+      <UploadProvider>
+        <AlbumEditorProvider>{isMobile ? <PhoneLayout /> : <DesktopLayout />}</AlbumEditorProvider>
+      </UploadProvider>
+    </PlayerProvider>
+  )
 }
 
 function DesktopLayout() {
   const { pathname } = useLocation()
+  const openUpload = useUpload().open
   const username = useUsername()
   useLogoScrollScale()
 
@@ -64,6 +77,15 @@ function DesktopLayout() {
       isCurrent: pathname.startsWith('/library'),
     },
     { label: 'Liked tracks', href: '/liked', icon: HeartIcon, selectedIcon: HeartSolid, isCurrent: pathname.startsWith('/liked') },
+    // The tables of your tracks, albums and playlists — only those exact paths;
+    // /tracks/{id} and the like are some item's page
+    {
+      label: 'Manage',
+      href: '/tracks',
+      icon: AdjustmentsHorizontalIcon,
+      selectedIcon: AdjustmentsHorizontalSolid,
+      isCurrent: ['/tracks', '/albums', '/playlists'].includes(pathname),
+    },
     {
       label: 'Profile',
       href: profile,
@@ -91,7 +113,7 @@ function DesktopLayout() {
               <HStack gap={2} vAlign="center">
                 <Button
                   label="Upload track"
-                  href="/upload"
+                  onClick={openUpload}
                   variant="secondary"
                   size="sm"
                   icon={<Icon icon={ArrowUpTrayIcon} />}
@@ -130,6 +152,7 @@ function DesktopLayout() {
 
 function PhoneLayout() {
   useLogoScrollScale()
+  const openUpload = useUpload().open
   return (
     <div className="mm-app-frame">
       <AppShell
@@ -147,7 +170,7 @@ function PhoneLayout() {
               <HStack gap={2} vAlign="center">
                 <IconButton
                   label="Upload track"
-                  href="/upload"
+                  onClick={openUpload}
                   variant="ghost"
                   size="lg"
                   icon={<Icon icon={ArrowUpTrayIcon} />}

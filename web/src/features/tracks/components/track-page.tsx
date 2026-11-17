@@ -4,11 +4,11 @@ import type { DropdownMenuOption } from '@astryxdesign/core/DropdownMenu'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Icon } from '@astryxdesign/core/Icon'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
 import { ArrowDownTrayIcon, MinusCircleIcon, PencilIcon, TrashIcon, UserPlusIcon } from '@heroicons/react/24/outline'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { PageLoader } from '@/components/feedback/page-loader'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
@@ -16,7 +16,7 @@ import { LikeButton, TrackMenu } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
 import { usePlayTrack } from '@/components/player/use-player'
-import { ShareNoteBody } from '@/components/sharing/share-note-section'
+import { ShareNote } from '@/components/sharing/share-note'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
 import { useIsCompact } from '@/hooks/use-is-compact'
@@ -24,8 +24,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
 import { useUsername } from '@/lib/auth/auth-context'
 import { trackEditPath, trackPath, trackPeoplePath, useCanonicalPath } from '@/lib/links'
-import { nameOf } from '@/types/user'
-import { formatDate, formatDuration, toUnixSeconds } from '@/utils/format'
+import { formatDate, formatDuration } from '@/utils/format'
 import {
   trackDetailKey,
   useDeleteTrack,
@@ -38,6 +37,7 @@ import {
   type Track,
 } from '../api/tracks'
 import { PersonRow } from './person-row'
+import { TrackEditDialog } from './track-edit-dialog'
 import { InAlbums, InPlaylists } from './track-appears-in'
 import { PREVIEW, SeeAll, SharedWith, TrackShareDialog } from './track-sharing'
 
@@ -47,13 +47,20 @@ const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}
 // it and when, then its genre and description. Its owner also gets sharing, editing and
 // deleting, plus who it's shared with and who liked it. Anyone else without access: 404.
 // Reached by its readable URL (/{owner}/{slug}, resolved to the id) or its id route /tracks/{id}.
-export function TrackPage({ trackId }: { trackId: string }) {
+/** `isEditing`: opened at /…/edit, so the Edit track dialog starts open (owners only) */
+export function TrackPage({ trackId, isEditing: startsEditing = false }: { trackId: string; isEditing?: boolean }) {
   const me = useUsername()
   const detail = useTrack(trackId)
   const appearsIn = useTrackAppearsIn(trackId, detail.isSuccess)
   const isCompact = useIsCompact()
   const [isSharing, setIsSharing, shareTab] = useSharingState()
-  useCanonicalPath(detail.data && trackPath(detail.data))
+  const [isEditing, setIsEditing] = useState(startsEditing)
+  // The readable URL. Opened at /…/edit, it stays there while the dialog's open (the edit
+  // route renders this page), and closing it moves on to the track's own address
+  useCanonicalPath(
+    detail.data &&
+      (startsEditing && isEditing && detail.data.owner.username === me ? trackEditPath(detail.data) : trackPath(detail.data)),
+  )
   // A track's own page plays just that track (or pauses it, wherever it's playing from)
   const play = usePlayTrack(detail.data)
 
@@ -79,15 +86,6 @@ export function TrackPage({ trackId }: { trackId: string }) {
   // Genre and description always show, with a quiet placeholder when blank, so a bare
   // track's page isn't empty below the header
   const sections: { title: string; body: ReactNode }[] = [
-    // Shared with you with a caption: what they said comes first
-    ...(track.myShare?.caption
-      ? [
-          {
-            title: `From ${nameOf(track.owner)}`,
-            body: <ShareNoteBody caption={track.myShare.caption} sharedAt={track.myShare.sharedAt} />,
-          },
-        ]
-      : []),
     { title: 'Genre', body: track.genre ? <Text type="body">{track.genre}</Text> : <Placeholder>No genre</Placeholder> },
     {
       title: 'Description',
@@ -117,7 +115,14 @@ export function TrackPage({ trackId }: { trackId: string }) {
         imageBgColor={track.imageBgColor}
         byline={<OwnerByline owner={track.owner} hasUsername />}
         meta={meta}
-        actions={<TrackActions track={track} isOwner={isOwner} onShare={() => setIsSharing(true)} />}
+        actions={
+          <TrackActions
+            track={track}
+            isOwner={isOwner}
+            onShare={() => setIsSharing(true)}
+            onEdit={() => setIsEditing(true)}
+          />
+        }
         play={{ label: `Play ${track.name}`, text: 'Play', ...play }}
         labelEnd={
           <Text type="supporting" color="secondary">
@@ -126,6 +131,9 @@ export function TrackPage({ trackId }: { trackId: string }) {
         }
         aside={isOwner && <SharedWithCorner track={track} onManage={() => setIsSharing(true)} />}
       />
+
+      {/* Shared with you with a caption: what they said comes first */}
+      <ShareNote share={track.myShare} from={track.owner} colour={track.imageBgColor} />
 
       <VStack gap={4}>
         {sections.map((section, i) => (
@@ -137,6 +145,7 @@ export function TrackPage({ trackId }: { trackId: string }) {
       </VStack>
 
       {isOwner && <TrackShareDialog track={track} isOpen={isSharing} onOpenChange={setIsSharing} initialTab={shareTab} />}
+      {isOwner && <TrackEditDialog track={track} isOpen={isEditing} onOpenChange={setIsEditing} />}
     </VStack>
   )
 }
@@ -167,7 +176,17 @@ function Placeholder({ children }: { children: ReactNode }) {
 
 // Header actions. Everyone: play, like, add to a playlist. Owners also share, edit and
 // delete; recipients can take it out of their library (the mirror of the owner unsharing).
-function TrackActions({ track, isOwner, onShare }: { track: Track; isOwner: boolean; onShare: () => void }) {
+function TrackActions({
+  track,
+  isOwner,
+  onShare,
+  onEdit,
+}: {
+  track: Track
+  isOwner: boolean
+  onShare: () => void
+  onEdit: () => void
+}) {
   const remove = useDeleteTrack(track.id)
   const leave = useRemoveTrackFromLibrary(track.id)
   const download = useDownloadOriginal(track.id)
@@ -190,7 +209,7 @@ function TrackActions({ track, isOwner, onShare }: { track: Track; isOwner: bool
 
   const menuItems: DropdownMenuOption[] = isOwner
     ? [
-        { label: 'Edit track', icon: PencilIcon, href: trackEditPath(track) },
+        { label: 'Edit track', icon: PencilIcon, onClick: onEdit },
         // The file exactly as uploaded (wav, flac…), not the streaming copy
         { label: 'Download original', icon: ArrowDownTrayIcon, onClick: () => download.mutate() },
         { type: 'divider' },
@@ -204,16 +223,10 @@ function TrackActions({ track, isOwner, onShare }: { track: Track; isOwner: bool
   return (
     <>
       {isOwner && <Button label="Share" variant="secondary" icon={<Icon icon={UserPlusIcon} />} onClick={onShare} />}
-      {/* Everything about the track (details, its file, who has it) on its own page */}
-      {/* (phones: just the pencil, or ⋯ wraps onto its own line on an SE) */}
+      {/* Its details in the Edit track dialog (phones: just the pencil, or ⋯ wraps onto
+          its own line on an SE) */}
       {isOwner && (
-        <Button
-          label="Edit"
-          variant="secondary"
-          icon={<Icon icon={PencilIcon} />}
-          isIconOnly={isMobile}
-          href={trackEditPath(track)}
-        />
+        <Button label="Edit" variant="secondary" icon={<Icon icon={PencilIcon} />} isIconOnly={isMobile} onClick={onEdit} />
       )}
       <LikeButton kind="TRACK" id={track.id} liked={track.likedByMe} name={track.name} />
       <TrackMenu track={track} extraItems={menuItems} />
@@ -250,7 +263,7 @@ function LikedBy({ track }: { track: Track }) {
       <VStack gap={0}>
         {firstPage.items.slice(0, PREVIEW).map((liker) => (
           <PersonRow key={liker.user.username} user={liker.user}>
-            Liked <Timestamp value={toUnixSeconds(liker.likedAt)} format="relative" />
+            Liked <TimeAgo ms={liker.likedAt} />
           </PersonRow>
         ))}
       </VStack>

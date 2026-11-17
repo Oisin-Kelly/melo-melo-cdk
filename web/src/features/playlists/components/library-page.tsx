@@ -1,19 +1,23 @@
 import { Button } from '@astryxdesign/core/Button'
+import { DropdownMenu } from '@astryxdesign/core/DropdownMenu'
 import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Icon } from '@astryxdesign/core/Icon'
+import { IconButton } from '@astryxdesign/core/IconButton'
 import { List, ListItem } from '@astryxdesign/core/List'
 import { StackItem } from '@astryxdesign/core/Stack'
 import { Text } from '@astryxdesign/core/Text'
 import { VStack } from '@astryxdesign/core/VStack'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, QueueListIcon, Square2StackIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
+import { useAlbumEditor } from '@/components/albums/album-editor-context'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { AlbumShelf } from '@/components/media/album-tile'
 import { CoverArt } from '@/components/media/cover-art'
 import { CoverPlay } from '@/components/media/cover-play'
 import { LikedCover } from '@/components/media/liked-cover'
 import { loadPlaylist } from '@/components/player/load-context'
+import { useIsMobile } from '@/hooks/use-is-mobile'
 import { useUsername } from '@/lib/auth/auth-context'
 import { playlistPath } from '@/lib/links'
 import { usePlaylists } from '@/lib/playlists'
@@ -31,6 +35,8 @@ export function LibraryPage() {
   const playlists = usePlaylists()
   const likedAlbums = useLikedAlbums()
   const [isCreating, setIsCreating] = useState(false)
+  const albumEditor = useAlbumEditor()
+  const isMobile = useIsMobile()
   const likes = playlists.data?.find((playlist) => playlist.type === 'LIKES')
   const custom = playlists.data?.filter((playlist) => playlist.type === 'CUSTOM') ?? []
 
@@ -40,13 +46,35 @@ export function LibraryPage() {
         <StackItem size="fill">
           <Heading level={1}>Library</Heading>
         </StackItem>
-        <Button
-          label="New playlist"
-          variant="secondary"
-          size="sm"
-          icon={<Icon icon={PlusIcon} />}
-          onClick={() => setIsCreating(true)}
-        />
+        {/* Two worded buttons don't fit beside the title on a phone: one + with both in it */}
+        {isMobile ? (
+          <DropdownMenu
+            renderTrigger={(props) => (
+              <IconButton {...props} label="New playlist or album" variant="secondary" icon={<Icon icon={PlusIcon} />} />
+            )}
+            items={[
+              { label: 'New playlist', icon: QueueListIcon, onClick: () => setIsCreating(true) },
+              { label: 'New album', icon: Square2StackIcon, onClick: () => albumEditor.create() },
+            ]}
+          />
+        ) : (
+          <>
+            <Button
+              label="New playlist"
+              variant="secondary"
+              size="sm"
+              icon={<Icon icon={PlusIcon} />}
+              onClick={() => setIsCreating(true)}
+            />
+            <Button
+              label="New album"
+              variant="secondary"
+              size="sm"
+              icon={<Icon icon={PlusIcon} />}
+              onClick={() => albumEditor.create()}
+            />
+          </>
+        )}
       </HStack>
 
       <List hasDividers={false} edgeCompensation="inline">

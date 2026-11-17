@@ -23,5 +23,10 @@ export function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+/** Epoch ms → "28 Oct 2026": a date short enough for a table column. */
+export function formatShortDate(epochMs: number): string {
+  return new Date(epochMs).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 /** The API's epoch-milliseconds → Astryx Timestamp's unix seconds. */
 export const toUnixSeconds = (epochMs: number) => Math.floor(epochMs / 1000)

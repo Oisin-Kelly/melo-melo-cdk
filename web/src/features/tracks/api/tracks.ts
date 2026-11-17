@@ -60,7 +60,7 @@ export function useTrackAppearsIn(id: string, enabled: boolean) {
 }
 
 // Name and cover show on rows everywhere: refresh every list (not other details)
-function refreshListsShowingTracks(queryClient: ReturnType<typeof useQueryClient>) {
+export function refreshListsShowingTracks(queryClient: ReturnType<typeof useQueryClient>) {
   const notDetail = (query: { queryKey: readonly unknown[] }) => query.queryKey[1] !== 'detail'
   void queryClient.invalidateQueries({ queryKey: ['tracks'], predicate: notDetail })
   void queryClient.invalidateQueries({ queryKey: ['albums'] })

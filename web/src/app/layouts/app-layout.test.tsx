@@ -39,7 +39,8 @@ describe('AppLayout (wider screens)', () => {
     renderAt('/')
     expect(screen.getByText('Page content')).toBeInTheDocument()
     expect(screen.getByLabelText('Search')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Upload track/ })).toHaveAttribute('href', '/upload')
+    // Upload is a dialog over the page, opened from the header
+    expect(screen.getByRole('button', { name: /Upload track/ })).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/me')
     expect(await screen.findByRole('link', { name: /Road trip/ })).toHaveAttribute('href', '/me/playlists/road-trip')
   })
@@ -48,6 +49,10 @@ describe('AppLayout (wider screens)', () => {
     ['/', ['Home']],
     ['/library', ['Library']],
     ['/liked', ['Liked tracks']],
+    ['/tracks', ['Manage']],
+    ['/albums', ['Manage']],
+    ['/playlists', ['Manage']],
+    ['/tracks/t1', []],
     ['/me', ['Profile']],
     ['/me/followers', ['Profile']],
     // Your tracks and playlists live under /me/… but aren't "Profile"

@@ -1,0 +1,31 @@
+/* Home on wide screens (home-page.tsx): an Astryx Layout filling the content area edge to
+   edge, like desktop Settings (settings-layout.css) — a Layout nested in AppShell's padded
+   content stretches out to its edges by itself, so this only makes it full height, and
+   the panel's divider then runs from the header to the bottom of the screen. */
+.mm-home {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mm-home > .astryx-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.mm-home > .astryx-layout > * {
+  flex: 1;
+}
+
+/* The panel: People you may know, staying in view while the feed scrolls (the scroll
+   area's own padding would otherwise push the stuck panel down by that much) */
+.mm-home-panel {
+  width: 22rem;
+  padding: var(--spacing-8) var(--spacing-5);
+  position: sticky;
+  top: calc(-1 * var(--mm-page-pad));
+}
+/* LayoutPanel scrolls on its own (overflow: auto), which would pin the panel's content to
+   the panel instead of the page */
+.mm-home .astryx-layout-panel {
+  overflow: visible;
+}

@@ -1,0 +1,54 @@
+/* The manage tables (Your tracks / albums / playlists). The bar and the table are one
+   block. Astryx's table and toolbar bleed over their container's padding on three sides
+   (they expect to be a card's first child); here they sit under the filters, so only the
+   sideways bleed is kept. */
+.mm-manage-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+/* Doubled class: has to outrank the components' own single-class margins */
+.mm-manage-table.mm-manage-table > * {
+  margin-block-start: 0;
+}
+
+/* The first cell is cover + name on one line, the name taking the
+   room and ending in "…" (the table's own truncation only reaches plain-text cells). */
+.mm-manage-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-width: 0;
+}
+
+.mm-manage-cell .mm-cover {
+  flex: none;
+  width: var(--mm-row-media, 2.75rem);
+  height: var(--mm-row-media, 2.75rem);
+}
+
+.mm-manage-cell-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The filter row's search box: wide enough for a track name */
+.mm-manage-search {
+  width: 18rem;
+}
+
+/* Lining the bar and the tick boxes up with the page's left edge (the title, the filters).
+   Astryx centres each tick box on the edge itself, so half of it hangs out; and the bar's
+   ghost buttons start a button's padding short of it. Both move over by that much (the
+   bar's end comes in to the page's right edge too). !important: Astryx's own rules carry id-level weight. */
+.mm-manage-table .astryx-toolbar {
+  margin-inline: var(--spacing-3) var(--spacing-5);
+}
+
+.mm-manage-table :is(th, td):first-child {
+  padding-inline-start: calc(var(--mm-page-pad) + 10px) !important;
+}

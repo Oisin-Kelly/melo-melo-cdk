@@ -1,0 +1,144 @@
+/* The dialog's body, for the form and for the picker alike: one fixed height on wider
+   screens (capped to the room the dialog has), so the centred dialog — and the cover in
+   it — stays put however many tracks there are. It scrolls inside instead */
+.mm-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+.mm-editor-body[hidden] { display: none; }
+/* Its children keep their own height (the body scrolls); a flex column would squash them */
+.mm-editor-body > * { flex-shrink: 0; }
+@media (min-width: 768px) {
+  .mm-editor-body {
+    /* Astryx caps a dialog near 75% of the window, and its header and footer take ~6.5rem:
+       stay inside that, or the dialog's own body would scroll as well */
+    height: min(32rem, calc(72dvh - 7rem));
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* room for focus rings and the rows' background, which reach past their content */
+    padding: var(--spacing-1);
+    margin: calc(-1 * var(--spacing-1));
+  }
+}
+/* New album on two columns: only the details-and-tracks column scrolls; the preview
+   never moves */
+@media (min-width: 1024px) {
+  /* clip, not hidden: nothing (a focus, a scroll-into-view) can scroll it even a pixel */
+  .mm-editor-body:has(> .mm-album-editor) { overflow: clip; }
+  .mm-editor-body > .mm-album-editor {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .mm-album-editor .mm-composer {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .mm-album-editor .mm-composer-fields {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    padding-inline: var(--spacing-1);
+    margin-inline: calc(-1 * var(--spacing-1));
+  }
+}
+
+/* No tracks yet: the whole dashed card opens the picker */
+.mm-edit-empty {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-1);
+  width: 100%;
+  padding: var(--spacing-6) var(--spacing-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  cursor: pointer;
+}
+.mm-edit-empty:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .mm-edit-empty:hover { background: var(--color-background-muted); }
+}
+
+/* The tracklist being edited, and the picker's rows: handle or checkbox, number, cover,
+   name (gives way with "…"), length, remove */
+.mm-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mm-edit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-1);
+  margin-inline: calc(-1 * var(--spacing-1));
+  border-radius: var(--radius-container);
+  background: transparent;
+}
+.mm-edit-row .mm-cover { border-radius: max(var(--radius-inner), calc(var(--radius-container) - var(--spacing-1))); }
+.mm-edit-row[data-dragging] {
+  background: var(--color-background-card);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.16);
+}
+.mm-edit-name {
+  flex: 1;
+  min-width: 0;
+}
+.mm-edit-number {
+  width: 1.5rem;
+  flex-shrink: 0;
+  text-align: end;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+/* The drag handle: a comfortable target, and a drag on it never scrolls or swipes */
+.mm-edit-handle {
+  all: unset;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-element);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-edit-handle:active { cursor: grabbing; }
+.mm-edit-handle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.mm-pick-row {
+  padding-inline: var(--spacing-2);
+  cursor: pointer;
+}
+.mm-pick-row[data-disabled] {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (hover: hover) {
+  .mm-pick-row:not([data-disabled]):hover { background: var(--color-background-muted); }
+}
+
+/* Phones: tighter, so the name keeps most of the row */
+@media (max-width: 767px) {
+  .mm-edit-row { gap: var(--spacing-2); }
+  .mm-edit-handle { width: 1.75rem; }
+  .mm-edit-number { width: 1.125rem; }
+}

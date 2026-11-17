@@ -2,10 +2,9 @@ import { Avatar } from '@astryxdesign/core/Avatar'
 import { Item } from '@astryxdesign/core/Item'
 import { StatusDot } from '@astryxdesign/core/StatusDot'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { activityTargetPath, profilePath } from '@/lib/links'
 import { nameOf } from '@/types/user'
-import { toUnixSeconds } from '@/utils/format'
 import type { ActivityEntry } from '../api/activity'
 
 function hrefFor(entry: ActivityEntry): string {
@@ -48,7 +47,7 @@ export function ActivityRow({ entry, isUnread }: { entry: ActivityEntry; isUnrea
           <Sentence entry={entry} />
         </Text>
       }
-      description={<Timestamp value={toUnixSeconds(entry.createdAt)} format="relative" />}
+      description={<TimeAgo ms={entry.createdAt} />}
       endContent={isUnread ? <StatusDot variant="accent" label="New" /> : undefined}
     />
   )

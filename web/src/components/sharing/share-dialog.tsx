@@ -13,32 +13,24 @@ import { StackItem } from '@astryxdesign/core/Stack'
 import { Text } from '@astryxdesign/core/Text'
 import { TextArea } from '@astryxdesign/core/TextArea'
 import { TextInput } from '@astryxdesign/core/TextInput'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
-import { Tokenizer } from '@astryxdesign/core/Tokenizer'
-import { TypeaheadItem, type SearchableItem, type SearchSource } from '@astryxdesign/core/Typeahead'
 import { VStack } from '@astryxdesign/core/VStack'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { useMemo, useState } from 'react'
 import { sileo } from 'sileo'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { DialogLayout } from '@/components/forms/dialog-layout'
 import { lengthError } from '@/components/forms/saved-text'
 import { LIMITS } from '@/config/limits'
 import { ApiError } from '@/lib/api-client'
-import { useUsername } from '@/lib/auth/auth-context'
-import { cleanUsernameQuery, MIN_PEOPLE_QUERY, searchPeople } from '@/lib/people'
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query'
 import type { LinkKind } from '@/lib/share-links'
 import type { Recipient, ShareChange, UserSummary } from '@/types/api'
 import { nameOf } from '@/types/user'
-import { toUnixSeconds } from '@/utils/format'
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl'
+import { PeoplePicker, type Person } from './people-picker'
 import { ShareLinksSection } from './share-links-section'
 import { useLinkForm } from './use-link-form'
 import './sharing.css'
-
-type Person = SearchableItem<UserSummary>
-
-const toPerson = (user: UserSummary): Person => ({ id: user.username, label: nameOf(user), auxiliaryData: user })
 
 function PersonAvatar({ user, size }: { user: UserSummary; size: 'xsm' | 'sm' }) {
   return <Avatar size={size} src={user.imageUrl ?? undefined} name={nameOf(user)} tooltip={false} />
@@ -64,7 +56,7 @@ function RecipientRow({ recipient, isLeaving, onToggle }: { recipient: Recipient
                 'Will lose access'
               ) : (
                 <>
-                  Shared <Timestamp value={toUnixSeconds(recipient.sharedAt)} format="relative" />
+                  Shared <TimeAgo ms={recipient.sharedAt} />
                 </>
               )}
             </Text>
@@ -98,13 +90,12 @@ type Props = {
   /** "album" / "track". */
   kind: string
   /** What sharing gives them, under the title. */
-  subtitle: string
   /** Who has it now (owner-only recipients endpoint), loaded while the dialog is open. */
   recipients: UseQueryResult<Recipient[]>
   /** POST …/share. */
   share: UseMutationResult<unknown, Error, ShareChange>
   /** Adds the Link tab (share links for this item). */
-  links?: { kind: LinkKind; id: string; isShortTrack?: boolean }
+  links?: { kind: LinkKind; id: string }
   /** Which tab it opens on (the invite screen's "Manage links" opens on Link). */
   initialTab?: ShareTab
 }
@@ -116,8 +107,7 @@ export type ShareTab = 'people' | 'link'
 // until Save: picked people, the caption and removals all go in one request, and the
 // button says what it will do ("Share with 2 · Remove 1"). Closing with unsaved changes
 // asks first. The page passes its own recipients query and share mutation.
-export function ShareDialog({ isOpen, onOpenChange, name, kind, subtitle, recipients, share, links, initialTab = 'people' }: Props) {
-  const me = useUsername()
+export function ShareDialog({ isOpen, onOpenChange, name, kind, recipients, share, links, initialTab = 'people' }: Props) {
   const [tab, setTab] = useState<ShareTab>(links ? initialTab : 'people')
   const linkForm = useLinkForm(links?.kind ?? 'TRACK', links?.id ?? '')
   const [picked, setPicked] = useState<Person[]>([])
@@ -133,19 +123,6 @@ export function ShareDialog({ isOpen, onOpenChange, name, kind, subtitle, recipi
   const hasAccess = useMemo(() => new Set(recipients.data?.map((r) => r.user.username)), [recipients.data])
   const isPeopleDirty = picked.length > 0 || caption.trim() !== '' || leaving.size > 0
   const isDirty = isPeopleDirty || linkForm.isDirty
-
-  const searchSource = useMemo<SearchSource<Person>>(
-    () => ({
-      bootstrap: () => [],
-      search: async (query) => {
-        const q = cleanUsernameQuery(query)
-        if (q.length < MIN_PEOPLE_QUERY) return []
-        const people = await searchPeople(q, { limit: 8 })
-        return people.filter((user) => user.username !== me).map(toPerson)
-      },
-    }),
-    [me],
-  )
 
   const reset = () => {
     setPicked([])
@@ -210,7 +187,7 @@ export function ShareDialog({ isOpen, onOpenChange, name, kind, subtitle, recipi
   return (
     <Dialog isOpen={isOpen} onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())} purpose="form" width={520}>
       <DialogLayout
-        header={<DialogHeader title={`Share ${name}`} subtitle={subtitle} onOpenChange={requestClose} />}
+        header={<DialogHeader title={`Share ${name}`} onOpenChange={requestClose} />}
         footer={
           tab === 'link' ? (
             <HStack gap={2} hAlign="end">
@@ -239,14 +216,11 @@ export function ShareDialog({ isOpen, onOpenChange, name, kind, subtitle, recipi
             </SegmentedControl>
           )}
           {tab === 'link' && links ? (
-            <ShareLinksSection form={linkForm} isShortTrack={links.isShortTrack} />
+            <ShareLinksSection form={linkForm} />
           ) : (
           <>
           {error && <Banner status="error" title={error} />}
-          <Tokenizer
-            label="Add people"
-            placeholder="Search by username"
-            searchSource={searchSource}
+          <PeoplePicker
             value={picked}
             onChange={(items) => {
               setPicked(items)
@@ -258,24 +232,14 @@ export function ShareDialog({ isOpen, onOpenChange, name, kind, subtitle, recipi
                 return next
               })
             }}
-            minQueryLength={MIN_PEOPLE_QUERY}
-            debounceMs={200}
-            emptySearchResultsText="No one by that username"
+            describe={(person) =>
+              hasAccess.has(person.id) ? `@${person.id} · already has it` : `@${person.id}`
+            }
             hasAutoFocus
-            renderItem={(person) => (
-              <TypeaheadItem
-                item={person}
-                icon={person.auxiliaryData && <PersonAvatar user={person.auxiliaryData} size="xsm" />}
-                description={
-                  hasAccess.has(person.id) ? `@${person.id} · has it — sharing again resurfaces it` : `@${person.id}`
-                }
-              />
-            )}
           />
           <TextArea
             label="Caption"
             isOptional
-            description={`Shown with the ${kind} in their feed.`}
             value={caption}
             onChange={(value) => {
               setCaption(value)

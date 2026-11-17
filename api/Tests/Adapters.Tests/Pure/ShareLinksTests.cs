@@ -43,7 +43,7 @@ public class ShareLinksTests
         var link = new ShareLinkDataModel
         {
             Pk = "p", Sk = "s", Gsi3Pk = "g", Gsi3Sk = "g", Token = "t", Owner = "o", Kind = ShareLinkKind.Track,
-            TargetId = "t1", CreatedAt = 0, LinkExpiresAt = 1000, ExpiresAt = 0, AllowPreview = true,
+            TargetId = "t1", CreatedAt = 0, LinkExpiresAt = 1000, ExpiresAt = 0,
         };
 
         ShareLinks.StateOf(link, 999).Should().Be(ShareLinkState.Active);

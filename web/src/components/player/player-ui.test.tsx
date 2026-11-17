@@ -76,6 +76,21 @@ describe('player UI', () => {
     expect(screen.getAllByRole('button', { name: 'Pause' })).toHaveLength(2)
   })
 
+  it('the speaker mutes, and unmutes back to where the volume was', async () => {
+    renderPlayer()
+    await userEvent.click(screen.getByRole('button', { name: 'Play all' }))
+    await screen.findByRole('region', { name: 'Now playing' })
+    const volume = () => screen.getByRole('slider', { name: 'Volume' })
+    expect(volume()).toHaveAttribute('aria-valuenow', '100')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mute' }))
+    expect(volume()).toHaveAttribute('aria-valuenow', '0')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Unmute' }))
+    expect(volume()).toHaveAttribute('aria-valuenow', '100')
+    expect(screen.getByRole('button', { name: 'Mute' })).toBeInTheDocument()
+  })
+
   it('the same button pauses it again', async () => {
     renderPlayer()
     await userEvent.click(screen.getByRole('button', { name: 'Play all' }))

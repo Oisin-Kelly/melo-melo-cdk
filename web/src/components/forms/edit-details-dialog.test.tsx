@@ -187,17 +187,21 @@ describe('EditDetailsDialog', () => {
     it('is sent with the rest', async () => {
       const { onSave, user } = setup({ genre: 'Indie' })
 
-      await user.type(screen.getByLabelText(/Genre/), ' pop')
+      await user.click(screen.getByRole('button', { name: /^Genre/ }))
+      await user.click(await screen.findByRole('option', { name: 'Pop' }))
       await user.click(save())
 
-      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ genre: 'Indie pop' }))
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ genre: 'Pop' }))
     })
 
     it.each([
-      [/Genre/, LIMITS.genre],
+      [/Your genre/, LIMITS.genre],
       [/Description/, LIMITS.trackDescription],
     ])('shows a too-long %s under that field only, and blocks saving', async (label, limit) => {
       const { user } = setup({ genre: '' })
+      // A typed genre is Other's field
+      await user.click(screen.getByRole('button', { name: /^Genre/ }))
+      await user.click(await screen.findByRole('option', { name: 'Other…' }))
 
       await user.click(screen.getByLabelText(label))
       await user.paste('x'.repeat(limit + 1))

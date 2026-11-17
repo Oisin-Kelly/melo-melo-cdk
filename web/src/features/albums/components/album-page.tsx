@@ -9,11 +9,14 @@ import {
   ForwardIcon,
   MinusCircleIcon,
   PencilIcon,
+  PlusIcon,
   QueueListIcon,
+  Bars3BottomLeftIcon,
   TrashIcon,
   UserPlusIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
+import { useAlbumEditor } from '@/components/albums/album-editor-context'
 import { PageLoader } from '@/components/feedback/page-loader'
 import { UnavailableScreen } from '@/components/feedback/unavailable-screen'
 import { EditDetailsDialog } from '@/components/forms/edit-details-dialog'
@@ -21,14 +24,13 @@ import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
 import { CollectionHeader } from '@/components/media/collection-header'
 import { DetailSection, ExpandableText } from '@/components/media/detail-section'
-import { ShareNoteSection } from '@/components/sharing/share-note-section'
-import { LikeButton, TrackRow } from '@/components/media/media-rows'
+import { ShareNote } from '@/components/sharing/share-note'
+import { LikeButton, TrackListHeader, TrackRow } from '@/components/media/media-rows'
 import { OwnerByline } from '@/components/media/owner-byline'
 import { useConfirmLeave } from '@/components/navigation/confirm-leave'
 import { allPages } from '@/components/player/all-pages'
 import type { PlayContext } from '@/components/player/queue'
 import { TrackListPlayback } from '@/components/player/track-list-playback'
-import type { TrackSource } from '@/components/player/player'
 import { usePlayContext, useQueueActions } from '@/components/player/use-player'
 import { SharedWithAvatars } from '@/components/sharing/shared-with-avatars'
 import { useSharingState } from '@/components/sharing/use-sharing-state'
@@ -36,6 +38,7 @@ import { useIsCompact } from '@/hooks/use-is-compact'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { isNotFound } from '@/lib/api-client'
 import { albumPath, useCanonicalPath } from '@/lib/links'
+import type { TrackSummary } from '@/types/api'
 import { formatLength } from '@/utils/format'
 import {
   albumDetailKey,
@@ -63,9 +66,10 @@ function AlbumActions({
   isOwner: boolean
   onShare: () => void
   playContext: PlayContext | null
-  playTracks: TrackSource
+  playTracks: () => Promise<TrackSummary[]>
 }) {
   const queue = useQueueActions()
+  const editor = useAlbumEditor()
   const update = useUpdateAlbum(album.id)
   const remove = useDeleteAlbum(album.id)
   const leave = useRemoveAlbumFromLibrary(album.id)
@@ -98,6 +102,7 @@ function AlbumActions({
   const menu: DropdownMenuOption[] = isOwner
     ? [
         ...queueItems,
+        { label: 'Edit tracks', icon: Bars3BottomLeftIcon, onClick: () => editor.editTracks(album, playTracks) },
         { label: 'Edit details', icon: PencilIcon, onClick: () => setIsEditing(true) },
         { type: 'divider' },
         { label: 'Delete album', icon: TrashIcon, variant: 'destructive', onClick: () => confirmLeave.ask('delete') },
@@ -165,6 +170,7 @@ export function AlbumPage({ albumId }: { albumId: string }) {
     album && owner ? { type: 'ALBUM', id: albumId, name: album.name, href: albumPath({ ...album, owner }) } : null
   const playTracks = async () => (await allPages(detail)).flatMap((page) => page.items)
   const play = usePlayContext(playContext, playTracks)
+  const editor = useAlbumEditor()
 
   if (detail.isPending) return <PageLoader what="album" />
 
@@ -206,7 +212,7 @@ export function AlbumPage({ albumId }: { albumId: string }) {
         description={isCompact ? album.description : undefined}
         aside={isOwner && <SharedWith album={album} onManage={() => setIsSharing(true)} />}
       />
-      {owner && <ShareNoteSection share={album.myShare} owner={owner} />}
+      {owner && <ShareNote share={album.myShare} from={owner} colour={album.imageBgColor} />}
       {album.description && !isCompact && (
         <DetailSection title="Description">
           <ExpandableText text={album.description} />
@@ -221,11 +227,20 @@ export function AlbumPage({ albumId }: { albumId: string }) {
           getKey={(track) => track.id}
           empty={{
             title: 'No tracks in this album yet',
-            description: isOwner ? 'Adding tracks to albums is coming soon.' : undefined,
+            description: isOwner ? "Pick from the tracks you've uploaded." : undefined,
             icon: <Illustration name="music" />,
+            actions: isOwner && (
+              <Button
+                label="Add tracks"
+                variant="secondary"
+                icon={<Icon icon={PlusIcon} />}
+                onClick={() => editor.editTracks(album, playTracks)}
+              />
+            ),
           }}
           endMessage={null}
-          renderItem={(track) => <TrackRow track={track} />}
+          renderBefore={(_track, index) => index === 0 && <TrackListHeader />}
+          renderItem={(track, index) => <TrackRow track={track} number={index + 1} />}
         />
       </TrackListPlayback>
     </VStack>

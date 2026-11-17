@@ -9,9 +9,14 @@ import {
   albumDetailKey,
   useAlbumDetail,
   useAlbumRecipients,
+  useAllMyAlbums,
+  useCreateAlbum,
   useDeleteAlbum,
+  useDeleteAlbums,
   useRemoveAlbumFromLibrary,
+  useSetAlbumTracks,
   useShareAlbum,
+  useShareAlbums,
   useUpdateAlbum,
 } from './albums'
 
@@ -92,6 +97,35 @@ describe('useUpdateAlbum', () => {
   })
 })
 
+describe('making an album and setting its tracks', () => {
+  it('POSTs the trimmed details, a staged cover and the track ids, then refreshes album lists', async () => {
+    serveStageUpload()
+    const bodies = captureBodies('post', '/albums', album)
+    const { result, queryClient } = renderHookWithProviders(() => useCreateAlbum())
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await act(() =>
+      result.current.mutateAsync({ name: ' Summer ', description: ' ', cover: { file: coverFile(), clear: false }, trackIds: ['t2', 't1'] }),
+    )
+
+    expect(bodies).toEqual([
+      { name: 'Summer', description: null, imageKey: expect.stringMatching(/^me\/albums\/.+\.png$/), trackIds: ['t2', 't1'] },
+    ])
+    expect(invalidate.mock.calls[0][0]).toEqual({ queryKey: ['albums'] })
+  })
+
+  it('PUTs the tracklist in order and refreshes the album, lists and feed', async () => {
+    const bodies = captureBodies('put', '/albums/a1/tracks', { trackCount: 2, added: 0, removed: 0 })
+    const { result, queryClient } = renderHookWithProviders(() => useSetAlbumTracks())
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await act(() => result.current.mutateAsync({ id: 'a1', trackIds: ['t2', 't1'] }))
+
+    expect(bodies).toEqual([{ trackIds: ['t2', 't1'] }])
+    expect(invalidate.mock.calls.map(([f]) => f)).toEqual([{ queryKey: ['albums'] }, { queryKey: ['feed'] }, { predicate: expect.any(Function) }])
+  })
+})
+
 describe('sharing', () => {
   it('loads recipients only when enabled', async () => {
     server.use(http.get(`${API}/albums/a1/recipients`, () => HttpResponse.json({ items: [{ user: userSummary('bob'), sharedAt: 2 }] })))
@@ -130,5 +164,58 @@ describe('leaving an album', () => {
     expect(filters[3].predicate!({ queryKey: ['tracks', 'detail', 't1'] })).toBe(false)
     expect(filters[1].predicate!({ queryKey: ['albums', 'detail', 'a1'] })).toBe(false)
     expect(filters[1].predicate!({ queryKey: ['albums', 'mine', 'list'] })).toBe(true)
+  })
+})
+
+describe('the Your albums table', () => {
+  it('loads every page of your albums, 100 at a time', async () => {
+    const urls: string[] = []
+    server.use(
+      http.get(`${API}/albums`, ({ request }) => {
+        const url = new URL(request.url)
+        urls.push(url.search)
+        const cursor = url.searchParams.get('cursor')
+        return HttpResponse.json({ items: [albumSummary(cursor ? 'a2' : 'a1')], nextCursor: cursor ? null : 'p2' })
+      }),
+    )
+    const { result } = renderHookWithProviders(() => useAllMyAlbums())
+    await waitFor(() => expect(result.current.data?.map((a) => a.id)).toEqual(['a1', 'a2']))
+    expect(urls).toEqual(['?limit=100', '?limit=100&cursor=p2'])
+  })
+
+  it('deletes each album, carries on past a failure and refreshes the lists', async () => {
+    const deleted: string[] = []
+    server.use(
+      http.delete(`${API}/albums/:id`, ({ params }) => {
+        if (params.id === 'a2') return HttpResponse.json({ statusCode: 500, message: 'x', error: 'x' }, { status: 500 })
+        deleted.push(params.id as string)
+        return HttpResponse.json({})
+      }),
+    )
+    const { result, queryClient } = renderHookWithProviders(() => useDeleteAlbums())
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const outcome = await act(() => result.current.mutateAsync(['a1', 'a2', 'a3']))
+
+    expect(deleted.sort()).toEqual(['a1', 'a3'])
+    expect(outcome.failed).toEqual(['a2'])
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['feed'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['playlists'] })
+  })
+
+  it('shares each album with the same people and caption', async () => {
+    const bodies: Record<string, unknown> = {}
+    server.use(
+      http.post(`${API}/albums/:id/share`, async ({ request, params }) => {
+        bodies[params.id as string] = await request.json()
+        return HttpResponse.json({ sharedWith: ['ada'] })
+      }),
+    )
+    const { result } = renderHookWithProviders(() => useShareAlbums())
+    await act(() => result.current.mutateAsync({ ids: ['a1', 'a2'], add: ['ada'], caption: ' hi ' }))
+    expect(bodies).toEqual({
+      a1: { add: ['ada'], remove: [], caption: 'hi' },
+      a2: { add: ['ada'], remove: [], caption: 'hi' },
+    })
   })
 })

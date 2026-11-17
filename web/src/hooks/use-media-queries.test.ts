@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useHasSidePanel } from './use-has-side-panel'
 import { useIsCompact } from './use-is-compact'
 import { useIsMobile } from './use-is-mobile'
 import { useIsNarrow } from './use-is-narrow'
@@ -36,5 +37,13 @@ describe('breakpoint hooks', () => {
     expect(renderHook(() => useIsNarrow()).result.current).toBe(narrow)
     expect(renderHook(() => useIsMobile()).result.current).toBe(mobile)
     expect(renderHook(() => useIsCompact()).result.current).toBe(compact)
+  })
+
+  it.each([
+    [1279, false],
+    [1280, true],
+  ])('a side panel fits at %ipx: %s', (width, fits) => {
+    atWidth(width)
+    expect(renderHook(() => useHasSidePanel()).result.current).toBe(fits)
   })
 })

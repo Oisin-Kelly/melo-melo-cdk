@@ -1,0 +1,89 @@
+/* The track composer (track-composer.tsx): the track's preview column, then the fields
+   taking the rest of the width — no half-empty label column. */
+.mm-composer {
+  display: grid;
+  grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
+  gap: var(--spacing-8);
+  align-items: start;
+}
+.mm-composer-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+  position: sticky;
+  top: var(--spacing-4);
+  min-width: 0;
+}
+.mm-composer-fields {
+  min-width: 0;
+}
+
+/* The cover fills the preview column, square and flat — a hairline instead of a shadow,
+   so nothing below it is shaded over */
+.mm-composer-cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-container);
+  cursor: pointer;
+}
+.mm-composer-cover .mm-cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  outline: 1px solid var(--color-border);
+  outline-offset: -1px;
+}
+.mm-composer-cover:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+/* "Add cover" sits in the middle of an empty cover; over a picked one it appears on
+   hover (and always on touch screens, which have no hover) */
+.mm-composer-cover-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-1);
+  border-radius: var(--radius-container);
+  color: white;
+  background: color-mix(in oklch, black 40%, transparent);
+  opacity: 0;
+  transition: opacity var(--duration-fast, 0.15s);
+}
+.mm-composer-cover-hint[data-empty] {
+  opacity: 1;
+  background: none;
+}
+@media (hover: hover) {
+  .mm-composer-cover:hover .mm-composer-cover-hint { opacity: 1; }
+}
+@media (hover: none) {
+  .mm-composer-cover-hint { opacity: 1; background: color-mix(in oklch, black 25%, transparent); }
+  .mm-composer-cover-hint[data-empty] { background: none; }
+}
+.mm-composer-cover-hint .astryx-text { color: inherit; }
+.mm-composer-cover-block > .astryx-button { align-self: center; }
+
+/* Below 1024px (useIsCompact) the content area is phone-sized: the preview goes on top as
+   a row — a smaller cover beside the title — like a detail page's short header */
+@media (max-width: 1023px) {
+  .mm-composer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-4);
+  }
+  .mm-composer-preview {
+    position: static;
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    align-items: end;
+    gap: var(--spacing-4);
+  }
+}

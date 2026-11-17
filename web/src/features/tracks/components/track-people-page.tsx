@@ -2,10 +2,10 @@ import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Heading } from '@astryxdesign/core/Heading'
 import { Text } from '@astryxdesign/core/Text'
-import { Timestamp } from '@astryxdesign/core/Timestamp'
 import { VStack } from '@astryxdesign/core/VStack'
 import { useState } from 'react'
 import { PageLoader } from '@/components/feedback/page-loader'
+import { TimeAgo } from '@/components/feedback/time-ago'
 import { Illustration } from '@/components/illustrations/illustration'
 import { InfiniteList } from '@/components/lists/infinite-list'
 import { BackButton } from '@/components/navigation/back-button'
@@ -13,7 +13,6 @@ import { matchesPerson } from '@/components/people/matches-person'
 import { PeopleSearch, PersonCard, PersonGrid } from '@/components/people/person-card'
 import { isNotFound } from '@/lib/api-client'
 import { trackPath, trackPeoplePath, useCanonicalPath } from '@/lib/links'
-import { toUnixSeconds } from '@/utils/format'
 import { useTrack, useTrackLikers, useTrackRecipients } from '../api/tracks'
 
 export type TrackPeopleKind = 'shared-with' | 'likes'
@@ -89,7 +88,7 @@ function AllRecipients({ trackId, search }: { trackId: string; search: string })
           user={recipient.user}
           detail={
             <>
-              Shared <Timestamp value={toUnixSeconds(recipient.sharedAt)} format="relative" />
+              Shared <TimeAgo ms={recipient.sharedAt} />
             </>
           }
         />
@@ -114,7 +113,7 @@ function AllLikers({ trackId, search }: { trackId: string; search: string }) {
           user={liker.user}
           detail={
             <>
-              Liked <Timestamp value={toUnixSeconds(liker.likedAt)} format="relative" />
+              Liked <TimeAgo ms={liker.likedAt} />
             </>
           }
         />

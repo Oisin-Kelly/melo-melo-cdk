@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { sileo } from 'sileo'
 import type { Details } from '@/components/forms/edit-details-dialog'
 import { api, isNotFound } from '@/lib/api-client'
+import { forEachId } from '@/lib/bulk'
 import { invalidateAppearsIn } from '@/lib/appears-in'
 import { stageUpload } from '@/lib/dropbox'
 import { playlistDetailKey, playlistsQueryKey, type Playlist, type PlaylistTrackEntry } from '@/lib/playlists'
@@ -117,6 +118,18 @@ export function useDeletePlaylist(id: string) {
   return useMutation({
     mutationFn: () => api<{ message: string }>(`/playlists/${id}`, { method: 'DELETE' }),
     onSuccess: () => invalidateLists(queryClient),
+  })
+}
+
+/** DELETE /playlists/{id} for each (the Your playlists table): no bulk endpoint, so the
+ *  single call per playlist (lib/bulk), lists refreshed once. */
+export function useDeletePlaylists() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => forEachId(ids, (id) => api(`/playlists/${id}`, { method: 'DELETE' })),
+    onSuccess: ({ done }) => {
+      if (done.length > 0) invalidateLists(queryClient)
+    },
   })
 }
 

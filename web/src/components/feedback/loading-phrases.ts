@@ -8,6 +8,7 @@ export const LOADING_PHRASES = {
   playlist: ['Queuing up your playlist', 'Lining up the tracks'],
   playlists: ['Fetching your playlists', 'Stacking up your playlists'],
   album: ['Opening the album', 'Lining up the tracks', 'Sliding the record out of its sleeve'],
+  albums: ['Pulling out your albums', 'Flipping through the sleeves'],
   track: ['Fetching the track', 'Cueing it up'],
   tracks: ['Lining up the tracks', 'Flipping through the crate'],
   profile: ['Looking them up', 'Flipping through their crate'],

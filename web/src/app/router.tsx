@@ -4,6 +4,7 @@ import { HomePage } from '@/features/feed/components/home-page'
 import { LibraryPage } from '@/features/playlists/components/library-page'
 import { SearchPage } from '@/features/search/components/search-page'
 import { EditProfilePage } from '@/features/users/components/edit-profile-page'
+import { OpenUpload } from './routes/open-upload'
 import { FollowListPage } from '@/features/users/components/follow-list-page'
 import { ProfilePage } from '@/features/users/components/profile-page'
 import { AppearancePage } from '@/features/users/components/appearance'
@@ -12,7 +13,6 @@ import { AppLayout } from './layouts/app-layout'
 import { GuestOnly, RequireAuth } from './layouts/guards'
 import { RootLayout } from './layouts/root-layout'
 import { SettingsIndex, SettingsLayout } from './layouts/settings-layout'
-import { ComingSoon } from './routes/coming-soon'
 import {
   AlbumIdRoute,
   AlbumSlugRoute,
@@ -28,6 +28,7 @@ import {
   TrackSlugRoute,
 } from './routes/item-routes'
 import { LandingRoute } from './routes/landing'
+import { AlbumsRoute, PlaylistsRoute, TracksRoute } from './routes/manage-routes'
 import { NotFoundRoute } from './routes/not-found'
 import { RouteError } from './routes/route-error'
 
@@ -35,11 +36,6 @@ import { RouteError } from './routes/route-error'
 const authRoute = (path: string, load: () => Promise<React.ComponentType>) => ({
   path,
   lazy: async () => ({ Component: await load() }),
-})
-
-const placeholder = (path: string, title: string, hasBack?: boolean) => ({
-  path,
-  element: <ComingSoon title={title} hasBack={hasBack} />,
 })
 
 const router = createBrowserRouter([
@@ -107,12 +103,17 @@ const router = createBrowserRouter([
               { path: 'appearance', element: <AppearancePage /> },
             ],
           },
-          placeholder('/upload', 'Upload a track', true),
+          // Upload is a dialog: an /upload link opens it over Home
+          { path: '/upload', element: <OpenUpload /> },
           // The built-in likes playlist is Liked tracks
           { path: '/playlists/likes', element: <Navigate to="/liked" replace /> },
           // Old id URLs (shared links, items without a slug yet) — each page moves the address
           // bar on to the readable URL once it has loaded
           { path: '/playlists/:playlistId', element: <PlaylistIdRoute /> },
+          // The manage tables: everything you've uploaded / made (wider screens)
+          { path: '/tracks', element: <TracksRoute /> },
+          { path: '/albums', element: <AlbumsRoute /> },
+          { path: '/playlists', element: <PlaylistsRoute /> },
           { path: '/tracks/:trackId', element: <TrackIdRoute /> },
           { path: '/tracks/:trackId/shared-with', element: <TrackPeopleIdRoute kind="shared-with" /> },
           { path: '/tracks/:trackId/likes', element: <TrackPeopleIdRoute kind="likes" /> },

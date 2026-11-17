@@ -28,3 +28,16 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* FormSheet on phones: the dialog's layout inside a tall bottom sheet — clear of the drag
+   handle at the top, filling the sheet so the buttons sit at its foot */
+.mm-form-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-block-start: var(--spacing-2);
+}
+.mm-form-sheet > .astryx-layout {
+  flex: 1;
+  min-height: 0;
+}

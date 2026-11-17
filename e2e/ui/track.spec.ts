@@ -29,11 +29,13 @@ test.describe('track', () => {
     const track = (await (await apiContext.get('/tracks?limit=1')).json()).items[0];
     test.skip(!track, 'user A has no tracks');
     const rename = async (name: string) => {
-      await page.getByRole('link', { name: 'Edit', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Edit track' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
-      await page.getByRole('button', { name: 'Save changes' }).click();
-      // Back on the track's page
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Edit track' });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
+      await dialog.getByRole('button', { name: 'Save changes' }).click();
+      // The dialog closes over the track's page, which shows the new name
+      await expect(dialog).toBeHidden();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
     };
 

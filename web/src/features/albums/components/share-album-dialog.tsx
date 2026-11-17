@@ -13,7 +13,6 @@ export function ShareAlbumDialog({ album, isOpen, onOpenChange, initialTab }: Pr
       onOpenChange={onOpenChange}
       name={album.name}
       kind="album"
-      subtitle="They'll get every track in it, including ones you add later."
       recipients={recipients}
       share={share}
       links={{ kind: 'ALBUM', id: album.id }}

@@ -12,6 +12,7 @@ import {
   ForwardIcon,
   HeartIcon as HeartOutline,
   MusicalNoteIcon,
+  UserIcon,
   PlusCircleIcon,
   QueueListIcon,
 } from '@heroicons/react/24/outline'
@@ -44,14 +45,16 @@ type PlayButtonProps = {
   onPlay?: () => void
   /** This is what's playing: the button pauses it. */
   isPlaying?: boolean
+  /** Round and extra large (a compact page header's), instead of `size`. */
+  isBig?: boolean
 }
 
 // The play button (black in light mode, white in dark): round and icon-only in rows, a
 // pill with its text in page headers.
-export function PlayButton({ label, text, size, onPlay, isPlaying = false }: PlayButtonProps) {
+export function PlayButton({ label, text, size, onPlay, isPlaying = false, isBig = false }: PlayButtonProps) {
   const shared = {
-    className: 'mm-play',
-    size,
+    className: isBig ? 'mm-play mm-play-big' : 'mm-play',
+    size: isBig ? ('lg' as const) : size,
     variant: 'primary' as const,
     isDisabled: !onPlay,
     tooltip: onPlay ? undefined : 'Playback coming soon',
@@ -65,6 +68,12 @@ export function PlayButton({ label, text, size, onPlay, isPlaying = false }: Pla
   )
 }
 
+/** The filled heart of something you've liked, in the theme's strong red (`--color-icon-red`) —
+ *  every liked heart in the app is this one. */
+export function LikedHeart({ size, label }: { size?: 'xsm' | 'sm' | 'md'; label?: string }) {
+  return <Icon icon={HeartSolid} size={size} color="inherit" className="mm-liked-heart" label={label} />
+}
+
 type LikeProps = { kind: 'TRACK' | 'ALBUM'; id: string; liked: boolean; name: string }
 
 export function LikeButton({ kind, id, liked, name }: LikeProps) {
@@ -74,7 +83,7 @@ export function LikeButton({ kind, id, liked, name }: LikeProps) {
       label={liked ? `Unlike ${name}` : `Like ${name}`}
       tooltip={liked ? 'Unlike' : 'Like'}
       variant="ghost"
-      icon={<Icon icon={liked ? HeartSolid : HeartOutline} color={liked ? 'error' : 'secondary'} />}
+      icon={liked ? <LikedHeart /> : <Icon icon={HeartOutline} color="secondary" />}
       onClick={() => toggle.mutate({ kind, id, liked: !liked })}
     />
   )
@@ -123,7 +132,7 @@ export function TrackMenu({
   excludePlaylistId,
   extraItems = [],
   hasLikeItem = false,
-  hasOpenItem = false,
+  hasGoToItems = false,
 }: {
   track: TrackSummary
   /** The playlist being viewed, which it's already in. */
@@ -131,8 +140,9 @@ export function TrackMenu({
   extraItems?: DropdownMenuOption[]
   /** Like / Unlike as the first item — for phone rows, which have no heart button. */
   hasLikeItem?: boolean
-  /** "Go to track" — for phone rows, where tapping the row plays it rather than opening it. */
-  hasOpenItem?: boolean
+  /** Go to track / Go to artist first — on rows (on phones tapping a row plays it rather
+   *  than opening it), not on the track's own page. */
+  hasGoToItems?: boolean
 }) {
   const playlists = usePlaylists()
   const add = useAddToPlaylist()
@@ -163,7 +173,12 @@ export function TrackMenu({
         />
       )}
       items={[
-        ...(hasOpenItem ? [{ label: 'Go to track', icon: MusicalNoteIcon, href: trackPath(track) }] : []),
+        ...(hasGoToItems
+          ? [
+              { label: 'Go to track', icon: MusicalNoteIcon, href: trackPath(track) },
+              { label: 'Go to artist', icon: UserIcon, href: profilePath(track.owner.username) },
+            ]
+          : []),
         ...(hasLikeItem
           ? [
               {
@@ -195,6 +210,8 @@ function Owner({ owner }: { owner: TrackSummary['owner'] }) {
 }
 
 type RowProps = {
+  /** Its place in the list (album and playlist pages): shown before the cover. */
+  number?: number
   /** Show who made it; off where the context already says (the feed's sender line, an album page). */
   showOwner?: boolean
   /** Extra detail, e.g. when it was liked: before the actions on wider screens, at the end
@@ -205,10 +222,46 @@ type RowProps = {
   variant?: RowVariant
 }
 
-/** A few bars bouncing over the playing track's cover (still while paused). */
-function Equaliser({ isPlaying }: { isPlaying: boolean }) {
+/** A row's place in its list, before the cover: the tracklist's "#" column. */
+export function RowNumber({ number }: { number: number }) {
   return (
-    <span className="mm-equaliser" data-playing={isPlaying || undefined} aria-hidden>
+    <span className="mm-row-number">
+      <Text type="supporting" color="secondary" hasTabularNumbers>
+        {number}
+      </Text>
+    </span>
+  )
+}
+
+/** The column names over a numbered tracklist (wider screens only — phone rows fold the
+ *  extra detail into their second line): # · Title · the rows' `aside`, if they have one. */
+export function TrackListHeader({ aside }: { aside?: string }) {
+  const isMobile = useIsMobile()
+  if (isMobile) return null
+  const label = (text: string) => (
+    <Text type="label" size="sm" weight="semibold" color="secondary">
+      {text.toUpperCase()}
+    </Text>
+  )
+  return (
+    <div className="mm-tracklist-head">
+      <span className="mm-row-number">{label('#')}</span>
+      <span className="mm-tracklist-head-title">{label('Title')}</span>
+      {aside && <span className="mm-row-aside">{label(aside)}</span>}
+      <span className="mm-tracklist-head-end" />
+    </div>
+  )
+}
+
+/** A few bars bouncing over the playing track's cover (still while paused) — or, `isInline`,
+ *  standing in the row's number column in a numbered tracklist. */
+function Equaliser({ isPlaying, isInline = false }: { isPlaying: boolean; isInline?: boolean }) {
+  return (
+    <span
+      className={isInline ? 'mm-equaliser mm-equaliser-inline' : 'mm-equaliser'}
+      data-playing={isPlaying || undefined}
+      aria-hidden
+    >
       <span />
       <span />
       <span />
@@ -218,6 +271,7 @@ function Equaliser({ isPlaying }: { isPlaying: boolean }) {
 
 export function TrackRow({
   track,
+  number,
   showOwner,
   aside,
   variant = 'flat',
@@ -264,11 +318,32 @@ export function TrackRow({
           onClick={play.onPlay}
         />
       )}
+      {/* A numbered row: its number — the bars while it's the one playing — and, on hover
+          (desktop), what a click does in their place: play, or pause on the playing row */}
+      {number !== undefined && (
+        <span className="mm-row-number">
+          <span className="mm-row-number-rest">
+            {play.isCurrent ? (
+              <Equaliser isPlaying={play.isPlaying} isInline />
+            ) : (
+              <Text type="supporting" color="secondary" hasTabularNumbers>
+                {number}
+              </Text>
+            )}
+          </span>
+          {isRowPlay && (
+            <span className="mm-row-number-play" aria-hidden>
+              <Icon icon={play.isPlaying ? PauseIcon : PlayIcon} size="sm" />
+            </span>
+          )}
+        </span>
+      )}
       <span className="mm-row-cover">
         <CoverArt imageUrl={track.imageUrl} imageBgColor={track.imageBgColor} size="sm" />
-        {play.isCurrent && <Equaliser isPlaying={play.isPlaying} />}
-        {/* Desktop: hovering the row shows what a click does, over the cover */}
-        {isRowPlay && (
+        {play.isCurrent && number === undefined && <Equaliser isPlaying={play.isPlaying} />}
+        {/* Desktop: hovering the row shows what a click does, over the cover (a numbered
+            row shows it in the number's place instead) */}
+        {isRowPlay && number === undefined && (
           <span className="mm-row-hover-play" aria-hidden>
             <Icon icon={play.isPlaying ? PauseIcon : PlayIcon} />
           </span>
@@ -282,7 +357,7 @@ export function TrackRow({
             {isMobile && track.likedByMe && (
               <>
                 <span className="mm-inline-icon">
-                  <Icon icon={HeartSolid} size="xsm" color="error" aria-label="Liked" />
+                  <LikedHeart size="xsm" label="Liked" />
                 </span>{' '}
               </>
             )}
@@ -297,7 +372,8 @@ export function TrackRow({
           </Text>
         </VStack>
       </StackItem>
-      {!isMobile && aside}
+      {/* A column of its own on wider screens, every row's the same width */}
+      {!isMobile && aside && <span className="mm-row-aside">{aside}</span>}
       {/* Phones: the heart moves into ⋯ (the row is too narrow for the title otherwise) */}
       {!isMobile && <LikeButton kind="TRACK" id={track.id} liked={track.likedByMe} name={track.name} />}
       <TrackMenu
@@ -305,7 +381,7 @@ export function TrackRow({
         excludePlaylistId={excludePlaylistId}
         extraItems={menuItems}
         hasLikeItem={isMobile}
-        hasOpenItem={isRowPlay && isMobile}
+        hasGoToItems
       />
       {variant === 'card' && (
         <PlayButton label={`Play ${track.name}`} size="lg" onPlay={play.onPlay} isPlaying={play.isPlaying} />

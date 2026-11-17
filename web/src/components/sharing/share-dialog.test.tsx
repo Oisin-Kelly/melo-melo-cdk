@@ -40,7 +40,6 @@ function setup({ people = [] as Recipient[], recipientsState = 'ok' as 'ok' | 'p
       onOpenChange={onOpenChange}
       name="Summer Demos"
       kind="album"
-      subtitle="They can play every track in it."
       recipients={recipients}
       share={share}
     />,
@@ -136,13 +135,13 @@ describe('ShareDialog', () => {
     expect(mutate).not.toHaveBeenCalled()
   })
 
-  it('says when someone picked already has it (sharing again resurfaces it)', async () => {
+  it('says when someone picked already has it', async () => {
     servePeople('bob')
     const { user } = setup({ people: [recipient('bob')] })
 
     await user.type(screen.getByRole('combobox', { name: 'Add people' }), 'bo')
 
-    expect(await screen.findByText('@bob · has it — sharing again resurfaces it')).toBeInTheDocument()
+    expect(await screen.findByText('@bob · already has it')).toBeInTheDocument()
   })
 
   it('previews five people with access, with "Show all"', async () => {

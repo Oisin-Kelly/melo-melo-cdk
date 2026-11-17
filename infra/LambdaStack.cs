@@ -52,6 +52,13 @@ public class LambdaStack : BaseStack
         var followUser = CreateLambdaFunction("User/FollowUserLambda");
         table.GrantReadWriteData(followUser);
 
+        // People you may know
+        var getSuggestedUsers = CreateLambdaFunction("User/GetSuggestedUsersLambda");
+        table.GrantReadData(getSuggestedUsers);
+
+        var hideSuggestion = CreateLambdaFunction("User/HideSuggestionLambda");
+        table.GrantReadWriteData(hideSuggestion);
+
         var searchUsers = CreateLambdaFunction("User/SearchUsersLambda");
         table.GrantReadData(searchUsers);
 
@@ -116,6 +123,12 @@ public class LambdaStack : BaseStack
 
         var getUploadStatus = CreateLambdaFunction("Track/GetUploadStatusLambda");
         table.GrantReadData(getUploadStatus);
+
+        var getUploads = CreateLambdaFunction("Track/GetUploadsLambda");
+        table.GrantReadData(getUploads);
+
+        var dismissUpload = CreateLambdaFunction("Track/DismissUploadLambda");
+        table.GrantReadWriteData(dismissUpload);
 
         // Playlists
         var createPlaylist = CreateLambdaFunction("Playlist/CreatePlaylistLambda");
@@ -265,6 +278,8 @@ public class LambdaStack : BaseStack
             GetTracksSharedFromUser: getTracksSharedFromUser,
             IsFollowingUser: isFollowingUser,
             FollowUser: followUser,
+            GetSuggestedUsers: getSuggestedUsers,
+            HideSuggestion: hideSuggestion,
             GetUserFollowers: getUserFollowers,
             GetUserFollowing: getUserFollowing,
             UpdateProfile: updateProfile,
@@ -273,6 +288,8 @@ public class LambdaStack : BaseStack
             GetLibraryTracks: getLibraryTracks,
             UploadTrack: UploadTrackFunction,
             GetUploadStatus: getUploadStatus,
+            GetUploads: getUploads,
+            DismissUpload: dismissUpload,
             UpdateTrack: updateTrack,
             ShareTrack: shareTrack,
             GetTrackRecipients: getTrackRecipients,

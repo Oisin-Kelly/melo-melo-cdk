@@ -28,7 +28,6 @@ test.describe('Share links', () => {
       expect(create.status()).toBe(201);
       const link = await create.json();
       expect(link.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
-      expect(link.allowPreview).toBe(true);
 
       // Someone else can't make a link to your track
       expect((await apiContextB.post('/links', { data: { kind: 'TRACK', targetId: trackId } })).status()).toBe(404);
@@ -93,18 +92,17 @@ test.describe('Share links', () => {
 
     try {
       const link = await (
-        await apiContext.post('/links', { data: { kind: 'ALBUM', targetId: album.id, allowPreview: false, caption: '  e2e   note  ' } })
+        await apiContext.post('/links', { data: { kind: 'ALBUM', targetId: album.id, caption: '  e2e   note  ' } })
       ).json();
 
       const own = await (await apiContext.get(`/links/${link.token}/viewer`)).json();
       expect(own.relation).toBe('OWN');
-      expect(own.link.allowPreview).toBe(false);
       expect((await apiContext.post(`/links/${link.token}/accept`)).status()).toBe(400);
 
-      // Preview off: the tracklist shows, but nothing to play
+      // The tracklist shows, each track with something to play
       const preview = await (await apiContextB.get(`/links/${link.token}`)).json();
       expect(preview.tracks).toHaveLength(1);
-      expect(preview.tracks[0].preview).toBeNull();
+      expect(preview.tracks[0].preview.url).toMatch(/^https:/);
       expect(preview.caption).toBe('e2e note'); // sanitised
 
       expect((await apiContextB.post(`/links/${link.token}/accept`)).status()).toBe(200);

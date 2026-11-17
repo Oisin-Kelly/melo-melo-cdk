@@ -120,6 +120,13 @@ describe('playing from track rows', () => {
     expect(screen.getByRole('menuitem', { name: 'Go to track' })).toHaveAttribute('href', trackPath(tracks[0]))
   })
 
+  it('⋯ has Go to track and Go to artist on wider screens too', async () => {
+    renderList([tracks[0]])
+    await userEvent.click(screen.getByRole('button', { name: 'More options for One' }))
+    expect(screen.getByRole('menuitem', { name: 'Go to track' })).toHaveAttribute('href', trackPath(tracks[0]))
+    expect(screen.getByRole('menuitem', { name: 'Go to artist' })).toHaveAttribute('href', '/bob')
+  })
+
   it('Play next with nothing playing just plays the track', async () => {
     renderList([tracks[2]])
     await userEvent.click(screen.getByRole('button', { name: 'More options for Three' }))

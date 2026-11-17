@@ -3,6 +3,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { LIMITS } from '@/config/limits'
 import { CountedTextInput } from './counted-text-input'
 import { CoverPicker } from './cover-picker'
+import { GenreField } from './genre-field'
 import { SlugField } from './slug-field'
 import type { CurrentCover, DetailsDraft } from './use-details-draft'
 
@@ -17,6 +18,8 @@ export function DetailsFields({
   onCoverPicked,
   onCoverError,
   hasAutoFocus = false,
+  hasCover = true,
+  descriptionRows = 5,
 }: {
   draft: DetailsDraft
   currentCover: CurrentCover
@@ -24,18 +27,24 @@ export function DetailsFields({
   onCoverPicked?: () => void
   onCoverError: (message: string) => void
   hasAutoFocus?: boolean
+  /** Off where the cover is picked elsewhere (the track composer's big preview) */
+  hasCover?: boolean
+  /** The description box's height (the composers keep it shorter, so the form fits) */
+  descriptionRows?: number
 }) {
   return (
     <VStack gap={4}>
-      <CoverPicker
-        imageUrl={currentCover.imageUrl}
-        imageBgColor={currentCover.imageBgColor}
-        onChange={(change) => {
-          draft.setCover(change)
-          onCoverPicked?.()
-        }}
-        onError={onCoverError}
-      />
+      {hasCover && (
+        <CoverPicker
+          imageUrl={currentCover.imageUrl}
+          imageBgColor={currentCover.imageBgColor}
+          onChange={(change) => {
+            draft.setCover(change)
+            onCoverPicked?.()
+          }}
+          onError={onCoverError}
+        />
+      )}
       <CountedTextInput
         label="Name"
         maxLength={LIMITS.name}
@@ -45,23 +54,14 @@ export function DetailsFields({
         hasAutoFocus={hasAutoFocus}
         status={errorStatus(draft.errors.name)}
       />
-      {draft.hasGenre && (
-        <CountedTextInput
-          label="Genre"
-          isOptional
-          maxLength={LIMITS.genre}
-          value={draft.genre}
-          onChange={draft.setGenre}
-          status={errorStatus(draft.errors.genre)}
-        />
-      )}
+      {draft.hasGenre && <GenreField value={draft.genre} onChange={draft.setGenre} error={draft.errors.genre} />}
       <TextArea
         label="Description"
         isOptional
         value={draft.description}
         onChange={draft.setDescription}
         maxLength={draft.descriptionLimit}
-        rows={5}
+        rows={descriptionRows}
         status={errorStatus(draft.errors.description)}
       />
       {draft.url && (

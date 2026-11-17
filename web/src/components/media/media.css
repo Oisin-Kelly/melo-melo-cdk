@@ -53,6 +53,10 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  /* Saved covers are opaque JPEGs flattened onto white (ImageService); a picked file not
+     yet uploaded may be a transparent PNG, so it previews on that same white rather than
+     over the placeholder gradient */
+  background: white;
 }
 
 /* Track/album rows tinted with their own cover colour (--mm-tint = the server's
@@ -88,6 +92,41 @@
 }
 .mm-row[data-variant='flat']:has(.mm-row-link:focus-visible) {
   background: var(--color-background-muted);
+}
+
+/* Numbered tracklists (album and playlist pages): the place in the list before the cover,
+   right-aligned in a column wide enough for three digits; on wider screens the rows' extra
+   detail (date added) is a column of its own, and a header names the columns. The header
+   lines up with the rows' contents: same gap, the title starting past the cover, and an end
+   spacer as wide as a row's heart + ⋯ buttons. */
+.mm-row-number {
+  flex: none;
+  width: 1.75rem;
+  text-align: end;
+}
+.mm-row-aside {
+  flex: none;
+  width: 7rem;
+}
+@media (max-width: 767px) {
+  /* Phones: a narrower number column, the rows being tight already */
+  .mm-row-number { width: 1.25rem; }
+}
+.mm-tracklist-head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding-block-end: var(--spacing-2);
+  border-block-end: 1px solid var(--color-border);
+}
+.mm-tracklist-head-title {
+  flex: 1;
+  padding-inline-start: calc(var(--mm-row-media) + var(--spacing-3));
+}
+.mm-tracklist-head-end {
+  flex: none;
+  /* two 2rem icon buttons and the gap between them */
+  width: calc(4rem + var(--spacing-3));
 }
 
 /* A row's cover is exactly as tall as the row's title block (title line + gap + detail
@@ -142,6 +181,35 @@
   background-color: var(--color-text-primary);
   color: var(--color-background-surface);
   opacity: 1;
+}
+/* The big one (PlayButton isBig): a compact page header's, a quarter larger than a large
+   button, icon and all */
+.astryx-button.mm-play-big {
+  width: calc(var(--size-element-lg) * 1.25);
+  height: calc(var(--size-element-lg) * 1.25);
+}
+.astryx-button.mm-play-big svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* A compact CollectionHeader under its cover: the big play button on the right, its top
+   where the cover ends; on the left the description (if any) at the top and the buttons
+   on the circle's bottom line. A long description just makes the left side taller. */
+.mm-header-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--spacing-4);
+}
+.mm-header-controls-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+  min-width: 0;
+}
+.mm-header-controls-main > :first-child:not(:last-child) {
+  margin-block-end: auto;
 }
 
 /* Cover-first tiles (album-tile.tsx): as wide as a large cover, the whole tile a link. */
@@ -298,6 +366,38 @@
 .mm-equaliser[data-playing] span { animation: mm-eq 0.9s ease-in-out infinite alternate; }
 .mm-equaliser[data-playing] span:nth-child(2) { animation-delay: -0.3s; animation-duration: 0.7s; }
 .mm-equaliser[data-playing] span:nth-child(3) { animation-delay: -0.6s; animation-duration: 1.1s; }
+/* In a numbered row's number column: just the bars, in the accent colour, no dark overlay */
+.mm-equaliser.mm-equaliser-inline {
+  position: static;
+  display: inline-flex;
+  height: 1rem;
+  padding: 0;
+  background: none;
+  vertical-align: middle;
+}
+.mm-equaliser-inline span {
+  height: 100%;
+  background: var(--color-text-accent);
+}
+
+/* Hovering a numbered row (mouse only): the play / pause icon takes the number's place —
+   or the bars', on the playing row — so the cover stays clear */
+.mm-row-number-play {
+  display: none;
+  vertical-align: middle;
+}
+@media (hover: hover) {
+  .mm-row:hover .mm-row-number-play,
+  .mm-row:has(.mm-row-play:focus-visible) .mm-row-number-play { display: inline-flex; }
+  .mm-row:hover .mm-row-number:has(.mm-row-number-play) .mm-row-number-rest,
+  .mm-row:has(.mm-row-play:focus-visible) .mm-row-number:has(.mm-row-number-play) .mm-row-number-rest { display: none; }
+}
+
+/* A liked heart, wherever it shows (LikedHeart) */
+.mm-liked-heart {
+  color: var(--color-icon-red);
+}
+
 @keyframes mm-eq {
   from { transform: scaleY(0.25); }
   to { transform: scaleY(1); }

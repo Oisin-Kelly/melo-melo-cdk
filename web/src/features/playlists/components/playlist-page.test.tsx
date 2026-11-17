@@ -65,6 +65,17 @@ describe('PlaylistPage', () => {
     expect(screen.getByText(/No longer shared with you/)).toBeInTheDocument()
   })
 
+  it('numbers the rows and says when each track was added, under column names', async () => {
+    renderAt('/me/playlists/road-trip')
+    await screen.findByRole('link', { name: 'First' })
+    expect(screen.getByText('#')).toBeInTheDocument()
+    expect(screen.getByText('DATE ADDED')).toBeInTheDocument()
+    // Placeholders are numbered too; only available tracks carry a date
+    expect(document.querySelectorAll('.mm-row .mm-row-number')).toHaveLength(3)
+    expect([...document.querySelectorAll('.mm-row .mm-row-number')].map((n) => n.textContent)).toEqual(['1', '2', '3'])
+    expect(screen.getByText(new Date(0).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }))).toBeInTheDocument()
+  })
+
   it('moves an old id link to the readable URL under your name', async () => {
     const { router } = renderAt('/playlists/p1')
     await screen.findByRole('heading', { name: 'Road Trip' })

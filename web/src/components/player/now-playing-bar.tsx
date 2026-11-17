@@ -75,16 +75,27 @@ function QueueButton() {
   )
 }
 
+/** The speaker mutes and unmutes (back to the level before muting); the slider sets it.
+ *  Both in the text colour, like the transport. */
 function Volume() {
   const player = usePlayer()
   const [volume, setVolume] = useState(100)
+  // What unmuting goes back to: the last level above zero
+  const [unmutedVolume, setUnmutedVolume] = useState(100)
   const change = (value: number) => {
     setVolume(value)
+    if (value > 0) setUnmutedVolume(value)
     player?.setVolume(value / 100)
   }
+  const isMuted = volume === 0
   return (
-    <HStack gap={2} vAlign="center">
-      <Icon icon={volume === 0 ? SpeakerXMarkIcon : SpeakerWaveIcon} color="secondary" />
+    <HStack gap={1} vAlign="center">
+      <IconButton
+        label={isMuted ? 'Unmute' : 'Mute'}
+        variant="ghost"
+        icon={<Icon icon={isMuted ? SpeakerXMarkIcon : SpeakerWaveIcon} />}
+        onClick={() => change(isMuted ? unmutedVolume : 0)}
+      />
       <span className="mm-player-slider">
         <Slider label="Volume" isLabelHidden valueDisplay="none" min={0} max={100} value={volume} onChange={change} width="6rem" />
       </span>
